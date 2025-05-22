@@ -9,13 +9,418 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      artists: {
+        Row: {
+          genres: string[] | null
+          id: string
+          image_url: string | null
+          last_synced_at: string
+          name: string
+          popularity: number | null
+          spotify_url: string | null
+        }
+        Insert: {
+          genres?: string[] | null
+          id: string
+          image_url?: string | null
+          last_synced_at?: string
+          name: string
+          popularity?: number | null
+          spotify_url?: string | null
+        }
+        Update: {
+          genres?: string[] | null
+          id?: string
+          image_url?: string | null
+          last_synced_at?: string
+          name?: string
+          popularity?: number | null
+          spotify_url?: string | null
+        }
+        Relationships: []
+      }
+      played_setlist_songs: {
+        Row: {
+          id: string
+          played_setlist_id: string
+          position: number
+          song_id: string
+        }
+        Insert: {
+          id?: string
+          played_setlist_id: string
+          position: number
+          song_id: string
+        }
+        Update: {
+          id?: string
+          played_setlist_id?: string
+          position?: number
+          song_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "played_setlist_songs_played_setlist_id_fkey"
+            columns: ["played_setlist_id"]
+            isOneToOne: false
+            referencedRelation: "played_setlists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "played_setlist_songs_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      played_setlists: {
+        Row: {
+          id: string
+          imported_at: string
+          played_date: string
+          setlist_fm_id: string
+          show_id: string
+        }
+        Insert: {
+          id?: string
+          imported_at?: string
+          played_date: string
+          setlist_fm_id: string
+          show_id: string
+        }
+        Update: {
+          id?: string
+          imported_at?: string
+          played_date?: string
+          setlist_fm_id?: string
+          show_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "played_setlists_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      setlist_songs: {
+        Row: {
+          id: string
+          position: number
+          setlist_id: string
+          song_id: string
+          votes: number
+        }
+        Insert: {
+          id?: string
+          position: number
+          setlist_id: string
+          song_id: string
+          votes?: number
+        }
+        Update: {
+          id?: string
+          position?: number
+          setlist_id?: string
+          song_id?: string
+          votes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setlist_songs_setlist_id_fkey"
+            columns: ["setlist_id"]
+            isOneToOne: false
+            referencedRelation: "setlists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setlist_songs_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      setlists: {
+        Row: {
+          created_at: string
+          id: string
+          show_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          show_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          show_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setlists_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shows: {
+        Row: {
+          artist_id: string
+          date: string
+          id: string
+          name: string | null
+          start_time: string | null
+          status: string
+          ticketmaster_url: string | null
+          venue_id: string
+          view_count: number
+        }
+        Insert: {
+          artist_id: string
+          date: string
+          id: string
+          name?: string | null
+          start_time?: string | null
+          status?: string
+          ticketmaster_url?: string | null
+          venue_id: string
+          view_count?: number
+        }
+        Update: {
+          artist_id?: string
+          date?: string
+          id?: string
+          name?: string | null
+          start_time?: string | null
+          status?: string
+          ticketmaster_url?: string | null
+          venue_id?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shows_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shows_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songs: {
+        Row: {
+          album: string
+          artist_id: string
+          duration_ms: number
+          id: string
+          name: string
+          popularity: number
+          spotify_url: string
+        }
+        Insert: {
+          album: string
+          artist_id: string
+          duration_ms: number
+          id: string
+          name: string
+          popularity: number
+          spotify_url: string
+        }
+        Update: {
+          album?: string
+          artist_id?: string
+          duration_ms?: number
+          id?: string
+          name?: string
+          popularity?: number
+          spotify_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songs_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_artists: {
+        Row: {
+          artist_id: string
+          id: string
+          rank: number
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          id?: string
+          rank: number
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          id?: string
+          rank?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_artists_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_artists_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          email: string | null
+          id: string
+          spotify_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name: string
+          email?: string | null
+          id: string
+          spotify_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+          spotify_id?: string | null
+        }
+        Relationships: []
+      }
+      venues: {
+        Row: {
+          address: string | null
+          city: string
+          country: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          state: string | null
+        }
+        Insert: {
+          address?: string | null
+          city: string
+          country: string
+          id: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          state?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string
+          country?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          state?: string | null
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          created_at: string
+          id: string
+          setlist_song_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setlist_song_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setlist_song_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_setlist_song_id_fkey"
+            columns: ["setlist_song_id"]
+            isOneToOne: false
+            referencedRelation: "setlist_songs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_or_create_setlist: {
+        Args: { show_id: string }
+        Returns: string
+      }
+      match_song_similarity: {
+        Args: {
+          p_artist_id: string
+          p_song_name: string
+          p_similarity_threshold: number
+        }
+        Returns: {
+          id: string
+          name: string
+          similarity: number
+        }[]
+      }
+      vote_for_song: {
+        Args: { setlist_song_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

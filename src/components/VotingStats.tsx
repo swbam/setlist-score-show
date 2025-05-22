@@ -1,43 +1,87 @@
 
-import { TrendingUp, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+
+// Sample data for voting statistics
+const data = [
+  {
+    name: "Mon",
+    votes: 15,
+  },
+  {
+    name: "Tue",
+    votes: 23,
+  },
+  {
+    name: "Wed",
+    votes: 18,
+  },
+  {
+    name: "Thu",
+    votes: 32,
+  },
+  {
+    name: "Fri",
+    votes: 40,
+  },
+  {
+    name: "Sat",
+    votes: 25,
+  },
+  {
+    name: "Sun",
+    votes: 20,
+  },
+];
 
 const VotingStats = () => {
   return (
-    <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-        <TrendingUp className="h-5 w-5 mr-2 text-cyan-400" />
-        Voting Stats
-      </h3>
-      
-      <div className="space-y-4">
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-300">Total Votes</span>
-            <span className="text-white font-medium">0</span>
+    <Card className="bg-gray-900 border-gray-800">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-white">Voting Activity</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[180px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data}>
+              <XAxis
+                dataKey="name"
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `${value}`}
+              />
+              <Bar
+                dataKey="votes"
+                fill="#06B6D4"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-3xl font-bold text-white">145</p>
+            <p className="text-xs text-gray-400">Total Votes</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-white">84</p>
+            <p className="text-xs text-gray-400">Voters</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-white">12</p>
+            <p className="text-xs text-gray-400">Songs</p>
           </div>
         </div>
-        
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-300">Free votes (3/3)</span>
-            <span className="text-cyan-400 font-medium">1/3</span>
-          </div>
-          <div className="text-xs text-gray-400">Log in for more</div>
-        </div>
-
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-300">Voting Closes In</span>
-          </div>
-          <div className="text-cyan-400 font-medium">2d 14h</div>
-        </div>
-
-        <div className="text-xs text-gray-400 flex items-center">
-          <Clock className="h-3 w-3 mr-1" />
-          127 fans have voted
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
