@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import * as userService from '@/services/user';
+import { storeUserProfile } from "@/services/auth";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -21,37 +22,16 @@ const AuthCallback = () => {
         if (data.session) {
           const user = data.session.user;
           
-          // Check if user has Spotify provider
+          // Store user in database
+          await storeUserProfile(user);
+          
+          // If Spotify user, fetch and store their top artists
           const isSpotifyUser = user.app_metadata?.provider === 'spotify';
           
-          // Get user details
-          const { data: userData } = await supabase.auth.getUser();
-          
-          if (userData.user) {
-            // Extract user details
-            const displayName = 
-              userData.user.user_metadata?.full_name || 
-              userData.user.user_metadata?.name || 
-              "User";
-            
-            const email = userData.user.email;
-            const spotifyId = isSpotifyUser ? userData.user.user_metadata?.provider_id : null;
-            const avatarUrl = userData.user.user_metadata?.avatar_url || null;
-            
-            // Store user in database
-            await userService.upsertUser(
-              userData.user.id,
-              email || null,
-              spotifyId,
-              displayName,
-              avatarUrl
-            );
-            
-            // If Spotify user, fetch and store their top artists
-            if (isSpotifyUser) {
-              // This would be implemented with proper Spotify API
-              // We would populate the user_artists table here
-            }
+          if (isSpotifyUser) {
+            // We'll implement this later with proper Spotify API integration
+            // For now, we redirect to the profile page
+            console.log("Spotify user authenticated, will fetch top artists later");
           }
           
           // Navigate to profile
@@ -66,7 +46,10 @@ const AuthCallback = () => {
       }
     };
 
-    handleCallback();
+    // Small delay to ensure auth state is properly initialized
+    setTimeout(() => {
+      handleCallback();
+    }, 300);
   }, [navigate]);
 
   return (

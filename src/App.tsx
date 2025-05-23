@@ -15,8 +15,17 @@ import SignUp from "./pages/SignUp";
 import AuthCallback from "./pages/AuthCallback";
 import SearchResults from "./pages/SearchResults";
 import SetlistComparison from "./pages/SetlistComparison";
+import AllArtists from "./pages/AllArtists";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -29,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/show/:showId" element={<ShowVoting />} />
             <Route path="/artist/:artistId" element={<ArtistPage />} />
+            <Route path="/artists" element={<AllArtists />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />

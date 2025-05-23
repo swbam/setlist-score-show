@@ -18,7 +18,8 @@ export interface SetlistSong {
   song_id: string;
   position: number;
   votes: number;
-  song?: Song;
+  song: Song;
+  userVoted?: boolean;
 }
 
 export interface Setlist {
@@ -50,28 +51,28 @@ export async function getOrCreateSetlist(showId: string): Promise<Setlist | null
     }
     
     // No setlist exists, create a new one
-    const { data: setlistData } = await supabase
+    const { data: setlistData, error } = await supabase
       .rpc('get_or_create_setlist', { show_id: showId });
     
-    if (!setlistData) {
-      console.error("Failed to create setlist");
+    if (error || !setlistData) {
+      console.error("Failed to create setlist:", error);
       return null;
     }
     
-    const setlistId = setlistData;
+    const setlistId = setlistData as string;
     
     // Now populate the setlist with 5 random songs
     await populateSetlistWithRandomSongs(setlistId, showId);
     
     // Fetch the newly created setlist
-    const { data: newSetlist, error } = await supabase
+    const { data: newSetlist, error: newSetlistError } = await supabase
       .from('setlists')
       .select('*')
       .eq('id', setlistId)
       .single();
     
-    if (error) {
-      console.error("Error fetching new setlist:", error);
+    if (newSetlistError) {
+      console.error("Error fetching new setlist:", newSetlistError);
       return null;
     }
     
@@ -122,10 +123,15 @@ async function populateSetlistWithRandomSongs(setlistId: string, showId: string)
       await spotifyService.storeTracksInDatabase(artistId, tracks);
       
       // Fetch the newly added songs
-      const { data: newArtistSongs } = await supabase
+      const { data: newArtistSongs, error: newSongsError } = await supabase
         .from('songs')
         .select('*')
         .eq('artist_id', artistId);
+        
+      if (newSongsError) {
+        console.error("Error fetching newly added songs:", newSongsError);
+        return false;
+      }
         
       if (newArtistSongs && newArtistSongs.length > 0) {
         // Use the newly fetched songs
@@ -227,12 +233,19 @@ export async function voteForSong(setlistSongId: string): Promise<number | null>
       return null;
     }
     
-    if (data.success) {
-      return data.votes;
-    } else {
-      console.error("Vote failed:", data.message);
-      return null;
+    // Parse the JSON response properly to extract success and votes fields
+    if (typeof data === 'object' && data !== null) {
+      const responseData = data as { success: boolean; votes?: number; message?: string };
+      
+      if (responseData.success && responseData.votes !== undefined) {
+        return responseData.votes;
+      } else {
+        console.error("Vote failed:", responseData.message || "Unknown error");
+        return null;
+      }
     }
+    
+    return null;
   } catch (error) {
     console.error("Error voting for song:", error);
     return null;
@@ -243,13 +256,18 @@ export async function voteForSong(setlistSongId: string): Promise<number | null>
 export async function addSongToSetlist(setlistId: string, songId: string): Promise<boolean> {
   try {
     // Get the current highest position
-    const { data: highestPosition } = await supabase
+    const { data: highestPosition, error: positionError } = await supabase
       .from('setlist_songs')
       .select('position')
       .eq('setlist_id', setlistId)
       .order('position', { ascending: false })
       .limit(1)
       .single();
+    
+    if (positionError && positionError.code !== 'PGRST116') { // Not found is ok
+      console.error("Error getting highest position:", positionError);
+      return false;
+    }
     
     const position = highestPosition ? highestPosition.position + 1 : 1;
     

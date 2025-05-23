@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, ChevronDown, Plus, XCircle } from "lucide-react";
@@ -9,7 +8,6 @@ import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import * as setlistService from "@/services/setlist";
 import VotingStats from "@/components/VotingStats";
-import Header from "@/components/Header";
 import AppHeader from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -31,6 +29,7 @@ interface Show {
   start_time: string | null;
   status: 'scheduled' | 'postponed' | 'canceled';
   ticketmaster_url: string | null;
+  view_count: number;
 }
 
 interface Song {
@@ -52,6 +51,8 @@ interface Setlist {
   id: string;
   show_id: string;
   songs: SetlistSong[];
+  created_at: string;
+  updated_at: string;
 }
 
 const ShowVoting = () => {
@@ -89,7 +90,12 @@ const ShowVoting = () => {
         }
         
         if (showData) {
-          setShow(showData);
+          const typedShowData = {
+            ...showData,
+            status: showData.status as 'scheduled' | 'postponed' | 'canceled'
+          };
+          
+          setShow(typedShowData);
           
           // Get or create setlist for this show
           const setlistData = await setlistService.getOrCreateSetlist(showId);
@@ -107,21 +113,28 @@ const ShowVoting = () => {
                   .eq('user_id', user.id);
                   
                 if (votesData) {
-                  const userVotesMap: Record<string, boolean> = {};
+                  const votesMap: Record<string, boolean> = {};
                   votesData.forEach(vote => {
-                    userVotesMap[vote.setlist_song_id] = true;
+                    votesMap[vote.setlist_song_id] = true;
                   });
-                  setUserVotes(userVotesMap);
+                  setUserVotes(votesMap);
+                  
+                  // Mark songs user has voted for
+                  const updatedSongs = setlistWithSongs.songs.map(song => ({
+                    ...song,
+                    userVoted: votesMap[song.id] || false
+                  }));
+                  
+                  setSetlist({
+                    ...setlistWithSongs,
+                    songs: updatedSongs
+                  });
+                } else {
+                  setSetlist(setlistWithSongs);
                 }
-                
-                // Mark songs user has voted for
-                setlistWithSongs.songs = setlistWithSongs.songs.map(song => ({
-                  ...song,
-                  userVoted: userVotesMap[song.id] || false
-                }));
+              } else {
+                setSetlist(setlistWithSongs);
               }
-              
-              setSetlist(setlistWithSongs);
             }
           }
         }
@@ -153,7 +166,7 @@ const ShowVoting = () => {
         (payload) => {
           // Update the affected song's vote count
           setSetlist(prev => {
-            if (!prev) return prev;
+            if (!prev || !prev.songs) return prev;
             
             return {
               ...prev,
@@ -194,7 +207,7 @@ const ShowVoting = () => {
     
     // Optimistically update UI
     setSetlist(prev => {
-      if (!prev) return prev;
+      if (!prev || !prev.songs) return prev;
       
       return {
         ...prev,
@@ -214,7 +227,7 @@ const ShowVoting = () => {
       if (newVotes === null) {
         // Revert optimistic update
         setSetlist(prev => {
-          if (!prev) return prev;
+          if (!prev || !prev.songs) return prev;
           
           return {
             ...prev,
@@ -239,7 +252,7 @@ const ShowVoting = () => {
       
       // Revert optimistic update
       setSetlist(prev => {
-        if (!prev) return prev;
+        if (!prev || !prev.songs) return prev;
         
         return {
           ...prev,
