@@ -79,7 +79,12 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     const channel = supabase
       .channel(`voting-stats-${setlistId}`)
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_id=eq.${setlistId}` },
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'votes', 
+          filter: `setlist_id=eq.${setlistId}` 
+        },
         () => fetchStats()
       )
       .subscribe();
@@ -131,19 +136,19 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
         ) : (
           <ul className="space-y-4">
             <li className="flex items-center text-gray-300">
-              <ThumbsUp className="h-4 w-4 mr-3 text-cyan-400" />
+              <ThumbsUp className="h-4 w-4 mr-3 text-[#f7f7f7]" />
               <span className="text-sm">
                 {stats.totalVotes} total {stats.totalVotes === 1 ? 'vote' : 'votes'}
               </span>
             </li>
             <li className="flex items-center text-gray-300">
-              <Users className="h-4 w-4 mr-3 text-cyan-400" />
+              <Users className="h-4 w-4 mr-3 text-[#f7f7f7]" />
               <span className="text-sm">
                 {stats.uniqueVoters} {stats.uniqueVoters === 1 ? 'person has' : 'people have'} voted
               </span>
             </li>
             <li className="flex items-center text-gray-300">
-              <Clock className="h-4 w-4 mr-3 text-cyan-400" />
+              <Clock className="h-4 w-4 mr-3 text-[#f7f7f7]" />
               <span className="text-sm">
                 Last vote: {formatTimeAgo(stats.lastVoteTime)}
               </span>
