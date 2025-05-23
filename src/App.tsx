@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import "./App.css";
@@ -20,39 +19,25 @@ import AllArtists from "./pages/AllArtists";
 import SetlistComparison from "./pages/SetlistComparison";
 import DataSyncTestPage from "./pages/DataSyncTestPage";
 
-// Create a react-query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
-    },
-  },
-});
-
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<IndexPage />} />
-            <Route path="/search" element={<SearchResults />} />
-            <Route path="/artist/:artistId" element={<ArtistPage />} />
-            <Route path="/show/:showId" element={<ShowVoting />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/artists" element={<AllArtists />} />
-            <Route path="/setlist-comparison/:showId" element={<SetlistComparison />} />
-            <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Router>
-        <Toaster position="top-center" richColors />
-      </AuthProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<IndexPage />} />
+        <Route path="/search" element={<SearchResults />} />
+        <Route path="/artist/:artistId" element={<ArtistPage />} />
+        <Route path="/show/:showId" element={<ShowVoting />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/artists" element={<AllArtists />} />
+        <Route path="/setlist-comparison/:showId" element={<SetlistComparison />} />
+        <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <Toaster position="top-center" richColors />
+    </AuthProvider>
   );
 }
 
