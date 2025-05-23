@@ -4,6 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 
+// Updated interfaces to avoid recursive type definitions
+export interface Song {
+  id: string;
+  name: string;
+  album?: string;
+  duration_ms?: number;
+}
+
 export interface SetlistSong {
   id: string;
   song_id: string;
@@ -12,6 +20,8 @@ export interface SetlistSong {
   position: number;
   album?: string;
   duration_ms?: number;
+  song?: Song; // Changed to use the Song interface above
+  userVoted?: boolean;
 }
 
 export function useSetlistVoting(setlistId: string) {
@@ -53,7 +63,13 @@ export function useSetlistVoting(setlistId: string) {
           votes: item.votes,
           position: item.position,
           album: item.song.album,
-          duration_ms: item.song.duration_ms
+          duration_ms: item.song.duration_ms,
+          song: {
+            id: item.song_id,
+            name: item.song.name,
+            album: item.song.album,
+            duration_ms: item.song.duration_ms
+          }
         }));
 
         setSongs(formattedData);
@@ -76,7 +92,7 @@ export function useSetlistVoting(setlistId: string) {
         }
       } catch (error) {
         console.error('Error fetching setlist songs:', error);
-        toast.error('Failed to load setlist');
+        toast("Failed to load setlist", { variant: "destructive" });
       } finally {
         setLoading(false);
       }
@@ -113,13 +129,13 @@ export function useSetlistVoting(setlistId: string) {
   // Vote for a song
   const vote = useCallback(async (setlistSongId: string) => {
     if (!user) {
-      toast.error('Please sign in to vote');
+      toast("Please sign in to vote", { variant: "destructive" });
       return false;
     }
 
     // Check if user already voted for this song
     if (userVotes[setlistSongId]) {
-      toast.error('You already voted for this song');
+      toast("You already voted for this song", { variant: "destructive" });
       return false;
     }
 
@@ -165,7 +181,10 @@ export function useSetlistVoting(setlistId: string) {
           return updated;
         });
 
-        toast.error('Failed to vote: ' + insertError.message);
+        toast("Failed to vote", { 
+          description: insertError.message,
+          variant: "destructive"
+        });
         return false;
       }
       
@@ -180,11 +199,11 @@ export function useSetlistVoting(setlistId: string) {
         // We don't revert UI changes since the vote record was created
       }
 
-      toast.success('Your vote has been counted!');
+      toast("Your vote has been counted!", { variant: "default" });
       return true;
     } catch (error) {
       console.error('Error voting for song:', error);
-      toast.error('Something went wrong while voting');
+      toast("Something went wrong while voting", { variant: "destructive" });
       return false;
     }
   }, [user, userVotes, setlistId, songs]);
@@ -192,7 +211,7 @@ export function useSetlistVoting(setlistId: string) {
   // Add a song to the setlist (for future implementation)
   const addSong = useCallback(async (songId: string) => {
     // Implementation for adding songs will go here
-    toast.info('This feature is coming soon!');
+    toast("This feature is coming soon!", { variant: "default" });
     return false;
   }, []);
 

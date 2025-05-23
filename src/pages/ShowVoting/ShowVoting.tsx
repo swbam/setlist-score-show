@@ -2,7 +2,7 @@
 import { useAuth } from "@/context/AuthContext";
 import AppHeader from "@/components/AppHeader";
 import ShowHeader from "./ShowHeader";
-import VotingSection from "./VotingSection";
+import { VotingSection } from "./VotingSection"; // Fixed import to use named export
 import Sidebar from "./Sidebar";
 import useShowVoting from "./useShowVoting";
 

@@ -1,12 +1,14 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/hooks/use-debounce";
 import { MoreVertical, CheckCircle, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client"; // Added missing import
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +29,7 @@ interface VotingSectionProps {
   onRefresh: () => Promise<void>;
 }
 
-// Update the component to properly pass the onSongAdded prop to AddSongToSetlist
+// Export as named export, not default
 export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectionProps) {
   const [songToAdd, setSongToAdd] = useState("");
   const [songs, setSongs] = useState<setlistService.SetlistSong[]>([]);
@@ -84,8 +86,8 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       
       if (error) {
         console.error("Error voting for song:", error);
-        toast({
-          title: "Failed to vote",
+        // Fixed toast call
+        toast("Failed to vote", {
           description: "There was an error voting for this song",
           variant: "destructive",
         });
@@ -95,8 +97,8 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       }
     } catch (error) {
       console.error("Error voting for song:", error);
-      toast({
-        title: "Failed to vote",
+      // Fixed toast call
+      toast("Failed to vote", {
         description: "There was an error voting for this song",
         variant: "destructive",
       });
@@ -126,8 +128,8 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       
       if (error) {
         console.error("Error removing vote for song:", error);
-        toast({
-          title: "Failed to remove vote",
+        // Fixed toast call
+        toast("Failed to remove vote", {
           description: "There was an error removing your vote for this song",
           variant: "destructive",
         });
@@ -137,10 +139,10 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       }
     } catch (error) {
       console.error("Error removing vote for song:", error);
-      toast({
-        title: "Failed to remove vote",
-        description: "There was an error removing your vote for this song",
-        variant: "destructive",
+      // Fixed toast call
+      toast("Failed to remove vote", {
+          description: "There was an error removing your vote for this song",
+          variant: "destructive",
       });
       
       // Revert the UI
