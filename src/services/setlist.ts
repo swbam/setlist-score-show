@@ -144,18 +144,28 @@ export async function getOrCreateSetlist(showId: string): Promise<string | null>
     } else {
       // If no songs in database, try to fetch from Spotify
       try {
-        const songs = await spotifyService.getArtistTopTracks(artistId);
-        if (songs && songs.length > 0) {
+        const spotifyTracks = await spotifyService.getArtistTopTracks(artistId);
+        if (spotifyTracks && spotifyTracks.length > 0) {
           // Take up to 5 songs
-          const selectedSongs = songs.slice(0, 5);
+          const selectedTracks = spotifyTracks.slice(0, 5);
           
           // First, ensure songs are in the database
-          for (const song of selectedSongs) {
+          for (const track of selectedTracks) {
+            // Convert Spotify track to our Song format
+            const song: Song = {
+              id: track.id,
+              artist_id: artistId,
+              name: track.name,
+              album: track.album || 'Unknown Album',
+              duration_ms: track.duration_ms || 0,
+              popularity: track.popularity || 0,
+              spotify_url: track.spotify_url || `https://open.spotify.com/track/${track.id}`
+            };
+            
+            // Insert the song
             const { error: songError } = await supabase
               .from("songs")
-              .insert([song])
-              .onConflict("id")
-              .merge();
+              .insert([song]);
               
             if (songError) {
               console.error("Error storing song:", songError);
@@ -163,9 +173,9 @@ export async function getOrCreateSetlist(showId: string): Promise<string | null>
           }
           
           // Create setlist songs
-          const setlistSongs = selectedSongs.map((song, index) => ({
+          const setlistSongs = selectedTracks.map((track, index) => ({
             setlist_id: setlist.id,
-            song_id: song.id,
+            song_id: track.id,
             votes: 0,
             position: index + 1
           }));
@@ -249,12 +259,26 @@ export async function voteForSong(setlistSongId: string): Promise<number | null>
       return null;
     }
     
-    if (!data || !data.success) {
-      console.error("Vote failed:", data?.message || "Unknown error");
+    // Check if data is available and has the expected format
+    if (!data) {
+      console.error("No data returned from vote_for_song RPC");
       return null;
     }
     
-    return data.votes;
+    // Type-check the response using more specific checks
+    if (typeof data === 'object' && data !== null && 'success' in data) {
+      const typedData = data as { success: boolean, votes?: number, message?: string };
+      
+      if (!typedData.success) {
+        console.error("Vote failed:", typedData.message || "Unknown error");
+        return null;
+      }
+      
+      return typedData.votes ?? null;
+    }
+    
+    console.error("Unexpected response format from vote_for_song RPC");
+    return null;
   } catch (error) {
     console.error("Error in voteForSong:", error);
     return null;
@@ -300,5 +324,28 @@ export async function addSongToSetlist(
   } catch (error) {
     console.error("Error in addSongToSetlist:", error);
     return false;
+  }
+}
+
+/**
+ * Fetch songs for an artist 
+ */
+export async function fetchArtistSongs(artistId: string): Promise<Song[]> {
+  try {
+    const { data, error } = await supabase
+      .from("songs")
+      .select("*")
+      .eq("artist_id", artistId)
+      .order("name");
+      
+    if (error) {
+      console.error("Error fetching artist songs:", error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error in fetchArtistSongs:", error);
+    throw error;
   }
 }

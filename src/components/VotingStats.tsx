@@ -38,27 +38,42 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
         setLoading(true);
         
         // Get total votes and songs count
-        const { data: songsData } = await supabase
+        const { data: songsData, error: songsError } = await supabase
           .from('setlist_songs')
           .select('votes')
           .eq('setlist_id', setlistId);
           
+        if (songsError) {
+          console.error("Error fetching setlist songs:", songsError);
+          throw songsError;
+        }
+        
         const totalVotes = songsData ? songsData.reduce((sum, song) => sum + (song.votes || 0), 0) : 0;
         const songCount = songsData ? songsData.length : 1;
         
         // Get unique voter count
-        const { count } = await supabase
+        const { count, error: countError } = await supabase
           .from('votes')
           .select('user_id', { count: 'exact', head: true })
           .eq('setlist_id', setlistId);
         
+        if (countError) {
+          console.error("Error counting unique voters:", countError);
+          throw countError;
+        }
+        
         // Get last vote time
-        const { data: lastVoteData } = await supabase
+        const { data: lastVoteData, error: timeError } = await supabase
           .from('votes')
           .select('created_at')
           .eq('setlist_id', setlistId)
           .order('created_at', { ascending: false })
           .limit(1);
+          
+        if (timeError) {
+          console.error("Error fetching last vote time:", timeError);
+          throw timeError;
+        }
           
         setStats({
           totalVotes,
