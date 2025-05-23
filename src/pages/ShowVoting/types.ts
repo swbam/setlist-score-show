@@ -28,7 +28,7 @@ export interface Setlist {
 
 export interface Show {
   id: string;
-  name?: string;
+  name?: string | null;
   date: string;
   status: 'scheduled' | 'postponed' | 'canceled';
   artist: {
@@ -40,14 +40,14 @@ export interface Show {
     spotify_url?: string;
   };
   venue?: {
-    id: string;
+    id?: string;
     name: string;
     city: string;
     state?: string;
     country: string;
     address?: string;
   };
-  ticketmaster_url?: string;
-  start_time?: string;
+  ticketmaster_url?: string | null;
+  start_time?: string | null;
   view_count: number;
 }

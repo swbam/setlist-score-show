@@ -25,7 +25,7 @@ interface ShowHeaderProps {
 
 const ShowHeader = ({ show }: ShowHeaderProps) => {
   return (
-    <div className="relative bg-gradient-to-b from-gray-900 to-black">
+    <div className="relative bg-gradient-to-b from-gray-900 to-black text-white">
       {/* Artist image overlay */}
       {show?.artist?.image_url && (
         <div className="absolute inset-0 opacity-30 bg-cover bg-center" 
@@ -34,9 +34,10 @@ const ShowHeader = ({ show }: ShowHeaderProps) => {
         </div>
       )}
       
-      <div className="relative container mx-auto max-w-7xl px-4 pt-6 pb-8">
+      <div className="relative container mx-auto max-w-7xl px-4 pt-6 pb-16">
         {/* Navigation */}
-        <div className="mb-4">
+        <div className="flex justify-between items-center mb-10">
+          {/* Back to artist link - positioned at the top left */}
           {show?.artist?.id && (
             <Link to={`/artist/${show.artist.id}`} className="inline-flex items-center text-gray-400 hover:text-white transition-colors text-sm font-medium">
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -44,8 +45,8 @@ const ShowHeader = ({ show }: ShowHeaderProps) => {
             </Link>
           )}
           
-          {/* Status badge */}
-          <div className="mt-2">
+          {/* Status badge - positioned at the top right */}
+          <div>
             <span className={`px-3 py-1 rounded-full text-xs font-medium inline-block
               ${show?.status === 'canceled' ? 'bg-red-900/50 text-red-300 border border-red-900/40' : 
                 show?.status === 'postponed' ? 'bg-amber-900/50 text-amber-300 border border-amber-900/40' :
@@ -56,27 +57,29 @@ const ShowHeader = ({ show }: ShowHeaderProps) => {
           </div>
         </div>
         
-        {/* Artist and show info */}
-        <div className="max-w-3xl">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-1 tracking-tight">
+        {/* Central content - Artist name and show details */}
+        <div className="flex flex-col items-center text-center">
+          <h1 className="text-5xl md:text-6xl font-bold mb-6">
             {show?.artist?.name || "Loading..."}
           </h1>
           
-          {show?.name && (
-            <p className="text-xl md:text-2xl text-gray-200 mb-4">
+          {/* Only show the show name if it's different from the artist name */}
+          {show?.name && show.name !== show.artist?.name && (
+            <p className="text-xl md:text-2xl text-gray-200 mb-8">
               {show.name}
             </p>
           )}
           
-          {/* Show details */}
-          <div className="flex flex-col md:flex-row gap-4 md:gap-8 text-gray-300 mb-6">
+          {/* Show details in a horizontal layout */}
+          <div className="flex flex-wrap justify-center gap-12 mb-12">
+            {/* Date and time */}
             {show?.date && (
               <div className="flex items-center">
-                <Calendar className="h-5 w-5 mr-2 text-cyan-400" />
-                <div>
-                  <div className="font-medium">{formatShowDate(show.date)}</div>
+                <Calendar className="h-6 w-6 mr-3 text-cyan-400" />
+                <div className="text-left">
+                  <div className="font-medium text-lg">{formatShowDate(show.date)}</div>
                   {show.start_time && (
-                    <div className="text-sm text-gray-400 mt-1">
+                    <div className="text-gray-400">
                       {format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}
                     </div>
                   )}
@@ -84,12 +87,13 @@ const ShowHeader = ({ show }: ShowHeaderProps) => {
               </div>
             )}
             
+            {/* Venue info */}
             {show?.venue && (
               <div className="flex items-center">
-                <MapPin className="h-5 w-5 mr-2 text-cyan-400" />
-                <div>
-                  <div className="font-medium">{show.venue.name}</div>
-                  <div className="text-sm text-gray-400 mt-1">
+                <MapPin className="h-6 w-6 mr-3 text-cyan-400" />
+                <div className="text-left">
+                  <div className="font-medium text-lg">{show.venue.name}</div>
+                  <div className="text-gray-400">
                     {show.venue.city}
                     {show.venue.state ? `, ${show.venue.state}` : ''}
                   </div>
@@ -101,13 +105,13 @@ const ShowHeader = ({ show }: ShowHeaderProps) => {
           {/* Tickets button */}
           {show?.ticketmaster_url && (
             <Button 
-              variant="outline" 
-              size="sm" 
+              variant="default"
+              size="lg"
               className="bg-white text-black hover:bg-gray-200 hover:text-black border-none"
               asChild
             >
               <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center">
-                <Ticket className="h-4 w-4 mr-2" />
+                <Ticket className="h-5 w-5 mr-2" />
                 Get Tickets
               </a>
             </Button>

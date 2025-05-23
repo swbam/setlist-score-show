@@ -5,7 +5,6 @@ import ShowHeader from "./ShowHeader";
 import { VotingSection } from "./VotingSection";
 import Sidebar from "./Sidebar";
 import useShowVoting from "./useShowVoting";
-import { SpotifyArtist } from "@/services/spotify";
 
 const ShowVoting = () => {
   const { user } = useAuth();
@@ -35,7 +34,7 @@ const ShowVoting = () => {
     <div className="min-h-screen bg-black">
       <AppHeader />
       
-      {/* Enhanced Show Header */}
+      {/* Show Header with fixed layout */}
       <ShowHeader show={show} />
 
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -48,7 +47,7 @@ const ShowVoting = () => {
               onRefresh={handleSongAdded}
               voteSubmitting={voteSubmitting}
               handleVote={handleVote}
-              votesRemaining={typeof votesRemaining === 'string' ? votesRemaining : Number(votesRemaining)}
+              votesRemaining={votesRemaining === 'Unlimited' ? 'Unlimited' : Number(votesRemaining)}
               usedVotesCount={usedVotesCount}
               maxFreeVotes={maxFreeVotes}
               artist={show?.artist || null}
