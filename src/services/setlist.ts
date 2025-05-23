@@ -119,19 +119,26 @@ async function populateSetlistWithRandomSongs(setlistId: string, showId: string)
       return false;
     }
     
-    // If the artist has no songs in the database, fetch them from Spotify
+    // If the artist has no songs in the database, import catalog from Spotify
     if (!artistSongs || artistSongs.length === 0) {
-      console.log("No songs found for artist in database, fetching from Spotify");
-      const tracks = await spotifyService.getArtistTopTracks(artistId);
-      if (!tracks || tracks.length === 0) {
-        console.error("Could not fetch artist tracks from Spotify");
-        return false;
+      console.log("No songs found for artist in database, importing from Spotify");
+      
+      // Import the full catalog instead of just top tracks
+      const success = await spotifyService.importArtistCatalog(artistId);
+      
+      if (!success) {
+        console.error("Could not import artist catalog from Spotify");
+        
+        // Fallback to top tracks if full catalog import fails
+        const tracks = await spotifyService.getArtistTopTracks(artistId);
+        if (!tracks || tracks.length === 0) {
+          console.error("Could not fetch artist tracks from Spotify");
+          return false;
+        }
+        
+        console.log(`Fetched ${tracks.length} top tracks from Spotify, storing in database`);
+        await spotifyService.storeTracksInDatabase(artistId, tracks);
       }
-      
-      console.log(`Fetched ${tracks.length} tracks from Spotify, storing in database`);
-      
-      // Store tracks in the database
-      await spotifyService.storeTracksInDatabase(artistId, tracks);
       
       // Fetch the newly added songs
       const { data: newArtistSongs, error: newSongsError } = await supabase
@@ -145,7 +152,7 @@ async function populateSetlistWithRandomSongs(setlistId: string, showId: string)
       }
         
       if (newArtistSongs && newArtistSongs.length > 0) {
-        console.log(`Successfully stored ${newArtistSongs.length} tracks, adding random songs to setlist`);
+        console.log(`Successfully imported ${newArtistSongs.length} tracks, adding random songs to setlist`);
         // Use the newly fetched songs
         return await addRandomSongsToSetlist(setlistId, newArtistSongs as Song[]);
       } else {

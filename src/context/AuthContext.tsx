@@ -71,7 +71,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       if (data) {
-        setUserProfile(data as UserProfile);
+        // Convert created_at string to Date object if it exists
+        const userProfileData: UserProfile = {
+          id: data.id,
+          email: data.email,
+          spotify_id: data.spotify_id,
+          display_name: data.display_name,
+          avatar_url: data.avatar_url,
+          created_at: data.created_at ? new Date(data.created_at) : undefined
+        };
+        
+        setUserProfile(userProfileData);
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
