@@ -46,7 +46,7 @@ const SearchResults = () => {
       if (query.trim().length > 2) {
         performSearch(query);
       }
-    }, 300),
+    }, 500),
     []
   );
 
@@ -87,19 +87,15 @@ const SearchResults = () => {
       const artistStored = await spotifyService.storeArtistInDatabase(artist);
       
       if (artistStored) {
-        // Import the full artist catalog to ensure we have all songs
-        console.log("Importing full catalog for artist:", artist.id);
-        const catalogImported = await spotifyService.importArtistCatalog(artist.id);
+        // Import the artist's top tracks
+        console.log("Importing top tracks for artist:", artist.id);
+        const tracks = await spotifyService.getArtistTopTracks(artist.id);
         
-        if (catalogImported) {
-          console.log("Successfully imported artist catalog");
+        if (tracks && tracks.length > 0) {
+          await spotifyService.storeTracksInDatabase(artist.id, tracks);
+          console.log(`Stored ${tracks.length} top tracks for ${artist.name}`);
         } else {
-          console.warn("Could not import full catalog, trying to get top tracks instead");
-          // Fallback to top tracks if full catalog fails
-          const tracks = await spotifyService.getArtistTopTracks(artist.id);
-          if (tracks && tracks.length > 0) {
-            await spotifyService.storeTracksInDatabase(artist.id, tracks);
-          }
+          console.warn("No top tracks found for artist");
         }
         
         // Get artist events from Ticketmaster and store them
@@ -108,6 +104,8 @@ const SearchResults = () => {
         let eventCount = 0;
         
         if (events && events.length > 0) {
+          console.log(`Found ${events.length} events for ${artist.name}`);
+          
           for (const event of events) {
             if (event._embedded?.venues?.[0]) {
               const venue = event._embedded.venues[0];
@@ -120,6 +118,9 @@ const SearchResults = () => {
               eventCount++;
             }
           }
+          console.log(`Stored ${eventCount} events for ${artist.name}`);
+        } else {
+          console.log(`No events found for ${artist.name}`);
         }
         
         // Dismiss loading toast
@@ -168,7 +169,7 @@ const SearchResults = () => {
           {/* Loading State */}
           {loading && (
             <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <p className="text-slate-400">Searching...</p>
             </div>
           )}
@@ -188,7 +189,7 @@ const SearchResults = () => {
                 <Card 
                   key={artist.id}
                   onClick={() => handleArtistClick(artist)}
-                  className="bg-slate-900 border-slate-800 overflow-hidden hover:border-white/50 transition-all duration-300 cursor-pointer"
+                  className="bg-slate-900 border-slate-800 overflow-hidden hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 cursor-pointer"
                 >
                   <div className="h-48 bg-slate-800 relative">
                     {artist.images && artist.images[0] ? (

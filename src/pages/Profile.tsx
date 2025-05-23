@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { signOut } from "@/services/auth";
+import { signOut, getUserTopArtists } from "@/services/auth";
 import AppHeader from "@/components/AppHeader";
 
 interface UserArtist {
@@ -63,22 +63,9 @@ const Profile = () => {
         }
         
         // Get user's followed artists
-        const { data: userArtists } = await supabase
-          .from('user_artists')
-          .select(`
-            artists (
-              id,
-              name,
-              image_url,
-              genres
-            )
-          `)
-          .eq('user_id', user.id)
-          .order('rank', { ascending: false });
-          
-        if (userArtists) {
-          // Extract artists from joined query
-          setFollowedArtists(userArtists.map(item => item.artists));
+        const userArtists = await getUserTopArtists(user.id);
+        if (userArtists && userArtists.length > 0) {
+          setFollowedArtists(userArtists);
         }
         
         // Get user's recent votes

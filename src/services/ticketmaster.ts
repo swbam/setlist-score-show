@@ -53,6 +53,7 @@ export interface TicketmasterEvent {
 // Search for events by keyword (artist name)
 export async function searchEvents(keyword: string): Promise<TicketmasterEvent[]> {
   try {
+    console.log("Searching Ticketmaster events for:", keyword);
     const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
     url.searchParams.append("apikey", TICKETMASTER_API_KEY);
     url.searchParams.append("keyword", keyword);
@@ -63,11 +64,14 @@ export async function searchEvents(keyword: string): Promise<TicketmasterEvent[]
     const response = await fetch(url.toString());
     
     if (!response.ok) {
+      console.error("Ticketmaster API error:", response.status, await response.text());
       throw new Error(`Failed to search events: ${response.status}`);
     }
     
     const data = await response.json();
-    return data._embedded?.events || [];
+    const events = data._embedded?.events || [];
+    console.log(`Found ${events.length} Ticketmaster events for "${keyword}"`);
+    return events;
   } catch (error) {
     console.error("Error searching events:", error);
     return [];
@@ -77,6 +81,7 @@ export async function searchEvents(keyword: string): Promise<TicketmasterEvent[]
 // Get events for a specific artist (by name or ID)
 export async function getArtistEvents(artistName: string): Promise<TicketmasterEvent[]> {
   try {
+    console.log("Getting Ticketmaster events for artist:", artistName);
     const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
     url.searchParams.append("apikey", TICKETMASTER_API_KEY);
     url.searchParams.append("keyword", artistName);
@@ -87,11 +92,14 @@ export async function getArtistEvents(artistName: string): Promise<TicketmasterE
     const response = await fetch(url.toString());
     
     if (!response.ok) {
+      console.error("Ticketmaster API error:", response.status, await response.text());
       throw new Error(`Failed to get artist events: ${response.status}`);
     }
     
     const data = await response.json();
-    return data._embedded?.events || [];
+    const events = data._embedded?.events || [];
+    console.log(`Found ${events.length} Ticketmaster events for "${artistName}"`);
+    return events;
   } catch (error) {
     console.error("Error getting artist events:", error);
     return [];
@@ -101,7 +109,9 @@ export async function getArtistEvents(artistName: string): Promise<TicketmasterE
 // Store venue in database
 export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<boolean> {
   try {
-    const { error } = await supabase.from('venues').upsert({
+    console.log("Storing venue in database:", venue.name);
+    
+    const venueData = {
       id: venue.id,
       name: venue.name,
       city: venue.city?.name || '',
@@ -110,13 +120,20 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
       address: venue.address?.line1 || null,
       latitude: venue.location?.latitude || null,
       longitude: venue.location?.longitude || null
-    });
+    };
+    
+    console.log("Venue data to store:", venueData);
+    
+    const { error } = await supabase
+      .from('venues')
+      .upsert(venueData, { onConflict: 'id' });
     
     if (error) {
       console.error("Error storing venue in database:", error);
       return false;
     }
     
+    console.log("Successfully stored venue:", venue.name);
     return true;
   } catch (error) {
     console.error("Error storing venue in database:", error);
@@ -131,11 +148,13 @@ export async function storeShowInDatabase(
   venueId: string
 ): Promise<boolean> {
   try {
+    console.log("Storing show in database:", event.name);
+    
     const status = 
       event.dates.status?.code === 'cancelled' ? 'canceled' :
       event.dates.status?.code === 'postponed' ? 'postponed' : 'scheduled';
     
-    const { error } = await supabase.from('shows').upsert({
+    const showData = {
       id: event.id,
       artist_id: artistId,
       venue_id: venueId,
@@ -144,16 +163,48 @@ export async function storeShowInDatabase(
       start_time: event.dates.start.localTime || null,
       status: status,
       ticketmaster_url: event.url || null
-    });
+    };
+    
+    console.log("Show data to store:", showData);
+    
+    const { error } = await supabase
+      .from('shows')
+      .upsert(showData, { onConflict: 'id' });
     
     if (error) {
       console.error("Error storing show in database:", error);
       return false;
     }
     
+    console.log("Successfully stored show:", event.name);
     return true;
   } catch (error) {
     console.error("Error storing show in database:", error);
     return false;
+  }
+}
+
+// Get trending shows based on view count
+export async function getTrendingShows(limit: number = 6): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('shows')
+      .select(`
+        *,
+        artist:artists(name, image_url),
+        venue:venues(name, city, state, country)
+      `)
+      .order('view_count', { ascending: false })
+      .limit(limit);
+      
+    if (error) {
+      console.error("Error fetching trending shows:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error fetching trending shows:", error);
+    return [];
   }
 }

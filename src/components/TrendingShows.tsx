@@ -1,130 +1,137 @@
 
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Calendar, MapPin, Users } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { getTrendingShows, TrendingShow } from "@/services/trending";
-import { formatDate } from "@/lib/utils";
+import { CalendarDays, MapPin } from 'lucide-react';
+import { format } from 'date-fns';
+import * as ticketmasterService from "@/services/ticketmaster";
+
+interface Show {
+  id: string;
+  name: string;
+  date: string;
+  artist: {
+    name: string;
+    image_url: string | null;
+  };
+  venue: {
+    name: string;
+    city: string;
+    state: string | null;
+    country: string;
+  };
+  view_count: number;
+}
 
 const TrendingShows = () => {
-  const [shows, setShows] = useState<TrendingShow[]>([]);
+  const [shows, setShows] = useState<Show[]>([]);
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
-    async function fetchTrendingShows() {
+    const fetchTrendingShows = async () => {
       setLoading(true);
       try {
-        const trendingShows = await getTrendingShows(6);
+        const trendingShows = await ticketmasterService.getTrendingShows(6);
         setShows(trendingShows);
       } catch (error) {
-        console.error("Failed to load trending shows:", error);
+        console.error('Error fetching trending shows:', error);
       } finally {
         setLoading(false);
       }
-    }
-    
+    };
+
     fetchTrendingShows();
   }, []);
 
-  return (
-    <section className="py-16 px-4">
-      <div className="container mx-auto max-w-7xl">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
-            Find Your Next Show
-          </h2>
-          <Link to="/artists">
-            <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
-              View All
-            </Button>
-          </Link>
-        </div>
-
-        {loading ? (
+  if (loading) {
+    return (
+      <section className="py-10">
+        <div className="container mx-auto max-w-7xl px-4">
+          <h2 className="text-3xl font-bold text-white mb-8">Trending Shows</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array(3).fill(0).map((_, idx) => (
-              <Card key={idx} className="bg-gray-900 border-gray-800">
-                <CardContent className="p-0">
-                  <div className="relative overflow-hidden rounded-t-lg">
-                    <div className="h-48 bg-gradient-to-br from-gray-900 to-gray-800 animate-pulse"></div>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <div className="h-4 bg-gray-800 animate-pulse rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-800 animate-pulse rounded w-1/2"></div>
-                    <div className="h-10 bg-gray-800 animate-pulse rounded"></div>
-                  </div>
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <Card key={item} className="bg-gray-800 border-gray-700 animate-pulse">
+                <div className="h-48 bg-gray-700"></div>
+                <CardContent className="p-5">
+                  <div className="h-4 bg-gray-700 rounded w-3/4 mb-4"></div>
+                  <div className="h-3 bg-gray-700 rounded w-1/2 mb-2"></div>
+                  <div className="h-3 bg-gray-700 rounded w-5/6 mb-2"></div>
+                  <div className="h-3 bg-gray-700 rounded w-1/4"></div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        ) : shows.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {shows.map((show) => (
-              <Link key={show.id} to={`/show/${show.id}`}>
-                <Card className="bg-gray-900 border-gray-800 hover:border-cyan-500/50 transition-all duration-300 card-glow group">
-                  <CardContent className="p-0">
-                    <div className="relative overflow-hidden rounded-t-lg">
-                      <div className={`h-48 ${show.image_url ? "" : "bg-gradient-to-br from-cyan-600/20 to-blue-600/20"} flex items-center justify-center`}>
-                        {show.image_url ? (
-                          <img 
-                            src={show.image_url} 
-                            alt={show.artist_name} 
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="text-center">
-                            <h3 className="text-2xl font-bold text-white mb-2">{show.artist_name}</h3>
-                            <div className="w-12 h-12 mx-auto bg-cyan-500 rounded-full flex items-center justify-center">
-                              <Users className="h-6 w-6 text-black" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1">
-                        <span className="text-cyan-400 text-sm font-medium">{show.votes} votes</span>
-                      </div>
-                    </div>
-                    
-                    <div className="p-6">
-                      <h3 className="text-xl font-semibold text-white mb-3 group-hover:text-cyan-400 transition-colors">
-                        {show.artist_name}
-                      </h3>
-                      
-                      <div className="space-y-2 mb-4">
-                        <div className="flex items-center text-gray-300 text-sm">
-                          <Calendar className="h-4 w-4 mr-2 text-cyan-400" />
-                          {formatDate(show.date)}
-                        </div>
-                        <div className="flex items-center text-gray-300 text-sm">
-                          <MapPin className="h-4 w-4 mr-2 text-cyan-400" />
-                          {show.venue_name}, {show.venue_city}
-                        </div>
-                      </div>
+        </div>
+      </section>
+    );
+  }
 
-                      <Button className="w-full bg-cyan-600 hover:bg-cyan-700 text-white">
-                        Vote on Setlist
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        ) : (
+  if (shows.length === 0) {
+    return (
+      <section className="py-10 bg-gradient-to-r from-gray-900 to-black">
+        <div className="container mx-auto max-w-7xl px-4">
+          <h2 className="text-3xl font-bold text-white mb-8">Trending Shows</h2>
           <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
-            <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-white mb-2">No trending shows yet</h3>
-            <p className="text-gray-400 mb-6 max-w-md mx-auto">
-              As users vote on setlists, trending shows will appear here. Search for your favorite artists to get started.
+            <h3 className="text-xl font-medium text-white mb-2">No upcoming shows</h3>
+            <p className="text-gray-400 mb-6">
+              Search for your favorite artists to see their upcoming shows
             </p>
-            <Link to="/search">
-              <Button className="bg-cyan-600 hover:bg-cyan-700">
-                Explore Artists
-              </Button>
-            </Link>
           </div>
-        )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="py-10 bg-gradient-to-r from-gray-900 to-black">
+      <div className="container mx-auto max-w-7xl px-4">
+        <h2 className="text-3xl font-bold text-white mb-8">Trending Shows</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {shows.map((show) => (
+            <Link to={`/show/${show.id}`} key={show.id}>
+              <Card className="bg-gray-900 border-gray-800 hover:border-cyan-600/50 transition-all duration-300 overflow-hidden h-full">
+                <div className="h-48 bg-gray-800 relative">
+                  {show.artist.image_url ? (
+                    <img 
+                      src={show.artist.image_url} 
+                      alt={show.artist.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-purple-900/30 flex items-center justify-center">
+                      <span className="text-xl text-white font-bold">{show.artist.name}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="text-white font-bold text-xl line-clamp-1">{show.artist.name}</h3>
+                    <p className="text-gray-300 text-sm line-clamp-1">{show.name || 'Concert'}</p>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center text-gray-400">
+                      <CalendarDays className="h-4 w-4 mr-2 text-cyan-500" />
+                      <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
+                    </div>
+                    <div className="flex items-center text-gray-400">
+                      <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
+                      <span>
+                        {show.venue.name}, {show.venue.city}
+                        {show.venue.state ? `, ${show.venue.state}` : ''}
+                      </span>
+                    </div>
+                    <div className="text-right mt-2">
+                      <span className="bg-cyan-500/20 text-cyan-300 text-xs py-1 px-2 rounded">
+                        {show.view_count} view{show.view_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
       </div>
     </section>
   );

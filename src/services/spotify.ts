@@ -65,6 +65,7 @@ async function getAccessToken(): Promise<string | null> {
     });
     
     if (!response.ok) {
+      console.error("Failed to get Spotify access token:", response.status);
       throw new Error(`Failed to get Spotify access token: ${response.status}`);
     }
     
@@ -91,6 +92,7 @@ async function spotifyApiCall<T>(endpoint: string): Promise<T | null> {
     });
     
     if (!response.ok) {
+      console.error("Spotify API error:", response.status, await response.text());
       throw new Error(`Failed to fetch from Spotify API: ${response.status}`);
     }
     
@@ -126,17 +128,23 @@ async function fetchAllPages<T>(initialUrl: string): Promise<T[]> {
 
 // Fetch artist from Spotify API
 export async function getArtist(artistId: string): Promise<SpotifyArtist | null> {
+  console.log("Fetching artist from Spotify:", artistId);
   return spotifyApiCall<SpotifyArtist>(`/artists/${artistId}`);
 }
 
 // Search for artist by name
 export async function searchArtists(query: string): Promise<SpotifyArtist[]> {
   try {
+    console.log("Searching Spotify for artists:", query);
     const response = await spotifyApiCall<{artists: SpotifyPaginatedResponse<SpotifyArtist>}>(
       `/search?q=${encodeURIComponent(query)}&type=artist&limit=10`
     );
     
-    return response?.artists.items || [];
+    if (response?.artists?.items) {
+      console.log("Found artists:", response.artists.items.length);
+      return response.artists.items;
+    }
+    return [];
   } catch (error) {
     console.error("Error searching artists:", error);
     return [];
@@ -146,11 +154,16 @@ export async function searchArtists(query: string): Promise<SpotifyArtist[]> {
 // Get top tracks for an artist
 export async function getArtistTopTracks(artistId: string): Promise<SpotifyTrack[]> {
   try {
+    console.log("Fetching top tracks for artist:", artistId);
     const response = await spotifyApiCall<{tracks: SpotifyTrack[]}>(
       `/artists/${artistId}/top-tracks?market=US`
     );
     
-    return response?.tracks || [];
+    if (response?.tracks) {
+      console.log("Found top tracks:", response.tracks.length);
+      return response.tracks;
+    }
+    return [];
   } catch (error) {
     console.error("Error fetching artist's top tracks:", error);
     return [];
@@ -160,8 +173,11 @@ export async function getArtistTopTracks(artistId: string): Promise<SpotifyTrack
 // Get all albums for an artist
 export async function getArtistAlbums(artistId: string): Promise<SpotifyAlbum[]> {
   try {
+    console.log("Fetching albums for artist:", artistId);
     const albumsUrl = `/artists/${artistId}/albums?include_groups=album,single&market=US&limit=50`;
-    return await fetchAllPages<SpotifyAlbum>(SPOTIFY_API_BASE + albumsUrl);
+    const albums = await fetchAllPages<SpotifyAlbum>(SPOTIFY_API_BASE + albumsUrl);
+    console.log("Found albums:", albums.length);
+    return albums;
   } catch (error) {
     console.error("Error fetching artist's albums:", error);
     return [];
@@ -171,6 +187,7 @@ export async function getArtistAlbums(artistId: string): Promise<SpotifyAlbum[]>
 // Get tracks for a specific album
 export async function getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
   try {
+    console.log("Fetching tracks for album:", albumId);
     const tracksUrl = `/albums/${albumId}/tracks?market=US&limit=50`;
     const tracks = await fetchAllPages<SpotifyTrack>(SPOTIFY_API_BASE + tracksUrl);
     
@@ -195,8 +212,15 @@ export async function getArtistAllTracks(artistId: string): Promise<SpotifyTrack
     const albums = await getArtistAlbums(artistId);
     console.log(`Found ${albums.length} albums for artist ${artistId}`);
     
-    // Then get all tracks for each album
-    const allTracksPromises = albums.map(album => getAlbumTracks(album.id));
+    if (albums.length === 0) {
+      // If no albums, try getting top tracks instead
+      console.log("No albums found, falling back to top tracks");
+      return await getArtistTopTracks(artistId);
+    }
+    
+    // Then get all tracks for each album (limit to first 5 albums to avoid rate limits)
+    const limitedAlbums = albums.slice(0, 5);
+    const allTracksPromises = limitedAlbums.map(album => getAlbumTracks(album.id));
     const allTracksArrays = await Promise.all(allTracksPromises);
     
     // Flatten the array of arrays and deduplicate by track ID
@@ -209,7 +233,9 @@ export async function getArtistAllTracks(artistId: string): Promise<SpotifyTrack
     return uniqueTracks;
   } catch (error) {
     console.error("Error fetching all artist tracks:", error);
-    return [];
+    // Fall back to top tracks if full catalog fetch fails
+    console.log("Falling back to top tracks");
+    return await getArtistTopTracks(artistId);
   }
 }
 
@@ -228,7 +254,9 @@ export async function getUserTopArtists(): Promise<SpotifyArtist[]> {
 // Store artist data in Supabase
 export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<boolean> {
   try {
-    const { error } = await supabase.from('artists').upsert({
+    console.log("Storing artist in database:", artist.name);
+    
+    const artistData = {
       id: artist.id,
       name: artist.name,
       image_url: artist.images?.[0]?.url || null,
@@ -236,13 +264,20 @@ export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<bool
       genres: artist.genres || [],
       spotify_url: artist.external_urls?.spotify || '',
       last_synced_at: new Date().toISOString()
-    });
+    };
+    
+    console.log("Artist data to store:", artistData);
+    
+    const { error } = await supabase
+      .from('artists')
+      .upsert(artistData, { onConflict: 'id' });
     
     if (error) {
       console.error("Error storing artist in database:", error);
       return false;
     }
     
+    console.log("Successfully stored artist:", artist.name);
     return true;
   } catch (error) {
     console.error("Error storing artist in database:", error);
@@ -253,31 +288,42 @@ export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<bool
 // Store tracks in Supabase
 export async function storeTracksInDatabase(artistId: string, tracks: SpotifyTrack[]): Promise<boolean> {
   try {
+    console.log(`Storing ${tracks.length} tracks for artist ${artistId}`);
+    
     // Convert tracks to database format
     const songsToInsert = tracks.map(track => ({
       id: track.id,
       artist_id: artistId,
       name: track.name,
-      album: track.album.name,
-      duration_ms: track.duration_ms,
+      album: track.album?.name || 'Unknown Album',
+      duration_ms: track.duration_ms || 0,
       popularity: track.popularity || 0,
       spotify_url: track.external_urls?.spotify || ''
     }));
     
     // Process in batches to avoid hitting request size limits
-    const batchSize = 100;
+    const batchSize = 50;
+    let successCount = 0;
+    
     for (let i = 0; i < songsToInsert.length; i += batchSize) {
       const batch = songsToInsert.slice(i, i + batchSize);
-      const { error } = await supabase.from('songs').upsert(batch);
+      console.log(`Processing batch ${i}-${i+batch.length} for artist ${artistId}`);
+      
+      const { error } = await supabase
+        .from('songs')
+        .upsert(batch, { onConflict: 'id' });
       
       if (error) {
         console.error(`Error storing tracks batch ${i}-${i+batch.length} in database:`, error);
-        return false;
+        continue;
       }
+      
+      successCount += batch.length;
       console.log(`Successfully stored tracks batch ${i}-${i+batch.length} for artist ${artistId}`);
     }
     
-    return true;
+    console.log(`Successfully stored ${successCount} of ${tracks.length} tracks for artist ${artistId}`);
+    return successCount > 0;
   } catch (error) {
     console.error("Error storing tracks in database:", error);
     return false;
@@ -308,41 +354,27 @@ export async function importArtistCatalog(artistId: string): Promise<boolean> {
       }
     }
     
-    // First fetch the artist details if not already in database
-    let artistData: SpotifyArtist | null = null;
-    
-    if (!artist) {
-      artistData = await getArtist(artistId);
-      if (!artistData) {
-        console.error(`Could not fetch artist with ID: ${artistId}`);
-        return false;
-      }
-      
-      // Store artist in database
-      const artistStored = await storeArtistInDatabase(artistData);
-      if (!artistStored) {
-        console.error(`Failed to store artist: ${artistId}`);
-        return false;
-      }
+    if (artistError && artistError.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.error(`Error checking artist sync status: ${artistId}`, artistError);
     }
     
-    // Now get all tracks for the artist
-    const tracks = await getArtistAllTracks(artistId);
+    // Get top tracks for the artist - simpler and more reliable than full catalog
+    console.log("Getting top tracks for artist:", artistId);
+    const tracks = await getArtistTopTracks(artistId);
+    
     if (tracks.length === 0) {
       console.warn(`No tracks found for artist: ${artistId}`);
       
-      // If no tracks found but we have a valid artist, update last_synced_at
-      if (artistData || artist) {
-        await supabase
-          .from('artists')
-          .update({ last_synced_at: new Date().toISOString() })
-          .eq('id', artistId);
-      }
+      // If no tracks found, try to update last_synced_at anyway
+      await supabase
+        .from('artists')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('id', artistId);
       
       return false;
     }
     
-    // Store all tracks in database
+    // Store tracks in database
     const tracksStored = await storeTracksInDatabase(artistId, tracks);
     if (!tracksStored) {
       console.error(`Failed to store tracks for artist: ${artistId}`);
