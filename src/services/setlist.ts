@@ -11,7 +11,7 @@ export interface Song {
   spotify_url: string;
 }
 
-// Remove circular reference by not including song property in base interface
+// Base interface without song property to avoid circular reference
 export interface SetlistSong {
   id: string;
   setlist_id: string;
@@ -20,8 +20,13 @@ export interface SetlistSong {
   votes: number;
 }
 
-// Create a separate interface for setlist song with song data included
-export interface SetlistSongWithData extends SetlistSong {
+// Extended interface with joined song data
+export interface SetlistSongWithData {
+  id: string;
+  setlist_id: string;
+  song_id: string;
+  position: number;
+  votes: number;
   song?: Song;
 }
 
