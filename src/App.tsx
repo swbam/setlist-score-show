@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
@@ -20,6 +19,11 @@ import SetlistComparison from "./pages/SetlistComparison";
 import DataSyncTestPage from "./pages/DataSyncTestPage";
 
 function App() {
+  useEffect(() => {
+    // Initialize background data synchronization
+    initBackgroundUpdates();
+  }, []);
+
   return (
     <AuthProvider>
       <Routes>

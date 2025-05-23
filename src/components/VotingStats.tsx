@@ -8,6 +8,13 @@ interface VotingStatsProps {
   setlistId: string;
 }
 
+interface Stats {
+  totalVotes: number;
+  uniqueVoters: number;
+  lastVoteTime: string | null;
+  avgVotesPerSong: number;
+}
+
 const VotingStats = ({ setlistId }: VotingStatsProps) => {
   const [stats, setStats] = useState<Stats>({
     totalVotes: 0,
@@ -16,13 +23,6 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     avgVotesPerSong: 0
   });
   const [loading, setLoading] = useState(true);
-
-  interface Stats {
-    totalVotes: number;
-    uniqueVoters: number;
-    lastVoteTime: string | null;
-    avgVotesPerSong: number;
-  }
 
   useEffect(() => {
     async function fetchStats() {
@@ -78,7 +78,7 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     const channel = supabase
       .channel('voting-stats')
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_id=eq.${setlistId}` },
+        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_song_id=eq.${setlistId}` },
         () => fetchStats()
       )
       .subscribe();
@@ -96,7 +96,7 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
-    const intervals = {
+    const intervals: Record<string, number> = {
       year: 31536000,
       month: 2592000,
       week: 604800,
@@ -106,9 +106,8 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
       second: 1
     };
     
-    let counter;
     for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-      counter = Math.floor(seconds / secondsInUnit);
+      const counter = Math.floor(seconds / secondsInUnit);
       if (counter > 0) {
         return `${counter} ${unit}${counter === 1 ? '' : 's'} ago`;
       }
