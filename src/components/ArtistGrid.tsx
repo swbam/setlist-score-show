@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ArtistCard from "./ArtistCard";
 import { Artist } from "@/utils/artistUtils";
+import { useMobile } from "@/context/MobileContext";
 
 interface ArtistGridProps {
   artists: Artist[];
@@ -21,10 +22,12 @@ const ArtistGrid = ({
   searchQuery,
   handleReset 
 }: ArtistGridProps) => {
+  const { isMobile } = useMobile();
+  
   if (loading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-        {[...Array(10)].map((_, i) => (
+      <div className={`grid ${isMobile ? 'grid-cols-2 gap-4' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6'}`}>
+        {[...Array(isMobile ? 6 : 10)].map((_, i) => (
           <Card key={i} className="bg-gray-900 border-gray-800 animate-pulse">
             <div className="h-40 bg-gray-800" />
             <CardContent className="p-4">
@@ -47,7 +50,7 @@ const ArtistGrid = ({
         </p>
         {searchQuery && (
           <Button 
-            className="bg-cyan-600 hover:bg-cyan-700"
+            className="bg-[#f7f7f7] hover:bg-gray-200 text-black"
             onClick={handleReset}
           >
             Show All Artists
@@ -58,7 +61,7 @@ const ArtistGrid = ({
   }
   
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+    <div className={`grid ${isMobile ? 'grid-cols-2 gap-4' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6'} pb-20 md:pb-0`}>
       {artists.map(artist => (
         <ArtistCard key={artist.id} artist={artist} />
       ))}

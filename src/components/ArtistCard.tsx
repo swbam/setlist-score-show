@@ -4,23 +4,27 @@ import { Link } from "react-router-dom";
 import { Music } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Artist } from "@/utils/artistUtils";
+import { useMobile } from "@/context/MobileContext";
 
 interface ArtistCardProps {
   artist: Artist;
 }
 
 const ArtistCard = ({ artist }: ArtistCardProps) => {
+  const { isMobile } = useMobile();
+  
   return (
     <Card 
-      className="bg-gray-900 border-gray-800 overflow-hidden hover:border-cyan-500 transition-all duration-300 group"
+      className={`bg-gray-900 border-gray-800 overflow-hidden hover:border-[#f7f7f7] transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
     >
-      <Link to={`/artist/${artist.id}`}>
-        <div className="h-40 bg-gray-800 relative">
+      <Link to={`/artist/${artist.id}`} className="block h-full">
+        <div className={`${isMobile ? 'h-32' : 'h-40'} bg-gray-800 relative`}>
           {artist.image_url ? (
             <img
               src={artist.image_url}
               alt={artist.name}
               className="w-full h-full object-cover"
+              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">

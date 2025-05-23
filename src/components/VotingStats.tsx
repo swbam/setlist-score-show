@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, ThumbsUp, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useMobile } from "@/context/MobileContext";
 
 interface VotingStatsProps {
   setlistId: string;
@@ -23,6 +24,7 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     avgVotesPerSong: 0
   });
   const [loading, setLoading] = useState(true);
+  const { isMobile } = useMobile();
 
   useEffect(() => {
     async function fetchStats() {
@@ -75,7 +77,6 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     fetchStats();
     
     // Set up real-time subscription for votes
-    // Using specific channel name to avoid excessive nesting
     const channel = supabase
       .channel(`voting-stats-${setlistId}`)
       .on('postgres_changes', 
@@ -123,8 +124,8 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
   };
   
   return (
-    <Card className="bg-gray-900/40 border-gray-800/50">
-      <CardContent className="p-6">
+    <Card className={`bg-gray-900/40 border-gray-800/50 ${isMobile ? 'mx-2 mb-20' : ''}`}>
+      <CardContent className="p-4 md:p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Voting Stats</h3>
         
         {loading ? (

@@ -4,15 +4,15 @@ import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import Header from "@/components/Header";
-import Hero from "@/components/Hero";
-import TrendingShows from "@/components/TrendingShows";
-import Features from "@/components/Features";
 import AppHeader from "@/components/AppHeader";
+import TrendingShows from "@/components/TrendingShows";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import { useMobile } from "@/context/MobileContext";
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
+  const { isMobile } = useMobile();
   
   // Handle search form submission
   const handleSearch = (e: React.FormEvent) => {
@@ -27,21 +27,21 @@ const Index = () => {
       <AppHeader />
       
       {/* Hero Section */}
-      <section className="relative min-h-[80vh] flex items-center justify-center w-full">
+      <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center justify-center w-full">
         {/* Background with grid pattern */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23374151%22%20fill-opacity%3D%220.1%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%227%22%20r%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-20"></div>
         </div>
 
         <div className="relative z-10 text-center max-w-4xl mx-auto px-4">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6">
+          <h1 className={`${isMobile ? "text-4xl" : "text-5xl md:text-7xl"} font-bold mb-6`}>
             <span className="text-white">Crowdsourced</span>
             <br />
             <span className="text-white">concert setlists </span>
             <span className="gradient-text">at scale.</span>
           </h1>
           
-          <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-2xl mx-auto">
+          <p className={`${isMobile ? "text-lg" : "text-xl md:text-2xl"} text-gray-300 mb-8 max-w-2xl mx-auto`}>
             Discover upcoming shows and vote on setlists for your favorite artists.
           </p>
 
@@ -50,7 +50,7 @@ const Index = () => {
             <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
             <Input
               placeholder="Search for artists, venues, or cities..."
-              className="w-full pl-12 pr-4 py-6 text-lg bg-gray-900/80 border-gray-700 focus:border-cyan-500 rounded-xl"
+              className={`w-full pl-12 pr-4 ${isMobile ? "py-4" : "py-6"} text-lg bg-gray-900/80 border-gray-700 focus:border-[#f7f7f7] rounded-xl`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -65,7 +65,7 @@ const Index = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => navigate(`/search?q=${encodeURIComponent(artist)}`)}
-                className="border-gray-700 text-gray-300 hover:bg-cyan-600 hover:text-white hover:border-cyan-600"
+                className="border-gray-700 text-gray-300 hover:bg-[#f7f7f7] hover:text-black hover:border-[#f7f7f7]"
               >
                 {artist}
               </Button>
@@ -76,7 +76,7 @@ const Index = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button 
               onClick={() => navigate("/search")}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-8 py-3 text-lg"
+              className="bg-[#f7f7f7] hover:bg-gray-200 text-black px-8 py-3 text-lg"
             >
               Explore Shows
             </Button>
@@ -100,7 +100,7 @@ const Index = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-              <div className="w-12 h-12 bg-cyan-600/20 text-cyan-400 rounded-full flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-[#f7f7f7]/20 text-[#f7f7f7] rounded-full flex items-center justify-center mb-4">
                 <span className="text-xl font-bold">1</span>
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Find Your Show</h3>
@@ -110,7 +110,7 @@ const Index = () => {
             </div>
             
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-              <div className="w-12 h-12 bg-cyan-600/20 text-cyan-400 rounded-full flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-[#f7f7f7]/20 text-[#f7f7f7] rounded-full flex items-center justify-center mb-4">
                 <span className="text-xl font-bold">2</span>
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Vote on Setlists</h3>
@@ -120,7 +120,7 @@ const Index = () => {
             </div>
             
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-              <div className="w-12 h-12 bg-cyan-600/20 text-cyan-400 rounded-full flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-[#f7f7f7]/20 text-[#f7f7f7] rounded-full flex items-center justify-center mb-4">
                 <span className="text-xl font-bold">3</span>
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Compare After the Show</h3>
@@ -133,7 +133,7 @@ const Index = () => {
       </section>
       
       {/* Footer - Full Width */}
-      <footer className="w-full bg-gray-900 border-t border-gray-800 py-12">
+      <footer className="w-full bg-gray-900 border-t border-gray-800 py-12 pb-32 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
@@ -146,18 +146,18 @@ const Index = () => {
             <div>
               <h4 className="text-white font-semibold mb-4">Navigation</h4>
               <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="/" className="hover:text-cyan-400 transition-colors">Home</a></li>
-                <li><a href="/search" className="hover:text-cyan-400 transition-colors">Artists</a></li>
-                <li><a href="/login" className="hover:text-cyan-400 transition-colors">Sign In</a></li>
+                <li><a href="/" className="hover:text-[#f7f7f7] transition-colors">Home</a></li>
+                <li><a href="/search" className="hover:text-[#f7f7f7] transition-colors">Artists</a></li>
+                <li><a href="/login" className="hover:text-[#f7f7f7] transition-colors">Sign In</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">About</a></li>
+                <li><a href="#" className="hover:text-[#f7f7f7] transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-[#f7f7f7] transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="hover:text-[#f7f7f7] transition-colors">About</a></li>
               </ul>
             </div>
             
@@ -176,6 +176,9 @@ const Index = () => {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

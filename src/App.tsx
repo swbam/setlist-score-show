@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
+import { MobileProvider } from "@/context/MobileContext";
 import { initBackgroundUpdates } from "@/services/scheduler";
 import "./App.css";
 
@@ -28,21 +29,23 @@ function App() {
 
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<IndexPage />} />
-        <Route path="/search" element={<SearchResults />} />
-        <Route path="/artist/:artistId" element={<ArtistPage />} />
-        <Route path="/show/:showId" element={<ShowVoting />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/artists" element={<AllArtists />} />
-        <Route path="/setlist-comparison/:showId" element={<SetlistComparison />} />
-        <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      <Toaster position="top-center" richColors />
+      <MobileProvider>
+        <Routes>
+          <Route path="/" element={<IndexPage />} />
+          <Route path="/search" element={<SearchResults />} />
+          <Route path="/artist/:artistId" element={<ArtistPage />} />
+          <Route path="/show/:showId" element={<ShowVoting />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/artists" element={<AllArtists />} />
+          <Route path="/setlist-comparison/:showId" element={<SetlistComparison />} />
+          <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <Toaster position="top-center" richColors />
+      </MobileProvider>
     </AuthProvider>
   );
 }
