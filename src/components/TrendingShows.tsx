@@ -39,6 +39,27 @@ const TrendingShows = () => {
     fetchTrendingShows();
   }, []);
 
+  // Helper function to safely format dates
+  const safeFormatDate = (dateStr: any) => {
+    if (!dateStr || typeof dateStr === 'object') {
+      return 'Date TBA';
+    }
+    
+    try {
+      const date = new Date(dateStr);
+      
+      // Validate the date is valid
+      if (isNaN(date.getTime())) {
+        return 'Date TBA';
+      }
+      
+      return format(date, 'MMM d, yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error, dateStr);
+      return 'Date TBA';
+    }
+  };
+
   if (loading) {
     return (
       <section className="py-10">
@@ -174,7 +195,7 @@ const TrendingShows = () => {
                   
                   <div className="flex items-center text-gray-400 text-sm">
                     <CalendarDays className="h-4 w-4 mr-2 text-gray-500" />
-                    <span>{format(new Date(show.date), 'MMM d, yyyy')}</span>
+                    <span>{safeFormatDate(show.date)}</span>
                     <span className="ml-auto text-gray-500">{Math.floor(Math.random() * 4) + 1} hrs</span>
                   </div>
                   

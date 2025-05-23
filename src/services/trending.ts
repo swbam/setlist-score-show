@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "@/services/ticketmaster";
 
@@ -43,17 +44,25 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         imageUrl = wideImage ? wideImage.url : event.images[0].url;
       }
       
+      // Ensure we have a valid date string
+      let dateString = null;
+      if (event.dates?.start?.dateTime && typeof event.dates.start.dateTime === 'string') {
+        dateString = event.dates.start.dateTime;
+      }
+      
       return {
         id: event.id,
         name: event.name,
-        date: event.dates.start.dateTime,
+        date: dateString,
         votes: 0, // New events from API start with 0 votes
         artist_name: artist?.name || 'Various Artists',
         venue_name: venue?.name || 'TBA',
         venue_city: venue?.city?.name || 'TBA',
         image_url: imageUrl
       };
-    });
+    })
+    // Filter out events with invalid dates
+    .filter(show => show.date !== null);
     
     // Also get top voted shows from database as a backup
     const { data: dbShows, error } = await supabase
@@ -105,11 +114,14 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
               return sum;
             }, 0);
           }
+          
+          // Ensure date is valid
+          let dateString = show.date && typeof show.date === 'string' ? show.date : null;
               
           return {
             id: show.id,
             name: show.name || `${show.artists.name} Concert`,
-            date: show.date,
+            date: dateString,
             votes: totalVotes,
             artist_name: show.artists.name,
             venue_name: show.venues.name,
@@ -117,7 +129,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
             image_url: show.artists.image_url
           };
         })
-        .filter(show => show.votes > 0); // Only include shows with votes
+        .filter(show => show.votes > 0 && show.date !== null); // Only include shows with votes and valid dates
       
       // Combine API and DB shows, prioritizing ones with votes
       const combinedShows = [...processedDbShows, ...ticketmasterShows];
@@ -138,8 +150,16 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
           return 1; // b has votes, a doesn't
         }
         
-        // Then sort by date
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
+        // Then sort by date (if both have valid dates)
+        if (a.date && b.date) {
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        } else if (a.date) {
+          return -1; // a has date, b doesn't
+        } else if (b.date) {
+          return 1;  // b has date, a doesn't
+        }
+        
+        return 0;
       });
       
       console.log("Combined trending shows:", uniqueShows.length);
