@@ -28,40 +28,32 @@ const AllArtists = () => {
   
   // Fetch artists on page load
   useEffect(() => {
-    fetchCombinedArtists();
+    fetchTopArtistsWithUpcomingShows();
   }, []);
   
-  // Fetch both database and Ticketmaster artists
-  const fetchCombinedArtists = async () => {
+  // Fetch top artists with upcoming shows from Ticketmaster
+  const fetchTopArtistsWithUpcomingShows = async () => {
     setLoading(true);
     
     try {
-      // Fetch from database first
-      const { data: dbArtists, error } = await supabase
-        .from("artists")
-        .select("*")
-        .order("popularity", { ascending: false })
-        .limit(15);
-        
-      if (error) {
-        throw error;
-      }
-      
-      // Mark database artists
-      const dbArtistsWithSource = (dbArtists || []).map(artist => ({
-        ...artist,
-        source: 'database' as const
-      }));
-      
-      // Fetch from Ticketmaster API for popular events
-      const events = await ticketmasterService.getPopularEvents(20);
+      // Get popular events from Ticketmaster API
+      const events = await ticketmasterService.getPopularEvents(50);
+      console.log(`Found ${events.length} popular events`);
       
       // Extract unique artists from events
-      const tmArtists = events
-        .filter(event => event._embedded?.attractions?.[0])
-        .map(event => {
-          const attraction = event._embedded?.attractions?.[0];
-          if (!attraction) return null;
+      const artistMap = new Map<string, Artist>();
+      
+      for (const event of events) {
+        const attractions = event._embedded?.attractions;
+        if (!attractions) continue;
+        
+        // Process each artist/attraction
+        for (const attraction of attractions) {
+          if (!attraction || !attraction.name) continue;
+          
+          // Skip if we already processed this artist
+          const artistKey = attraction.name.toLowerCase();
+          if (artistMap.has(artistKey)) continue;
           
           // Find a suitable image
           let imageUrl = null;
@@ -70,7 +62,7 @@ const AllArtists = () => {
             imageUrl = wideImage ? wideImage.url : attraction.images[0].url;
           }
           
-          return {
+          const artist: Artist = {
             id: attraction.id || `tm-${attraction.name}`,
             name: attraction.name,
             image_url: imageUrl,
@@ -78,21 +70,101 @@ const AllArtists = () => {
             popularity: 0,
             source: 'ticketmaster' as const
           };
-        })
-        .filter(Boolean) as Artist[];
+          
+          artistMap.set(artistKey, artist);
+          
+          // Store the artist in Supabase
+          await storeArtistInDatabase(artist);
+        }
+      }
       
-      // Deduplicate artists (prefer database entries)
-      const dbArtistNames = new Set(dbArtistsWithSource.map(a => a.name.toLowerCase()));
-      const uniqueTmArtists = tmArtists.filter(a => !dbArtistNames.has(a.name.toLowerCase()));
+      // Get the unique artists
+      const uniqueArtists = Array.from(artistMap.values());
+      console.log(`Extracted ${uniqueArtists.length} unique artists`);
       
-      // Combine and set
-      const combinedArtists = [...dbArtistsWithSource, ...uniqueTmArtists];
-      setArtists(combinedArtists);
+      // Mix in any artists from the database that aren't already in the list
+      const { data: dbArtists, error } = await supabase
+        .from("artists")
+        .select("*")
+        .order("popularity", { ascending: false })
+        .limit(40);
+      
+      if (!error && dbArtists) {
+        console.log(`Found ${dbArtists.length} artists in database`);
+        
+        // Add database artists that aren't already in our map
+        for (const dbArtist of dbArtists) {
+          const artistKey = dbArtist.name.toLowerCase();
+          if (!artistMap.has(artistKey)) {
+            artistMap.set(artistKey, {
+              ...dbArtist,
+              source: 'database' as const
+            });
+          }
+        }
+      }
+      
+      // Final list of unique artists, sorted by source (database first) then name
+      const finalArtists = Array.from(artistMap.values()).sort((a, b) => {
+        // Database artists come first
+        if (a.source === 'database' && b.source !== 'database') return -1;
+        if (a.source !== 'database' && b.source === 'database') return 1;
+        
+        // Then sort by name
+        return a.name.localeCompare(b.name);
+      });
+      
+      setArtists(finalArtists);
     } catch (error) {
-      console.error("Error fetching artists:", error);
+      console.error("Error fetching artists with upcoming shows:", error);
       toast.error("Failed to load artists");
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Store artist in Supabase database
+  const storeArtistInDatabase = async (artist: Artist): Promise<boolean> => {
+    try {
+      // Skip if no valid ID
+      if (!artist.id) return false;
+      
+      // Check if artist exists in database
+      const { data: existingArtist } = await supabase
+        .from('artists')
+        .select('id')
+        .eq('id', artist.id)
+        .maybeSingle();
+      
+      if (existingArtist) {
+        console.log(`Artist ${artist.name} already exists in database`);
+        return true; // Artist already exists
+      }
+      
+      // Create artist in database with minimal information
+      // Later sync processes can fetch more details from Spotify
+      const { error } = await supabase
+        .from('artists')
+        .insert({
+          id: artist.id,
+          name: artist.name,
+          image_url: artist.image_url || null,
+          genres: artist.genres || [],
+          popularity: artist.popularity || 0,
+          spotify_url: null,
+          last_synced_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.error(`Error storing artist ${artist.name}:`, error);
+        return false;
+      }
+      
+      console.log(`Successfully stored artist ${artist.name} in database`);
+      return true;
+    } catch (error) {
+      console.error(`Error storing artist ${artist.name}:`, error);
+      return false;
     }
   };
   
@@ -101,7 +173,7 @@ const AllArtists = () => {
     e.preventDefault();
     
     if (!searchQuery.trim()) {
-      fetchCombinedArtists();
+      fetchTopArtistsWithUpcomingShows();
       return;
     }
     
@@ -109,18 +181,22 @@ const AllArtists = () => {
     setSearchPerformed(true);
     
     try {
-      // Search Spotify for artists
-      const spotifyArtists = await spotifyService.searchArtists(searchQuery);
-      
       // Search Ticketmaster for artists with events
       const events = await ticketmasterService.searchEvents(searchQuery);
+      console.log(`Found ${events.length} events matching "${searchQuery}"`);
       
       // Extract unique artists from events
-      const tmArtists = events
-        .filter(event => event._embedded?.attractions?.[0])
-        .map(event => {
-          const attraction = event._embedded?.attractions?.[0];
-          if (!attraction) return null;
+      const artistMap = new Map<string, Artist>();
+      
+      for (const event of events) {
+        const attractions = event._embedded?.attractions;
+        if (!attractions) continue;
+        
+        for (const attraction of attractions) {
+          if (!attraction || !attraction.name) continue;
+          
+          const artistKey = attraction.name.toLowerCase();
+          if (artistMap.has(artistKey)) continue;
           
           let imageUrl = null;
           if (attraction.images && attraction.images.length > 0) {
@@ -128,7 +204,7 @@ const AllArtists = () => {
             imageUrl = wideImage ? wideImage.url : attraction.images[0].url;
           }
           
-          return {
+          const artist: Artist = {
             id: attraction.id || `tm-${attraction.name}`,
             name: attraction.name,
             image_url: imageUrl,
@@ -136,22 +212,51 @@ const AllArtists = () => {
             popularity: 0,
             source: 'ticketmaster' as const
           };
-        })
-        .filter(Boolean) as Artist[];
+          
+          artistMap.set(artistKey, artist);
+          
+          // Store the artist in Supabase
+          await storeArtistInDatabase(artist);
+        }
+      }
       
-      // Convert Spotify artists to our format
-      const formattedSpotifyArtists = spotifyArtists.map(artist => ({
-        id: artist.id,
-        name: artist.name,
-        image_url: artist.images && artist.images.length > 0 ? artist.images[0].url : undefined,
-        genres: artist.genres || [],
-        popularity: artist.popularity || 0,
-        source: 'database' as const
-      }));
+      // Also search for artists in our database
+      const { data: dbArtists } = await supabase
+        .from("artists")
+        .select("*")
+        .ilike("name", `%${searchQuery}%`)
+        .limit(20);
+        
+      if (dbArtists) {
+        for (const dbArtist of dbArtists) {
+          const artistKey = dbArtist.name.toLowerCase();
+          if (!artistMap.has(artistKey)) {
+            artistMap.set(artistKey, {
+              ...dbArtist,
+              source: 'database' as const
+            });
+          }
+        }
+      }
       
-      // Combine and deduplicate artists
-      const combinedArtists = mergeArtists([...formattedSpotifyArtists, ...tmArtists]);
-      setArtists(combinedArtists);
+      // Convert to array and sort
+      const searchResults = Array.from(artistMap.values()).sort((a, b) => {
+        // Database artists come first
+        if (a.source === 'database' && b.source !== 'database') return -1;
+        if (a.source !== 'database' && b.source === 'database') return 1;
+        
+        // Then sort by how well the name matches the search query
+        const aStartsWith = a.name.toLowerCase().startsWith(searchQuery.toLowerCase());
+        const bStartsWith = b.name.toLowerCase().startsWith(searchQuery.toLowerCase());
+        
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        
+        // Finally sort by name
+        return a.name.localeCompare(b.name);
+      });
+      
+      setArtists(searchResults);
     } catch (error) {
       console.error("Error searching artists:", error);
       toast.error("Search failed. Please try again.");
@@ -160,35 +265,12 @@ const AllArtists = () => {
     }
   };
   
-  // Helper function to deduplicate artists by name
-  const mergeArtists = (artistArray: Artist[]): Artist[] => {
-    const artistMap = new Map<string, Artist>();
-    
-    artistArray.forEach(artist => {
-      const key = artist.name.toLowerCase();
-      // Prefer database artists over ticketmaster ones
-      if (!artistMap.has(key) || artist.source === 'database') {
-        artistMap.set(key, artist);
-      }
-    });
-    
-    return Array.from(artistMap.values());
-  };
-  
   // Reset search and show all artists
   const handleReset = () => {
     setSearchQuery("");
     setSearchPerformed(false);
-    fetchCombinedArtists();
+    fetchTopArtistsWithUpcomingShows();
   };
-  
-  // Filter artists by search query
-  const filteredArtists = searchPerformed 
-    ? artists 
-    : (searchQuery
-        ? artists.filter(artist => 
-            artist.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : artists);
   
   return (
     <div className="min-h-screen bg-black">
@@ -237,9 +319,9 @@ const AllArtists = () => {
               </Card>
             ))}
           </div>
-        ) : filteredArtists.length > 0 ? (
+        ) : artists.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {filteredArtists.map(artist => (
+            {artists.map(artist => (
               <Card 
                 key={artist.id}
                 className="bg-gray-900 border-gray-800 overflow-hidden hover:border-cyan-500 transition-all duration-300 group"
