@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { getRandomSongsForSetlist } from "@/services/catalog";
 
 export interface Song {
   id: string;
@@ -114,6 +114,72 @@ export async function getSetlistByShowId(showId: string): Promise<Setlist | null
     return getSetlistWithSongs(setlist.id);
   } catch (error) {
     console.error("Error in getSetlistByShowId:", error);
+    return null;
+  }
+}
+
+// Create a new setlist for a show
+export async function createSetlistForShow(showId: string): Promise<string | null> {
+  try {
+    console.log(`Creating setlist for show: ${showId}`);
+    
+    // Get show details to find artist
+    const { data: show, error: showError } = await supabase
+      .from('shows')
+      .select('artist_id')
+      .eq('id', showId)
+      .single();
+    
+    if (showError || !show) {
+      console.error(`Error fetching show ${showId}:`, showError);
+      return null;
+    }
+    
+    const artistId = show.artist_id;
+    
+    // Create setlist record 
+    const { data: setlist, error: setlistError } = await supabase
+      .from('setlists')
+      .insert({
+        show_id: showId,
+      })
+      .select()
+      .single();
+    
+    if (setlistError || !setlist) {
+      console.error("Error creating setlist:", setlistError);
+      return null;
+    }
+    
+    // Get 5 random songs from artist's catalog
+    const randomSongs = await getRandomSongsForSetlist(artistId, 5);
+    
+    if (!randomSongs || randomSongs.length === 0) {
+      console.error("Failed to get random songs for setlist");
+      return setlist.id;
+    }
+    
+    console.log(`Adding ${randomSongs.length} initial songs to setlist`);
+    
+    // Add songs to setlist with initial votes of 0
+    const setlistSongs = randomSongs.map((song, index) => ({
+      setlist_id: setlist.id,
+      song_id: song.id,
+      position: index + 1,
+      votes: 0
+    }));
+    
+    const { error: songsError } = await supabase
+      .from('setlist_songs')
+      .insert(setlistSongs);
+    
+    if (songsError) {
+      console.error("Error adding songs to setlist:", songsError);
+    }
+    
+    return setlist.id;
+  } catch (error) {
+    console.error("Error creating setlist:", error);
     return null;
   }
 }
