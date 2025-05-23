@@ -7,8 +7,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/hooks/use-debounce";
-import { ThumbsUp, Search, PlusCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client"; // Make sure this import is present
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { ThumbsUp, Search, Music, PlusCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import AddSongToSetlist from "@/components/AddSongToSetlist";
 import * as setlistService from "@/services/setlist";
 import { SpotifyArtist } from "@/services/spotify";
@@ -38,10 +45,11 @@ export function VotingSection({
   usedVotesCount,
   maxFreeVotes
 }: VotingSectionProps) {
-  const [songToAdd, setSongToAdd] = useState("");
+  const [selectedSongId, setSelectedSongId] = useState("");
   const [songs, setSongs] = useState<setlistService.SetlistSong[]>([]);
+  const [availableSongs, setAvailableSongs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const debouncedSong = useDebounce(songToAdd, 500);
+  const [loadingSongs, setLoadingSongs] = useState(false);
   
   // Load setlist songs on setlist change
   useEffect(() => {
@@ -50,27 +58,65 @@ export function VotingSection({
     }
   }, [setlist]);
   
+  // Load available songs for the artist
+  useEffect(() => {
+    if (artist && artist.id) {
+      fetchAvailableSongs();
+    }
+  }, [artist]);
+  
+  // Fetch available songs for the artist from the database
+  const fetchAvailableSongs = async () => {
+    if (!artist.id) return;
+    
+    try {
+      setLoadingSongs(true);
+      const { data, error } = await supabase
+        .from('songs')
+        .select('id, name, album')
+        .eq('artist_id', artist.id)
+        .order('name', { ascending: true })
+        .limit(100);
+      
+      if (error) {
+        console.error("Error fetching songs:", error);
+        toast.error("Failed to load songs");
+      } else {
+        // Filter out songs that are already in the setlist
+        const existingSongIds = songs.map(song => song.song_id);
+        const filteredSongs = data.filter(song => !existingSongIds.includes(song.id));
+        setAvailableSongs(filteredSongs);
+      }
+    } catch (error) {
+      console.error("Error loading songs:", error);
+    } finally {
+      setLoadingSongs(false);
+    }
+  };
+  
   // Refresh setlist data
   const refreshSetlist = useCallback(async () => {
     setLoading(true);
     await onRefresh();
+    await fetchAvailableSongs(); // Refresh available songs to exclude newly added ones
     setLoading(false);
   }, [onRefresh]);
 
   // Function to add a song to the setlist
-  const addSong = async (songId: string) => {
-    if (!setlist) return false;
+  const addSong = async () => {
+    if (!setlist || !selectedSongId) return false;
     
     try {
-      const success = await setlistService.addSongToSetlist(setlist.id, songId);
+      const success = await setlistService.addSongToSetlist(setlist.id, selectedSongId);
       if (success) {
         await refreshSetlist();
-        toast("Song added to setlist");
+        toast.success("Song added to setlist");
+        setSelectedSongId(""); // Reset selection
       }
       return success;
     } catch (error) {
       console.error("Error adding song:", error);
-      toast("Failed to add song");
+      toast.error("Failed to add song");
       return false;
     }
   };
@@ -120,15 +166,53 @@ export function VotingSection({
         </Card>
       )}
       
-      {/* Add Song Section */}
+      {/* Add Song Section - Now with dropdown */}
       <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-        <h3 className="text-lg font-medium text-white mb-4">Add Songs to Setlist</h3>
-        <AddSongToSetlist 
-          setlistId={setlist?.id || ''} 
-          artistId={artist.id}
-          onAddSong={addSong}
-          onSongAdded={refreshSetlist}
-        />
+        <h3 className="text-lg font-medium text-white mb-4">Add a Song to Setlist</h3>
+        
+        <div className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="song-select" className="text-white">Choose a song</Label>
+            <Select 
+              value={selectedSongId} 
+              onValueChange={setSelectedSongId}
+              disabled={loadingSongs}
+            >
+              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                <SelectValue placeholder={loadingSongs ? "Loading songs..." : "Select a song"} />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700 text-white max-h-80">
+                {availableSongs.map((song) => (
+                  <SelectItem key={song.id} value={song.id} className="focus:bg-gray-700">
+                    <div className="flex flex-col">
+                      <span>{song.name}</span>
+                      {song.album && <span className="text-xs text-gray-400">{song.album}</span>}
+                    </div>
+                  </SelectItem>
+                ))}
+                {availableSongs.length === 0 && !loadingSongs && (
+                  <div className="p-2 text-center text-gray-400">
+                    No songs available
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <Button
+            type="button"
+            onClick={addSong}
+            disabled={!selectedSongId || loading}
+            className="w-full"
+          >
+            {loading ? (
+              <div className="h-4 w-4 border-2 border-t-transparent rounded-full animate-spin mr-2" />
+            ) : (
+              <PlusCircle className="h-4 w-4 mr-2" />
+            )}
+            Add to Setlist
+          </Button>
+        </div>
       </div>
     </div>
   );

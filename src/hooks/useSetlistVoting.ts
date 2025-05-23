@@ -3,26 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import * as setlistService from "@/services/setlist";
-
-// Updated interfaces to avoid recursive type definitions
-export interface Song {
-  id: string;
-  name: string;
-  album?: string;
-  duration_ms?: number;
-}
-
-export interface SetlistSong {
-  id: string;
-  song_id: string;
-  song_name: string;
-  votes: number;
-  position: number;
-  album?: string;
-  duration_ms?: number;
-  song?: Song; // Changed to use the Song interface above
-  userVoted?: boolean;
-}
+import { SetlistSong, Song } from "@/pages/ShowVoting/types";
 
 export function useSetlistVoting(setlistId: string) {
   const [songs, setSongs] = useState<SetlistSong[]>([]);
@@ -78,11 +59,8 @@ export function useSetlistVoting(setlistId: string) {
         const formattedData: SetlistSong[] = data.map(item => ({
           id: item.id,
           song_id: item.song_id,
-          song_name: item.song?.name || '',
           votes: item.votes,
           position: item.position,
-          album: item.song?.album,
-          duration_ms: item.song?.duration_ms,
           song: {
             id: item.song?.id || '',
             name: item.song?.name || '',

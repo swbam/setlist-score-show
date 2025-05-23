@@ -2,9 +2,10 @@
 import { useAuth } from "@/context/AuthContext";
 import AppHeader from "@/components/AppHeader";
 import ShowHeader from "./ShowHeader";
-import { VotingSection } from "./VotingSection"; // Use named import
+import { VotingSection } from "./VotingSection";
 import Sidebar from "./Sidebar";
 import useShowVoting from "./useShowVoting";
+import { SpotifyArtist } from "@/services/spotify";
 
 const ShowVoting = () => {
   const { user } = useAuth();
@@ -22,10 +23,14 @@ const ShowVoting = () => {
   } = useShowVoting(user);
 
   // Format artist data to match SpotifyArtist type
-  const artist = show?.artist ? {
+  const artist: SpotifyArtist = show?.artist ? {
     id: show.artist.id,
     name: show.artist.name,
-    images: show.artist.image_url ? [{ url: show.artist.image_url }] : [],
+    images: show.artist.image_url ? [{ 
+      url: show.artist.image_url,
+      height: 640, // Default values
+      width: 640
+    }] : [],
     popularity: show.artist.popularity || 0,
     genres: show.artist.genres || [],
     external_urls: { spotify: show.artist.spotify_url || '' }
@@ -56,7 +61,7 @@ const ShowVoting = () => {
               onRefresh={handleSongAdded}
               voteSubmitting={voteSubmitting}
               handleVote={handleVote}
-              votesRemaining={votesRemaining}
+              votesRemaining={typeof votesRemaining === 'string' ? votesRemaining : Number(votesRemaining)}
               usedVotesCount={usedVotesCount}
               maxFreeVotes={maxFreeVotes}
             />
