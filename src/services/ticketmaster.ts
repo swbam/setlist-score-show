@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Ticketmaster API key
@@ -175,69 +174,108 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
 }
 
 // Store show in database
-export async function storeShowInDatabase(
-  event: TicketmasterEvent, 
-  artistId: string, 
+export const storeShowInDatabase = async (
+  event: TicketmasterEvent,
+  artistId: string,
   venueId: string
-): Promise<boolean> {
+): Promise<boolean> => {
   try {
-    console.log("Storing show in database:", event.name);
+    // Check if artist exists in the database
+    const { data: artistExists } = await supabase
+      .from('artists')
+      .select('id')
+      .eq('id', artistId)
+      .maybeSingle();
     
-    // Check for required fields
-    if (!event || !event.id || !event.name || !artistId || !venueId) {
-      console.error("Missing required show data:", { event, artistId, venueId });
+    // If artist doesn't exist with that ID, try to find them by name
+    if (!artistExists) {
+      console.warn(`Artist with ID ${artistId} not found in database.`);
+      // This could happen if we're using a Ticketmaster ID but the artist was stored with Spotify ID
+      // Try to find by name using the event information
+      if (event._embedded?.attractions?.[0]?.name) {
+        const { data: artistByName } = await supabase
+          .from('artists')
+          .select('id')
+          .ilike('name', event._embedded.attractions[0].name)
+          .maybeSingle();
+        
+        if (artistByName) {
+          artistId = artistByName.id;
+          console.log(`Found artist by name instead: ${artistId}`);
+        } else {
+          console.error(`Could not find artist ${event._embedded.attractions[0].name} in database`);
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+    
+    // Check if venue exists
+    const { data: venueExists } = await supabase
+      .from('venues')
+      .select('id')
+      .eq('id', venueId)
+      .maybeSingle();
+    
+    if (!venueExists) {
+      console.error(`Venue with ID ${venueId} not found in database. Store venue first.`);
       return false;
     }
     
-    // Ensure we have a valid date
-    if (!event.dates?.start?.dateTime) {
-      console.error("Event missing required date:", event);
-      return false;
-    }
-    
-    const status = 
-      event.dates.status?.code === 'cancelled' ? 'canceled' :
-      event.dates.status?.code === 'postponed' ? 'postponed' : 'scheduled';
-    
-    // Find a good image
-    let imageUrl = null;
-    if (event.images && event.images.length > 0) {
-      // Try to find a 16:9 ratio image first
-      const wideImage = event.images.find(img => img.ratio === '16_9');
-      // Otherwise use the first image
-      imageUrl = wideImage ? wideImage.url : event.images[0].url;
-    }
-    
+    // Format the show data
     const showData = {
       id: event.id,
       artist_id: artistId,
       venue_id: venueId,
-      name: event.name,
-      date: event.dates.start.dateTime,
-      start_time: event.dates.start.localTime || null,
-      status: status,
-      ticketmaster_url: event.url || null,
-      view_count: 0 // Initialize view count to 0
+      name: event.name || null,
+      date: event.dates?.start?.dateTime || null,
+      start_time: event.dates?.start?.localTime || null,
+      status: event.dates?.status?.code === 'cancelled' ? 'canceled' : 
+             event.dates?.status?.code === 'postponed' ? 'postponed' : 'scheduled',
+      ticketmaster_url: event.url || null
     };
     
-    console.log("Show data to store:", showData);
-    
-    const { error } = await supabase
+    // Check if show already exists
+    const { data: existingShow } = await supabase
       .from('shows')
-      .upsert(showData, { onConflict: 'id' });
+      .select('id')
+      .eq('id', event.id)
+      .maybeSingle();
     
-    if (error) {
-      console.error("Error storing show in database:", error);
-      return false;
+    if (existingShow) {
+      // Update existing show
+      const { error } = await supabase
+        .from('shows')
+        .update(showData)
+        .eq('id', event.id);
+      
+      if (error) {
+        console.error(`Error updating show ${event.name}:`, error);
+        return false;
+      }
+      
+      console.log(`Updated show ${event.name} in database`);
+      return true;
+    } else {
+      // Insert new show
+      const { error } = await supabase
+        .from('shows')
+        .insert(showData);
+      
+      if (error) {
+        console.error(`Error storing show ${event.name}:`, error);
+        return false;
+      }
+      
+      console.log(`Stored show ${event.name} in database`);
+      return true;
     }
-    
-    console.log("Successfully stored show:", event.name);
-    return true;
   } catch (error) {
-    console.error("Error storing show in database:", error);
+    console.error(`Error storing show:`, error);
     return false;
   }
-}
+};
 
 // Get trending shows based on view count
 export async function getTrendingShows(limit: number = 6): Promise<any[]> {

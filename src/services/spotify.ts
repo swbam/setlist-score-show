@@ -268,16 +268,40 @@ export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<bool
     
     console.log("Artist data to store:", artistData);
     
-    const { error } = await supabase
+    // First check if artist with this ID already exists
+    const { data: existingArtist } = await supabase
       .from('artists')
-      .upsert(artistData, { onConflict: 'id' });
+      .select('id')
+      .eq('id', artist.id)
+      .maybeSingle();
     
-    if (error) {
-      console.error("Error storing artist in database:", error);
-      return false;
+    if (existingArtist) {
+      // Artist exists, update their data
+      const { error } = await supabase
+        .from('artists')
+        .update(artistData)
+        .eq('id', artist.id);
+      
+      if (error) {
+        console.error("Error updating artist in database:", error);
+        return false;
+      }
+      
+      console.log("Successfully updated artist:", artist.name);
+    } else {
+      // Artist doesn't exist, insert them
+      const { error } = await supabase
+        .from('artists')
+        .insert(artistData);
+      
+      if (error) {
+        console.error("Error storing artist in database:", error);
+        return false;
+      }
+      
+      console.log("Successfully stored artist:", artist.name);
     }
     
-    console.log("Successfully stored artist:", artist.name);
     return true;
   } catch (error) {
     console.error("Error storing artist in database:", error);

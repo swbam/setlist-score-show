@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Music } from "lucide-react";
@@ -9,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/context/AuthContext";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
+import * as artistUtils from "@/utils/artistUtils";
 import AppHeader from "@/components/AppHeader";
 import { debounce } from 'lodash';
 
@@ -83,7 +83,7 @@ const SearchResults = () => {
       // Show loading toast
       const loadingToast = toast.loading(`Loading ${artist.name} data...`);
       
-      // Store artist in database
+      // Store artist in database with normalized ID
       const artistStored = await spotifyService.storeArtistInDatabase(artist);
       
       if (artistStored) {
@@ -113,7 +113,7 @@ const SearchResults = () => {
               // Store venue in database
               await ticketmasterService.storeVenueInDatabase(venue);
               
-              // Store show in database
+              // Store show in database with the normalized artist ID
               await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
               eventCount++;
             }
@@ -131,8 +131,14 @@ const SearchResults = () => {
           `${artist.name} data loaded with ${eventCount} upcoming shows`
         );
         
-        // Navigate to artist page
-        navigate(`/artist/${artist.id}`);
+        // Create URL-friendly slug from artist name
+        const artistSlug = artist.name.toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        
+        // Navigate to artist page with SEO-friendly URL
+        navigate(`/artists/${artist.id}/${artistSlug}`);
       } else {
         toast.dismiss(loadingToast);
         toast.error(`Failed to load ${artist.name} data`);

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "@/services/ticketmaster";
 import * as spotifyService from "@/services/spotify";
@@ -12,6 +13,29 @@ export interface Artist {
   source?: 'database' | 'ticketmaster' | 'spotify';
 }
 
+/**
+ * Normalize artist ID to ensure consistency
+ * This helps avoid duplicate artists with different ID formats
+ */
+export const normalizeArtistId = (artist: Artist): string => {
+  // If it's a Spotify ID (typically 22 characters), use it directly
+  if (artist.id && artist.id.length === 22) {
+    return artist.id;
+  }
+  
+  // If it has a spotify_url, extract the ID from it
+  if (artist.spotify_url) {
+    const spotifyUrlMatch = artist.spotify_url.match(/artist\/([a-zA-Z0-9]+)/);
+    if (spotifyUrlMatch && spotifyUrlMatch[1]) {
+      return spotifyUrlMatch[1];
+    }
+  }
+  
+  // Return the original ID if we can't normalize it
+  // This should be a fallback for Ticketmaster IDs or other formats
+  return artist.id;
+};
+
 // Comprehensive function to ensure artist data is consistently stored in database
 export const ensureArtistInDatabase = async (
   artist: Artist, 
@@ -24,11 +48,14 @@ export const ensureArtistInDatabase = async (
       return artist;
     }
     
-    // Check if artist exists in database
+    // Normalize artist ID
+    const normalizedId = normalizeArtistId(artist);
+    
+    // Check if artist exists in database using the normalized ID
     const { data: existingArtist } = await supabase
       .from('artists')
       .select('*')
-      .eq('id', artist.id)
+      .eq('id', normalizedId)
       .maybeSingle();
     
     if (existingArtist) {
@@ -42,7 +69,7 @@ export const ensureArtistInDatabase = async (
         let spotifyArtist = null;
         if (fetchSpotifyData) {
           // First try by ID in case it's already a Spotify ID
-          spotifyArtist = await spotifyService.getArtist(artist.id);
+          spotifyArtist = await spotifyService.getArtist(normalizedId);
           
           // If not found by ID, search by name
           if (!spotifyArtist) {
@@ -64,7 +91,7 @@ export const ensureArtistInDatabase = async (
               popularity: spotifyArtist.popularity || existingArtist.popularity,
               last_synced_at: new Date().toISOString()
             })
-            .eq('id', artist.id);
+            .eq('id', normalizedId);
           
           if (error) {
             console.error(`Error updating Spotify data for artist ${artist.name}:`, error);
@@ -95,9 +122,12 @@ export const ensureArtistInDatabase = async (
       }
     }
     
+    // Use Spotify ID if available, otherwise use normalized ID
+    const finalArtistId = spotifyArtist?.id || normalizedId;
+    
     // Prepare data for insert
     const artistData = {
-      id: spotifyArtist?.id || artist.id,
+      id: finalArtistId,
       name: artist.name,
       image_url: spotifyArtist?.images?.[0]?.url || artist.image_url || null,
       genres: spotifyArtist?.genres || artist.genres || [],
@@ -155,10 +185,6 @@ export const extractUniqueArtistsFromEvents = async (events: ticketmasterService
     for (const attraction of attractions) {
       if (!attraction || !attraction.name) continue;
       
-      // Skip if we already processed this artist
-      const artistKey = attraction.name.toLowerCase();
-      if (artistMap.has(artistKey)) continue;
-      
       // Find a suitable image
       let imageUrl = null;
       if (attraction.images && attraction.images.length > 0) {
@@ -175,10 +201,13 @@ export const extractUniqueArtistsFromEvents = async (events: ticketmasterService
         source: 'ticketmaster' as const
       };
       
-      artistMap.set(artistKey, artist);
-      
-      // Store the artist in Supabase with Spotify enrichment
-      await ensureArtistInDatabase(artist, true);
+      // Use normalized ID as the map key to avoid duplicates
+      const normalizedId = normalizeArtistId(artist);
+      if (!artistMap.has(normalizedId)) {
+        artistMap.set(normalizedId, artist);
+        // Store the artist in Supabase with Spotify enrichment
+        await ensureArtistInDatabase(artist, true);
+      }
     }
   }
   
@@ -229,16 +258,14 @@ export const mergeArtists = (ticketmasterArtists: Artist[], databaseArtists: Art
   
   // Add Ticketmaster artists first
   for (const artist of ticketmasterArtists) {
-    const artistKey = artist.name.toLowerCase();
-    artistMap.set(artistKey, artist);
+    const normalizedId = normalizeArtistId(artist);
+    artistMap.set(normalizedId, artist);
   }
   
-  // Add database artists that aren't already in the map
+  // Add database artists, overriding any duplicates from Ticketmaster
   for (const artist of databaseArtists) {
-    const artistKey = artist.name.toLowerCase();
-    if (!artistMap.has(artistKey)) {
-      artistMap.set(artistKey, artist);
-    }
+    const normalizedId = normalizeArtistId(artist);
+    artistMap.set(normalizedId, artist);
   }
   
   // Convert to array and sort
