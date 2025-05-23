@@ -156,9 +156,11 @@ export async function getOrCreateSetlist(showId: string): Promise<string | null>
               id: track.id,
               artist_id: artistId,
               name: track.name,
-              album: track.album || 'Unknown Album',
+              // Fix for TypeScript error - ensure album is a string
+              album: typeof track.album === 'string' ? track.album : 'Unknown Album',
               duration_ms: track.duration_ms || 0,
               popularity: track.popularity || 0,
+              // Fix for TypeScript error - for spotify_url
               spotify_url: track.spotify_url || `https://open.spotify.com/track/${track.id}`
             };
             

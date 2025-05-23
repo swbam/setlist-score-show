@@ -16,6 +16,38 @@ interface Stats {
   avgVotesPerSong: number;
 }
 
+// Helper function for time ago calculation
+const formatTimeAgo = (timestamp: string | null) => {
+  if (!timestamp) return 'No votes yet';
+  
+  const date = new Date(timestamp);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  type TimeInterval = {
+    [key: string]: number;
+  }
+
+  const intervals: TimeInterval = {
+    year: 31536000,
+    month: 2592000,
+    week: 604800,
+    day: 86400,
+    hour: 3600,
+    minute: 60,
+    second: 1
+  };
+  
+  for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+    const counter = Math.floor(seconds / secondsInUnit);
+    if (counter > 0) {
+      return `${counter} ${unit}${counter === 1 ? '' : 's'} ago`;
+    }
+  }
+  
+  return 'Just now';
+};
+
 const VotingStats = ({ setlistId }: VotingStatsProps) => {
   const [stats, setStats] = useState<Stats>({
     totalVotes: 0,
@@ -108,34 +140,6 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
       supabase.removeChannel(channel);
     };
   }, [setlistId]);
-  
-  // Format time ago
-  const formatTimeAgo = (timestamp: string | null) => {
-    if (!timestamp) return 'No votes yet';
-    
-    const date = new Date(timestamp);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    const intervals: Record<string, number> = {
-      year: 31536000,
-      month: 2592000,
-      week: 604800,
-      day: 86400,
-      hour: 3600,
-      minute: 60,
-      second: 1
-    };
-    
-    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-      const counter = Math.floor(seconds / secondsInUnit);
-      if (counter > 0) {
-        return `${counter} ${unit}${counter === 1 ? '' : 's'} ago`;
-      }
-    }
-    
-    return 'Just now';
-  };
   
   return (
     <Card className={`bg-yellow-metal-950/40 border-yellow-metal-800/50 ${isMobile ? 'mx-2 mb-20' : ''}`}>
