@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "@/services/ticketmaster";
+import { isValid } from "date-fns";
 
 export interface TrendingShow {
   id: string;
@@ -12,6 +13,21 @@ export interface TrendingShow {
   venue_city: string;
   image_url?: string;
 }
+
+/**
+ * Validate date string to ensure it's parseable
+ */
+const isValidDateString = (dateStr: any): boolean => {
+  if (!dateStr) return false;
+  if (typeof dateStr !== 'string') return false;
+  
+  try {
+    const date = new Date(dateStr);
+    return isValid(date);
+  } catch (e) {
+    return false;
+  }
+};
 
 /**
  * Fetch trending shows based on both Ticketmaster API and voting activity
@@ -47,7 +63,10 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
       // Ensure we have a valid date string
       let dateString = null;
       if (event.dates?.start?.dateTime && typeof event.dates.start.dateTime === 'string') {
-        dateString = event.dates.start.dateTime;
+        // Validate the date
+        if (isValidDateString(event.dates.start.dateTime)) {
+          dateString = event.dates.start.dateTime;
+        }
       }
       
       return {
@@ -116,7 +135,10 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
           }
           
           // Ensure date is valid
-          let dateString = show.date && typeof show.date === 'string' ? show.date : null;
+          let dateString = null;
+          if (show.date && isValidDateString(show.date)) {
+            dateString = show.date;
+          }
               
           return {
             id: show.id,
@@ -129,7 +151,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
             image_url: show.artists.image_url
           };
         })
-        .filter(show => show.votes > 0 && show.date !== null); // Only include shows with votes and valid dates
+        .filter(show => show.votes > 0 || isValidDateString(show.date)); // Only include shows with votes or valid dates
       
       // Combine API and DB shows, prioritizing ones with votes
       const combinedShows = [...processedDbShows, ...ticketmasterShows];
