@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import * as setlistService from "@/services/setlist";
 import { Song } from "@/services/setlist";
 
@@ -44,7 +44,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
     setLoading(true);
     try {
       // Using the correct function name based on what's available in setlistService
-      const artistSongs = await setlistService.getArtistSongs(artistId);
+      const artistSongs = await setlistService.fetchArtistSongs(artistId);
       
       // Sort songs alphabetically by name
       const sortedSongs = [...artistSongs].sort((a, b) => 
@@ -96,23 +96,23 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         <Button 
           variant="outline" 
           size="sm"
-          className="border-yellow-metal-700 text-white hover:bg-yellow-metal-100 hover:text-yellow-metal-950"
+          className="border-yellow-metal-700 text-yellow-metal-100 hover:bg-yellow-metal-800 hover:text-yellow-metal-200"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add to Setlist
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-black border-yellow-metal-800 text-white max-w-2xl">
+      <DialogContent className="bg-yellow-metal-950 border-yellow-metal-800 text-yellow-metal-100 max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add a song to the setlist</DialogTitle>
         </DialogHeader>
         
         {/* Search input */}
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-yellow-metal-500" />
           <Input
             placeholder="Search songs by name or album..."
-            className="pl-9 bg-black border-yellow-metal-800"
+            className="pl-9 bg-yellow-metal-950 border-yellow-metal-800"
             value={searchQuery}
             onChange={handleSearchChange}
           />
@@ -120,7 +120,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         
         {/* Song count indicator */}
         {!loading && (
-          <p className="text-sm text-slate-400 mb-2">
+          <p className="text-sm text-yellow-metal-400 mb-2">
             {filteredSongs.length} songs found {searchQuery ? `for "${searchQuery}"` : ''}
           </p>
         )}
@@ -129,12 +129,12 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         {loading ? (
           <div className="text-center py-8">
             <div className="w-8 h-8 border-4 border-yellow-metal-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-slate-400 text-sm">Loading songs...</p>
+            <p className="text-yellow-metal-400 text-sm">Loading songs...</p>
           </div>
         ) : filteredSongs.length === 0 ? (
           <div className="text-center py-8">
-            <Music className="h-12 w-12 text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-400">No songs found</p>
+            <Music className="h-12 w-12 text-yellow-metal-700 mx-auto mb-2" />
+            <p className="text-yellow-metal-400">No songs found</p>
           </div>
         ) : (
           <ScrollArea className="h-[300px] pr-4">
@@ -142,11 +142,11 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
               {filteredSongs.map(song => (
                 <div 
                   key={song.id}
-                  className="flex items-center justify-between p-3 rounded-md bg-black border border-yellow-metal-900 hover:bg-yellow-metal-950 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-md bg-yellow-metal-950 border border-yellow-metal-900 hover:bg-yellow-metal-900/40 transition-colors"
                 >
                   <div className="overflow-hidden">
-                    <p className="font-medium text-white truncate">{song.name}</p>
-                    <p className="text-sm text-slate-400 truncate">{song.album}</p>
+                    <p className="font-medium text-yellow-metal-100 truncate">{song.name}</p>
+                    <p className="text-sm text-yellow-metal-400 truncate">{song.album}</p>
                   </div>
                   <Button 
                     size="sm"

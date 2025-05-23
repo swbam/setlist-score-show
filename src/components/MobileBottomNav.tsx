@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Music, User, LayoutGrid } from 'lucide-react';
+import { Home, Search, Music, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const MobileBottomNav = () => {
@@ -28,13 +28,13 @@ const MobileBottomNav = () => {
               key={item.path}
               className={cn(
                 "flex flex-col items-center justify-center native-tap",
-                isActive ? "text-yellow-metal-300" : "text-gray-500"
+                isActive ? "text-yellow-metal-300" : "text-yellow-metal-600"
               )}
               onClick={() => navigate(item.path)}
             >
               <item.icon className={cn(
                 "h-5 w-5 mb-1",
-                isActive ? "text-yellow-metal-300" : "text-gray-500"
+                isActive ? "text-yellow-metal-300" : "text-yellow-metal-600"
               )} />
               <span className="text-xs">{item.label}</span>
             </button>

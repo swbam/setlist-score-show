@@ -35,6 +35,16 @@
  
     --radius: 0.5rem;
 
+    /* Yellow metal sidebar theme */
+    --sidebar-background: 40 30% 8%;
+    --sidebar-foreground: 40 30% 98%;
+    --sidebar-primary: 40 30% 80%; 
+    --sidebar-primary-foreground: 40 30% 10%;
+    --sidebar-accent: 40 30% 30%;
+    --sidebar-accent-foreground: 40 30% 95%;
+    --sidebar-border: 40 30% 25%;
+    --sidebar-ring: 40 30% 50%;
+
     /* Mobile viewport height fix for better mobile experience */
     --vh: 1vh;
   }
@@ -62,7 +72,7 @@
 }
 
 .app-gradient-bg {
-  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.1), rgba(34, 31, 17, 0.2) 80%);
+  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.15), rgba(34, 31, 17, 0.3) 80%);
 }
 
 /* Loading placeholders animation */
@@ -109,7 +119,7 @@
 /* Native app feeling tap states */
 @media (max-width: 767px) {
   .native-tap:active {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(176, 160, 105, 0.15);
     transition: background-color 0.1s;
   }
 }

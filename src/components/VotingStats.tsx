@@ -58,13 +58,12 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
           .select('created_at')
           .eq('setlist_id', setlistId)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1);
           
         setStats({
           totalVotes,
           uniqueVoters: count || 0,
-          lastVoteTime: lastVoteData?.created_at || null,
+          lastVoteTime: lastVoteData && lastVoteData.length > 0 ? lastVoteData[0].created_at : null,
           avgVotesPerSong: songCount > 0 ? totalVotes / songCount : 0
         });
       } catch (error) {
@@ -136,19 +135,19 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
           </div>
         ) : (
           <ul className="space-y-4">
-            <li className="flex items-center text-gray-300">
+            <li className="flex items-center text-yellow-metal-200">
               <ThumbsUp className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 {stats.totalVotes} total {stats.totalVotes === 1 ? 'vote' : 'votes'}
               </span>
             </li>
-            <li className="flex items-center text-gray-300">
+            <li className="flex items-center text-yellow-metal-200">
               <Users className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 {stats.uniqueVoters} {stats.uniqueVoters === 1 ? 'person has' : 'people have'} voted
               </span>
             </li>
-            <li className="flex items-center text-gray-300">
+            <li className="flex items-center text-yellow-metal-200">
               <Clock className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 Last vote: {formatTimeAgo(stats.lastVoteTime)}
