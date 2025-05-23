@@ -32,7 +32,7 @@ const ArtistPage = () => {
         />
         
         {/* Stats Section */}
-        <StatsSection setlistId={setlistId} />
+        <StatsSection setlistId={setlistId} artistId={artist.id} />
       </div>
     </div>
   );

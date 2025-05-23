@@ -2,6 +2,34 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 
+// Define types for better TypeScript support
+export interface Song {
+  id: string;
+  artist_id: string;
+  name: string;
+  album: string;
+  duration_ms: number;
+  popularity: number;
+  spotify_url: string;
+}
+
+export interface SetlistSong {
+  id: string;
+  setlist_id: string;
+  song_id: string;
+  position: number;
+  votes: number;
+  song?: Song;
+}
+
+export interface Setlist {
+  id: string;
+  show_id: string;
+  created_at: string;
+  updated_at: string;
+  songs?: SetlistSong[];
+}
+
 // Get or create setlist for a show
 export async function getOrCreateSetlist(showId: string) {
   try {
@@ -63,7 +91,7 @@ export async function getOrCreateSetlist(showId: string) {
 }
 
 // Get setlist with songs
-export async function getSetlistWithSongs(setlistId: string) {
+export async function getSetlistWithSongs(setlistId: string): Promise<Setlist | null> {
   try {
     console.log("Getting setlist with songs:", setlistId);
     
@@ -123,7 +151,7 @@ async function createInitialSetlistSongs(setlistId: string, artistId: string) {
     // If no existing songs in database, fetch from Spotify and store
     if (!existingSongs || existingSongs.length === 0) {
       console.log("No existing songs in database, fetching from Spotify");
-      await spotifyService.importArtistTopTracks(artistId);
+      await fetchArtistSongs(artistId);
     }
     
     // Get all songs for this artist
@@ -262,12 +290,12 @@ export async function importTrackIfNeeded(track: spotifyService.SpotifyTrack) {
       .from('songs')
       .insert({
         id: track.id,
-        artist_id: track.artists[0].id,
+        artist_id: track.artists?.[0]?.id || '',
         name: track.name,
         album: track.album.name,
         duration_ms: track.duration_ms,
         popularity: track.popularity,
-        spotify_url: track.external_urls?.spotify || '' // Fix: Use optional chaining and default value
+        spotify_url: track.external_urls?.spotify || '' 
       });
       
     if (insertError) {
@@ -296,6 +324,56 @@ export async function getPopularSongsForArtist(artistId: string, limit = 10) {
     return data;
   } catch (error) {
     console.error("Error in getPopularSongsForArtist:", error);
+    return [];
+  }
+}
+
+// Fetch and store artist songs in database
+export async function fetchArtistSongs(artistId: string) {
+  try {
+    console.log("Fetching songs for artist:", artistId);
+    
+    // Get artist's top tracks from Spotify
+    const tracks = await spotifyService.getArtistTopTracks(artistId);
+    
+    if (!tracks || tracks.length === 0) {
+      console.error("No tracks found for artist:", artistId);
+      return false;
+    }
+    
+    console.log(`Found ${tracks.length} tracks for artist ${artistId}, importing to database`);
+    
+    // Import all tracks to database
+    for (const track of tracks) {
+      await importTrackIfNeeded(track);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error in fetchArtistSongs:", error);
+    return false;
+  }
+}
+
+// Get all songs for an artist that match a search term
+export async function searchArtistSongs(artistId: string, query: string) {
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('artist_id', artistId)
+      .ilike('name', `%${query}%`)
+      .order('popularity', { ascending: false })
+      .limit(20);
+      
+    if (error) {
+      console.error("Error searching artist songs:", error);
+      return [];
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Error in searchArtistSongs:", error);
     return [];
   }
 }

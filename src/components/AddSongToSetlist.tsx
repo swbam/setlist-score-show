@@ -1,169 +1,130 @@
 
-import { useState } from "react";
-import { Plus, Search, Music } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { Search, Music } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 import * as setlistService from "@/services/setlist";
-import { Song } from "@/services/setlist";
+import * as spotifyService from "@/services/spotify";
 
 interface AddSongToSetlistProps {
-  setlistId: string;
   artistId: string;
-  onSongAdded?: () => void;
+  setlistId: string;
+  onAddSong: (songId: string) => Promise<boolean>;
 }
 
-const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlistProps) => {
-  const [open, setOpen] = useState(false);
+export default function AddSongToSetlist({ artistId, setlistId, onAddSong }: AddSongToSetlistProps) {
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filteredSongs, setFilteredSongs] = useState<Song[]>([]);
-
-  const handleOpenChange = (isOpen: boolean) => {
-    setOpen(isOpen);
-    
-    if (isOpen) {
-      // Fetch artist songs when dialog opens
-      fetchArtistSongs();
+  const [searching, setSearching] = useState(false);
+  const [songs, setSongs] = useState<setlistService.Song[]>([]);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      searchSongs(debouncedSearchQuery);
     } else {
-      // Reset state when dialog closes
-      setSearchQuery("");
+      loadPopularSongs();
     }
-  };
-
-  const fetchArtistSongs = async () => {
-    setLoading(true);
+  }, [debouncedSearchQuery, artistId]);
+  
+  async function loadPopularSongs() {
     try {
-      // Using the correct function name based on what's available in setlistService
-      const artistSongs = await setlistService.fetchArtistSongs(artistId);
-      
-      // Sort songs alphabetically by name
-      const sortedSongs = [...artistSongs].sort((a, b) => 
-        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-      );
-      
-      setSongs(sortedSongs);
-      setFilteredSongs(sortedSongs);
-      setLoading(false);
+      setSearching(true);
+      const popularSongs = await setlistService.getPopularSongsForArtist(artistId);
+      setSongs(popularSongs);
     } catch (error) {
-      console.error("Error fetching artist songs:", error);
-      toast.error("Could not load artist songs");
-      setLoading(false);
+      console.error("Error loading popular songs:", error);
+    } finally {
+      setSearching(false);
     }
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value.toLowerCase();
-    setSearchQuery(query);
+  }
+  
+  async function searchSongs(query: string) {
+    if (!query) return;
     
-    if (!query.trim()) {
-      setFilteredSongs(songs);
-      return;
-    }
-    
-    const filtered = songs.filter(song => 
-      song.name.toLowerCase().includes(query) || 
-      song.album.toLowerCase().includes(query)
-    );
-    
-    setFilteredSongs(filtered);
-  };
-
-  const handleAddSong = async (song: Song) => {
     try {
-      await setlistService.addSongToSetlist(setlistId, song.id);
-      toast.success(`Added "${song.name}" to setlist`);
-      setOpen(false);
-      if (onSongAdded) onSongAdded();
+      setSearching(true);
+      const results = await setlistService.searchArtistSongs(artistId, query);
+      setSongs(results);
     } catch (error) {
-      console.error("Error adding song to setlist:", error);
-      toast.error("An error occurred while adding song to setlist");
+      console.error("Error searching songs:", error);
+    } finally {
+      setSearching(false);
+    }
+  }
+  
+  const handleAddSong = async (songId: string) => {
+    const success = await onAddSong(songId);
+    
+    if (success) {
+      toast({
+        title: "Song added to setlist",
+        description: "Your song has been added to the setlist",
+      });
+    } else {
+      toast({
+        title: "Failed to add song",
+        description: "The song may already be in the setlist",
+        variant: "destructive",
+      });
     }
   };
-
+  
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="border-yellow-metal-700 text-yellow-metal-100 hover:bg-yellow-metal-800 hover:text-yellow-metal-200"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add to Setlist
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="bg-yellow-metal-950 border-yellow-metal-800 text-yellow-metal-100 max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Add a song to the setlist</DialogTitle>
-        </DialogHeader>
-        
-        {/* Search input */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-yellow-metal-500" />
-          <Input
-            placeholder="Search songs by name or album..."
-            className="pl-9 bg-yellow-metal-950 border-yellow-metal-800"
-            value={searchQuery}
-            onChange={handleSearchChange}
-          />
-        </div>
-        
-        {/* Song count indicator */}
-        {!loading && (
-          <p className="text-sm text-yellow-metal-400 mb-2">
-            {filteredSongs.length} songs found {searchQuery ? `for "${searchQuery}"` : ''}
-          </p>
-        )}
-        
-        {/* Song list */}
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="w-8 h-8 border-4 border-yellow-metal-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-yellow-metal-400 text-sm">Loading songs...</p>
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Search for songs..."
+          className="pl-9 bg-gray-950/40 border-gray-800"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+      
+      <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+        {searching ? (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : filteredSongs.length === 0 ? (
+        ) : songs.length === 0 ? (
           <div className="text-center py-8">
-            <Music className="h-12 w-12 text-yellow-metal-700 mx-auto mb-2" />
-            <p className="text-yellow-metal-400">No songs found</p>
+            <Music className="h-10 w-10 text-gray-700 mx-auto mb-2" />
+            <p className="text-gray-400 mb-2">No songs found</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setlistService.fetchArtistSongs(artistId).then(() => loadPopularSongs())}
+            >
+              Import songs from Spotify
+            </Button>
           </div>
         ) : (
-          <ScrollArea className="h-[300px] pr-4">
-            <div className="space-y-2">
-              {filteredSongs.map(song => (
-                <div 
-                  key={song.id}
-                  className="flex items-center justify-between p-3 rounded-md bg-yellow-metal-950 border border-yellow-metal-900 hover:bg-yellow-metal-900/40 transition-colors"
-                >
-                  <div className="overflow-hidden">
-                    <p className="font-medium text-yellow-metal-100 truncate">{song.name}</p>
-                    <p className="text-sm text-yellow-metal-400 truncate">{song.album}</p>
-                  </div>
-                  <Button 
-                    size="sm"
-                    className="bg-yellow-metal-100 text-yellow-metal-950 hover:bg-yellow-metal-200 ml-2 flex-shrink-0"
-                    onClick={() => handleAddSong(song)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
+          <ul className="space-y-2">
+            {songs.map((song) => (
+              <li 
+                key={song.id} 
+                className="flex justify-between items-center bg-gray-800/30 rounded-md p-3"
+              >
+                <div>
+                  <h4 className="text-white text-sm font-medium">{song.name}</h4>
+                  <p className="text-xs text-gray-400">{song.album}</p>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  className="text-xs hover:bg-cyan-900/30 hover:text-cyan-300"
+                  onClick={() => handleAddSong(song.id)}
+                >
+                  Add
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
-};
-
-export default AddSongToSetlist;
+}
