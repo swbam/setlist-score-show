@@ -94,7 +94,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         <Button 
           variant="outline" 
           size="sm"
-          className="border-slate-700 text-white hover:bg-slate-800"
+          className="border-slate-700 text-white hover:bg-white hover:text-black"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add to Setlist
@@ -110,7 +110,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             placeholder="Search songs by name or album..."
-            className="pl-9 bg-slate-900 border-slate-700"
+            className="pl-9 bg-black border-slate-700"
             value={searchQuery}
             onChange={handleSearchChange}
           />
@@ -133,7 +133,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
               {filteredSongs.map(song => (
                 <div 
                   key={song.id}
-                  className="flex items-center justify-between p-3 rounded-md bg-slate-900 hover:bg-slate-800 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-md bg-black border border-slate-800 hover:bg-slate-900 transition-colors"
                 >
                   <div>
                     <p className="font-medium text-white">{song.name}</p>

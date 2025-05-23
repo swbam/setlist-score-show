@@ -1,12 +1,12 @@
 
-import { Search, User } from "lucide-react";
+import { Search, Filter, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/80">
+    <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/80">
       <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
         {/* Logo */}
         <div className="flex items-center space-x-2">
@@ -18,33 +18,33 @@ const Header = () => {
         {/* Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           <Link to="/" className="text-slate-300 hover:text-white transition-colors">
-            Home
+            All Shows
           </Link>
-          <Link to="/artists" className="text-slate-300 hover:text-white transition-colors">
-            Artists
+          <Link to="/trending" className="text-slate-300 hover:text-white transition-colors">
+            Trending
           </Link>
-          <Link to="/shows" className="text-slate-300 hover:text-white transition-colors">
-            Upcoming Shows
+          <Link to="/voting" className="text-slate-300 hover:text-white transition-colors">
+            Voting Open
           </Link>
-          <Link to="/how-it-works" className="text-slate-300 hover:text-white transition-colors">
-            How It Works
-          </Link>
-          <Link to="/tests/data-sync" className="text-slate-300 hover:text-white transition-colors">
-            Run Tests
+          <Link to="/rock" className="text-slate-300 hover:text-white transition-colors">
+            Rock
           </Link>
         </nav>
 
         {/* Search & Auth */}
         <div className="flex items-center space-x-4">
           <div className="hidden sm:block relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search artists..."
-              className="w-64 pl-10 bg-slate-900 border-slate-700 focus:border-white"
-            />
+            <Button variant="outline" className="bg-black/70 border-gray-700 text-white hover:bg-white/10">
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+            </Button>
           </div>
+          <Button variant="outline" className="bg-black/70 border-gray-700 text-white hover:bg-white/10">
+            <CalendarDays className="h-4 w-4 mr-2" />
+            Date
+          </Button>
           <Link to="/login">
-            <Button className="bg-white hover:bg-slate-200 text-black">
+            <Button className="bg-white hover:bg-gray-100 text-black">
               Log In
             </Button>
           </Link>
