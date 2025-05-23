@@ -121,23 +121,14 @@ async function populateSetlistWithRandomSongs(setlistId: string, showId: string)
     
     // If the artist has no songs in the database, import catalog from Spotify
     if (!artistSongs || artistSongs.length === 0) {
-      console.log("No songs found for artist in database, importing from Spotify");
+      console.log("No songs found for artist in database, importing full catalog from Spotify");
       
-      // Import the full catalog instead of just top tracks
+      // Import the full catalog from Spotify
       const success = await spotifyService.importArtistCatalog(artistId);
       
       if (!success) {
         console.error("Could not import artist catalog from Spotify");
-        
-        // Fallback to top tracks if full catalog import fails
-        const tracks = await spotifyService.getArtistTopTracks(artistId);
-        if (!tracks || tracks.length === 0) {
-          console.error("Could not fetch artist tracks from Spotify");
-          return false;
-        }
-        
-        console.log(`Fetched ${tracks.length} top tracks from Spotify, storing in database`);
-        await spotifyService.storeTracksInDatabase(artistId, tracks);
+        return false;
       }
       
       // Fetch the newly added songs
@@ -173,8 +164,15 @@ async function populateSetlistWithRandomSongs(setlistId: string, showId: string)
 // Add 5 random songs to the setlist
 async function addRandomSongsToSetlist(setlistId: string, songs: Song[]): Promise<boolean> {
   try {
+    // Ensure we have songs to select from
+    if (songs.length === 0) {
+      console.error("No songs available to add to setlist");
+      return false;
+    }
+    
     // Randomly select 5 songs (or all if less than 5)
-    const selectedSongs = songs.sort(() => 0.5 - Math.random()).slice(0, 5);
+    const songsToSelect = Math.min(5, songs.length);
+    const selectedSongs = songs.sort(() => 0.5 - Math.random()).slice(0, songsToSelect);
     console.log(`Selected ${selectedSongs.length} random songs for setlist`);
     
     // Prepare setlist songs for insertion
@@ -319,5 +317,51 @@ export async function addSongToSetlist(setlistId: string, songId: string): Promi
   } catch (error) {
     console.error("Error adding song to setlist:", error);
     return false;
+  }
+}
+
+// Get all songs for an artist - used for adding songs to setlists
+export async function getArtistSongs(artistId: string): Promise<Song[]> {
+  try {
+    // Get songs from database
+    const { data: songs, error } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('artist_id', artistId)
+      .order('popularity', { ascending: false });
+    
+    if (error) {
+      console.error("Error fetching artist songs:", error);
+      return [];
+    }
+    
+    if (!songs || songs.length === 0) {
+      console.log("No songs found for artist, importing from Spotify");
+      // Try to import the catalog
+      const success = await spotifyService.importArtistCatalog(artistId);
+      
+      if (success) {
+        // Try again to get the songs
+        const { data: newSongs, error: newError } = await supabase
+          .from('songs')
+          .select('*')
+          .eq('artist_id', artistId)
+          .order('popularity', { ascending: false });
+          
+        if (newError) {
+          console.error("Error fetching new artist songs:", newError);
+          return [];
+        }
+        
+        return newSongs as Song[] || [];
+      } else {
+        return [];
+      }
+    }
+    
+    return songs as Song[];
+  } catch (error) {
+    console.error("Error getting artist songs:", error);
+    return [];
   }
 }

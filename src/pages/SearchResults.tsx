@@ -69,15 +69,20 @@ const SearchResults = () => {
 
   // Perform search using APIs
   const performSearch = async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) return;
+    
     setLoading(true);
+    console.log("Performing search for:", query);
 
     try {
       // Search Spotify for artists
       const artistResults = await spotifyService.searchArtists(query);
+      console.log("Spotify artists search results:", artistResults.length, "artists");
       setArtists(artistResults);
       
       // Search Ticketmaster for events
       const eventResults = await ticketmasterService.searchEvents(query);
+      console.log("Ticketmaster events search results:", eventResults.length, "events");
       setEvents(eventResults);
     } catch (error) {
       console.error("Search error:", error);
@@ -91,21 +96,33 @@ const SearchResults = () => {
   const handleArtistClick = async (artist: spotifyService.SpotifyArtist) => {
     try {
       // Show loading toast
-      const loadingToast = toast.loading("Loading artist data...");
+      const loadingToast = toast.loading(`Loading ${artist.name} data...`);
       
       // Store artist in database
       const artistStored = await spotifyService.storeArtistInDatabase(artist);
       
       if (artistStored) {
-        // Get artist top tracks and store them
-        const tracks = await spotifyService.getArtistTopTracks(artist.id);
-        if (tracks.length > 0) {
-          await spotifyService.storeTracksInDatabase(artist.id, tracks);
+        // Import the full artist catalog to ensure we have all songs
+        console.log("Importing full catalog for artist:", artist.id);
+        const catalogImported = await spotifyService.importArtistCatalog(artist.id);
+        
+        if (catalogImported) {
+          console.log("Successfully imported artist catalog");
+        } else {
+          console.warn("Could not import full catalog, trying to get top tracks instead");
+          // Fallback to top tracks if full catalog fails
+          const tracks = await spotifyService.getArtistTopTracks(artist.id);
+          if (tracks && tracks.length > 0) {
+            await spotifyService.storeTracksInDatabase(artist.id, tracks);
+          }
         }
         
         // Get artist events from Ticketmaster and store them
+        console.log("Fetching Ticketmaster events for artist:", artist.name);
         const events = await ticketmasterService.getArtistEvents(artist.name);
-        if (events.length > 0) {
+        let eventCount = 0;
+        
+        if (events && events.length > 0) {
           for (const event of events) {
             if (event._embedded?.venues?.[0]) {
               const venue = event._embedded.venues[0];
@@ -115,6 +132,7 @@ const SearchResults = () => {
               
               // Store show in database
               await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
+              eventCount++;
             }
           }
         }
@@ -123,13 +141,15 @@ const SearchResults = () => {
         toast.dismiss(loadingToast);
         
         // Show success toast
-        toast.success(`${artist.name} data loaded successfully`);
+        toast.success(
+          `${artist.name} data loaded with ${eventCount} upcoming shows`
+        );
         
         // Navigate to artist page
         navigate(`/artist/${artist.id}`);
       } else {
         toast.dismiss(loadingToast);
-        toast.error("Failed to load artist data");
+        toast.error(`Failed to load ${artist.name} data`);
       }
     } catch (error) {
       console.error("Error handling artist click:", error);
@@ -149,7 +169,7 @@ const SearchResults = () => {
       const attraction = event._embedded.attractions[0];
       
       // Show loading toast
-      const loadingToast = toast.loading("Loading event data...");
+      const loadingToast = toast.loading(`Loading ${event.name} data...`);
       
       // Get attraction details from Spotify
       const artistResults = await spotifyService.searchArtists(attraction.name);
@@ -164,26 +184,37 @@ const SearchResults = () => {
       // Store artist in database
       await spotifyService.storeArtistInDatabase(artist);
       
-      // Get artist top tracks and store them
-      const tracks = await spotifyService.getArtistTopTracks(artist.id);
-      if (tracks.length > 0) {
-        await spotifyService.storeTracksInDatabase(artist.id, tracks);
+      // Import full artist catalog
+      console.log("Importing full catalog for artist:", artist.id);
+      const catalogImported = await spotifyService.importArtistCatalog(artist.id);
+      
+      if (!catalogImported) {
+        console.warn("Could not import full catalog, trying to get top tracks instead");
+        // Fallback to top tracks if full catalog fails
+        const tracks = await spotifyService.getArtistTopTracks(artist.id);
+        if (tracks && tracks.length > 0) {
+          await spotifyService.storeTracksInDatabase(artist.id, tracks);
+        }
       }
       
       // Store venue in database
       await ticketmasterService.storeVenueInDatabase(venue);
       
       // Store show in database
-      await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
+      const showStored = await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
       
       // Dismiss loading toast
       toast.dismiss(loadingToast);
       
-      // Show success toast
-      toast.success(`${event.name} data loaded successfully`);
-      
-      // Navigate to show page
-      navigate(`/show/${event.id}`);
+      if (showStored) {
+        // Show success toast
+        toast.success(`${event.name} data loaded successfully`);
+        
+        // Navigate to show page
+        navigate(`/show/${event.id}`);
+      } else {
+        toast.error(`Failed to load ${event.name} data`);
+      }
     } catch (error) {
       console.error("Error handling event click:", error);
       toast.error("An error occurred while loading event data");
@@ -249,7 +280,7 @@ const SearchResults = () => {
           
           {/* Artists Tab */}
           <TabsContent value="artists">
-            {!loading && artists.length === 0 ? (
+            {!loading && searchQuery && artists.length === 0 ? (
               <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
                 <Music className="h-12 w-12 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-xl font-medium text-white mb-2">No artists found</h3>
@@ -294,7 +325,7 @@ const SearchResults = () => {
           
           {/* Shows Tab */}
           <TabsContent value="shows">
-            {!loading && events.length === 0 ? (
+            {!loading && searchQuery && events.length === 0 ? (
               <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
                 <Calendar className="h-12 w-12 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-xl font-medium text-white mb-2">No shows found</h3>

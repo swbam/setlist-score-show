@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, Plus, XCircle } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import * as setlistService from "@/services/setlist";
 import VotingStats from "@/components/VotingStats";
 import AppHeader from "@/components/AppHeader";
+import AddSongToSetlist from "@/components/AddSongToSetlist";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Show {
@@ -72,6 +73,7 @@ const ShowVoting = () => {
       
       try {
         setLoading(true);
+        console.log("Fetching show data for ID:", showId);
         
         // Get show data
         const { data: showData, error: showError } = await supabase
@@ -87,6 +89,7 @@ const ShowVoting = () => {
         if (showError) {
           console.error("Error fetching show:", showError);
           toast.error("Failed to load show details");
+          setLoading(false);
           return;
         }
         
@@ -96,16 +99,27 @@ const ShowVoting = () => {
             status: showData.status as 'scheduled' | 'postponed' | 'canceled'
           };
           
+          console.log("Show data loaded:", typedShowData);
           setShow(typedShowData);
           
+          // Increment view count
+          await supabase
+            .from('shows')
+            .update({ view_count: (typedShowData.view_count || 0) + 1 })
+            .eq('id', showId);
+          
           // Get or create setlist for this show
+          console.log("Getting or creating setlist for show:", showId);
           const setlistData = await setlistService.getOrCreateSetlist(showId);
           
           if (setlistData) {
+            console.log("Setlist found or created:", setlistData.id);
+            
             // Get setlist with songs
             const setlistWithSongs = await setlistService.getSetlistWithSongs(setlistData.id);
             
             if (setlistWithSongs) {
+              console.log("Setlist with songs loaded:", setlistWithSongs);
               let processedSetlist: Setlist;
               
               // Make sure the songs array exists
@@ -154,8 +168,16 @@ const ShowVoting = () => {
                   ...setlistWithSongs,
                   songs: []
                 });
+                
+                console.warn("No songs found in setlist");
               }
+            } else {
+              console.error("Failed to load setlist with songs");
+              toast.error("Failed to load setlist data");
             }
+          } else {
+            console.error("Failed to get or create setlist");
+            toast.error("Failed to load setlist");
           }
         }
       } catch (error) {
@@ -173,6 +195,8 @@ const ShowVoting = () => {
   useEffect(() => {
     if (!setlist) return;
     
+    console.log("Setting up realtime subscriptions for setlist:", setlist.id);
+    
     // Subscribe to setlist song changes
     const channel = supabase
       .channel('setlist-changes')
@@ -184,6 +208,8 @@ const ShowVoting = () => {
           filter: `setlist_id=eq.${setlist.id}`
         },
         (payload) => {
+          console.log("Received realtime update for setlist song:", payload.new);
+          
           // Update the affected song's vote count
           setSetlist(prev => {
             if (!prev || !prev.songs) return prev;
@@ -199,11 +225,39 @@ const ShowVoting = () => {
           });
         }
       )
+      .subscribe((status) => {
+        console.log("Realtime subscription status:", status);
+      });
+      
+    // Also subscribe to inserts
+    const insertChannel = supabase
+      .channel('setlist-inserts')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'setlist_songs',
+          filter: `setlist_id=eq.${setlist.id}`
+        },
+        async () => {
+          console.log("New song added to setlist, refreshing data");
+          
+          // Refresh setlist with songs
+          if (setlist) {
+            const refreshedSetlist = await setlistService.getSetlistWithSongs(setlist.id);
+            if (refreshedSetlist) {
+              setSetlist(refreshedSetlist);
+            }
+          }
+        }
+      )
       .subscribe();
       
     // Cleanup
     return () => {
+      console.log("Cleaning up realtime subscriptions");
       supabase.removeChannel(channel);
+      supabase.removeChannel(insertChannel);
     };
   }, [setlist]);
 
@@ -242,9 +296,11 @@ const ShowVoting = () => {
     setUserVotes(prev => ({ ...prev, [songId]: true }));
     
     try {
+      console.log("Voting for song:", songId);
       const newVotes = await setlistService.voteForSong(songId);
       
       if (newVotes === null) {
+        console.error("Vote failed, reverting UI");
         // Revert optimistic update
         setSetlist(prev => {
           if (!prev || !prev.songs) return prev;
@@ -266,6 +322,8 @@ const ShowVoting = () => {
         });
         
         toast.error("Failed to vote for song");
+      } else {
+        console.log("Vote successful, new vote count:", newVotes);
       }
     } catch (error) {
       console.error("Error voting:", error);
@@ -294,6 +352,17 @@ const ShowVoting = () => {
     }
   };
 
+  // Handle song added to setlist
+  const handleSongAdded = async () => {
+    if (setlist) {
+      console.log("Refreshing setlist after song was added");
+      const refreshedSetlist = await setlistService.getSetlistWithSongs(setlist.id);
+      if (refreshedSetlist) {
+        setSetlist(refreshedSetlist);
+      }
+    }
+  };
+
   // Check remaining votes allowed
   const usedVotesCount = Object.keys(userVotes).length;
   const maxFreeVotes = 3;
@@ -307,10 +376,12 @@ const ShowVoting = () => {
       <div className="relative h-64 bg-gradient-to-br from-cyan-600/20 to-blue-600/20">
         <div className="absolute inset-0 bg-black/50" />
         <div className="relative z-10 container mx-auto max-w-7xl px-4 h-full flex items-center">
-          <Link to={`/artist/${show?.artist_id}`} className="text-gray-300 hover:text-white mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2 inline-block" />
-            Back to artist
-          </Link>
+          {show?.artist_id && (
+            <Link to={`/artist/${show.artist_id}`} className="text-gray-300 hover:text-white mb-4">
+              <ArrowLeft className="h-4 w-4 mr-2 inline-block" />
+              Back to artist
+            </Link>
+          )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-6">
           <div className="container mx-auto max-w-7xl">
@@ -324,7 +395,7 @@ const ShowVoting = () => {
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              {show?.artist?.name}
+              {show?.artist?.name || "Loading..."}
             </h1>
             <p className="text-xl text-gray-300 mb-4">
               {show?.name || 'Concert'}
@@ -381,24 +452,23 @@ const ShowVoting = () => {
             <p className="text-gray-300 mb-6">Vote for songs you want to hear at this show.</p>
 
             {/* Add Song Section */}
-            <Card className="bg-gray-900 border-gray-800 mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Add a song to this setlist:</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="border-gray-700 text-gray-300 hover:bg-gray-800"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add to Setlist
-                  </Button>
-                </div>
-                <p className="text-sm text-gray-400 mt-2">
-                  Add your favorite songs to the setlist for everyone to vote on.
-                </p>
-              </CardContent>
-            </Card>
+            {setlist && show?.artist_id && (
+              <Card className="bg-gray-900 border-gray-800 mb-6">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Add a song to this setlist:</span>
+                    <AddSongToSetlist
+                      setlistId={setlist.id}
+                      artistId={show.artist_id}
+                      onSongAdded={handleSongAdded}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Add your favorite songs to the setlist for everyone to vote on.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Songs List */}
             {loading ? (

@@ -6,10 +6,10 @@ import { cleanupAuthState } from '@/services/auth';
 
 interface UserProfile {
   id: string;
-  email?: string;
-  spotify_id?: string;
+  email?: string | null;
+  spotify_id?: string | null;
   display_name: string;
-  avatar_url?: string;
+  avatar_url?: string | null;
   created_at?: Date;
 }
 
@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Fetch user profile from database
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log("Fetching user profile for user:", userId);
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -71,6 +72,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       if (data) {
+        console.log("User profile found:", data);
         // Convert created_at string to Date object if it exists
         const userProfileData: UserProfile = {
           id: data.id,
@@ -82,6 +84,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
         
         setUserProfile(userProfileData);
+      } else {
+        console.warn("No user profile found in database for user:", userId);
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -90,9 +94,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Set up auth state listener
   useEffect(() => {
+    console.log("Setting up auth state listener");
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -108,6 +115,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Got existing session:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -119,6 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Cleanup: unsubscribe when component unmounts
     return () => {
+      console.log("Cleaning up auth state listener");
       subscription.unsubscribe();
     };
   }, []);
