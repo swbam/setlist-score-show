@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import * as userService from '@/services/user';
-import { storeUserProfile } from "@/services/auth";
+import { storeUserProfile, fetchUserTopArtistsFromSpotify } from "@/services/auth";
+import { toast } from "@/components/ui/sonner";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -24,24 +25,32 @@ const AuthCallback = () => {
           
           // Store user in database
           await storeUserProfile(user);
+          toast.success("Successfully signed in!");
           
           // If Spotify user, fetch and store their top artists
           const isSpotifyUser = user.app_metadata?.provider === 'spotify';
           
           if (isSpotifyUser) {
-            // We'll implement this later with proper Spotify API integration
-            // For now, we redirect to the profile page
-            console.log("Spotify user authenticated, will fetch top artists later");
+            toast.loading("Fetching your Spotify artists...");
+            const success = await fetchUserTopArtistsFromSpotify();
+            
+            if (success) {
+              toast.success("We've imported your favorite artists from Spotify!");
+            } else {
+              toast.error("Could not import artists from Spotify. You can still search and add them manually.");
+            }
           }
           
           // Navigate to profile
           navigate("/profile");
         } else {
           // No session found
+          toast.error("Authentication failed");
           navigate("/login");
         }
       } catch (error) {
         console.error("Error handling auth callback:", error);
+        toast.error("Authentication failed");
         navigate("/login");
       }
     };

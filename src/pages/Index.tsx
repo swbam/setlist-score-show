@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
@@ -89,42 +90,8 @@ const Index = () => {
         </div>
       </section>
       
-      {/* Featured Shows Section - Full Width */}
-      <section className="py-16 w-full bg-gradient-to-b from-black to-gray-900/30">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold text-white">Featured Shows</h2>
-            <Button variant="link" className="text-cyan-400 flex items-center gap-1 hover:text-cyan-300">
-              View All <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {/* Shows grid would go here */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {/* This would be populated from the API */}
-            <div className="animate-pulse">
-              <div className="bg-gray-800 h-48 rounded-lg mb-3"></div>
-              <div className="bg-gray-800 h-4 w-3/4 rounded mb-2"></div>
-              <div className="bg-gray-800 h-3 w-1/2 rounded"></div>
-            </div>
-            <div className="animate-pulse">
-              <div className="bg-gray-800 h-48 rounded-lg mb-3"></div>
-              <div className="bg-gray-800 h-4 w-3/4 rounded mb-2"></div>
-              <div className="bg-gray-800 h-3 w-1/2 rounded"></div>
-            </div>
-            <div className="animate-pulse">
-              <div className="bg-gray-800 h-48 rounded-lg mb-3"></div>
-              <div className="bg-gray-800 h-4 w-3/4 rounded mb-2"></div>
-              <div className="bg-gray-800 h-3 w-1/2 rounded"></div>
-            </div>
-            <div className="animate-pulse">
-              <div className="bg-gray-800 h-48 rounded-lg mb-3"></div>
-              <div className="bg-gray-800 h-4 w-3/4 rounded mb-2"></div>
-              <div className="bg-gray-800 h-3 w-1/2 rounded"></div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Featured Shows Section - Now using the real TrendingShows component */}
+      <TrendingShows />
       
       {/* How It Works Section - Full Width */}
       <section className="py-16 w-full">

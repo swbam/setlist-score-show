@@ -9,7 +9,7 @@ export async function signInWithSpotify() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'spotify',
       options: {
-        scopes: 'user-read-email user-top-read',
+        scopes: 'user-read-email user-top-read user-read-recently-played',
         redirectTo: `${window.location.origin}/auth/callback`
       }
     });
@@ -126,41 +126,69 @@ export function cleanupAuthState() {
   });
 }
 
-// Get user's top artists from Spotify
-export async function getUserTopArtists() {
+// Get user's top artists from Spotify after login
+export async function fetchUserTopArtistsFromSpotify() {
   try {
-    const user = supabase.auth.getUser();
-    if (!user) {
-      return [];
-    }
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session) return false;
     
     // Check if this is a Spotify-authenticated user
-    const { data: userData } = await supabase.auth.getUser();
-    const isSpotifyUser = userData?.user?.app_metadata?.provider === 'spotify';
+    const isSpotifyUser = session.session.user?.app_metadata?.provider === 'spotify';
     
     if (!isSpotifyUser) {
-      return [];
+      console.log("User not authenticated with Spotify");
+      return false;
     }
     
-    // Fetch user's top artists from the database
-    const { data: userArtists, error } = await supabase
-      .from('user_artists')
-      .select(`
-        artist_id,
-        rank,
-        artists(*)
-      `)
-      .order('rank');
+    // User has authenticated with Spotify, we'll use their access token
+    const accessToken = session.session.provider_token;
+    
+    if (!accessToken) {
+      console.error("No Spotify access token available");
+      return false;
+    }
+    
+    // Use the access token to fetch user's top artists from Spotify
+    const response = await fetch('https://api.spotify.com/v1/me/top/artists?limit=20&time_range=medium_term', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.error("Failed to fetch user's top artists from Spotify:", response.statusText);
+      return false;
+    }
+    
+    const data = await response.json();
+    const artists = data.items;
+    
+    // Store artists in the database
+    for (const artist of artists) {
+      // Store the artist
+      await supabase.from('artists').upsert({
+        id: artist.id,
+        name: artist.name,
+        image_url: artist.images?.[0]?.url,
+        popularity: artist.popularity,
+        genres: artist.genres,
+        spotify_url: artist.external_urls?.spotify,
+        last_synced_at: new Date().toISOString()
+      });
       
-    if (error) {
-      console.error('Error fetching user artists:', error);
-      return [];
+      // Link artist to user
+      await supabase.from('user_artists').upsert({
+        user_id: session.session.user.id,
+        artist_id: artist.id,
+        rank: artists.indexOf(artist) + 1
+      });
     }
     
-    return userArtists?.map(item => item.artists) || [];
+    return true;
   } catch (error) {
-    console.error('Error getting user top artists:', error);
-    return [];
+    console.error('Error fetching user top artists from Spotify:', error);
+    return false;
   }
 }
 
