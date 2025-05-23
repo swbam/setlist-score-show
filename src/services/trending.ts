@@ -12,6 +12,7 @@ export interface TrendingShow {
   venue_name: string;
   venue_city: string;
   image_url?: string;
+  artist_id?: string; // Added to track unique artists
 }
 
 /**
@@ -50,6 +51,7 @@ const safeParseDateString = (dateStr: any): string | null => {
 
 /**
  * Fetch trending shows based on both Ticketmaster API and voting activity
+ * Ensures no duplicate artists are returned
  */
 export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[]> {
   try {
@@ -88,6 +90,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         date: dateString,
         votes: 0, // New events from API start with 0 votes
         artist_name: artist?.name || 'Various Artists',
+        artist_id: artist?.id, // Store artist ID to check for duplicates
         venue_name: venue?.name || 'TBA',
         venue_city: venue?.city?.name || 'TBA',
         image_url: imageUrl
@@ -106,6 +109,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         artist_id,
         venue_id,
         artists (
+          id,
           name,
           image_url
         ),
@@ -122,12 +126,12 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         )
       `)
       .order('date', { ascending: true })
-      .limit(limit);
+      .limit(limit * 2); // Get more than we need to account for filtering
     
     if (error) {
       console.error("Database error fetching trending shows:", error);
       // Return just Ticketmaster shows if DB call fails
-      return ticketmasterShows.slice(0, limit);
+      return removeDuplicateArtists(ticketmasterShows, limit);
     }
     
     if (dbShows && dbShows.length > 0) {
@@ -156,6 +160,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
             date: dateString,
             votes: totalVotes,
             artist_name: show.artists.name,
+            artist_id: show.artist_id, // Store artist ID to check for duplicates
             venue_name: show.venues.name,
             venue_city: show.venues.city,
             image_url: show.artists.image_url
@@ -163,45 +168,81 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         })
         .filter(show => show.votes > 0 || show.date !== null); // Only include shows with votes or valid dates
       
-      // Combine API and DB shows, prioritizing ones with votes
+      // Combine API and DB shows
       const combinedShows = [...processedDbShows, ...ticketmasterShows];
       
-      // Make sure we have unique shows by ID
-      const uniqueShows = Array.from(
+      // Filter out duplicate shows by ID first
+      const uniqueShowsById = Array.from(
         combinedShows.reduce((map, show) => map.set(show.id, show), new Map()).values()
       );
       
-      // Sort by votes (for shows with votes) and then by date for the rest
-      uniqueShows.sort((a, b) => {
-        // First prioritize shows with votes
-        if (a.votes && b.votes) {
-          return b.votes - a.votes;
-        } else if (a.votes) {
-          return -1; // a has votes, b doesn't
-        } else if (b.votes) {
-          return 1; // b has votes, a doesn't
-        }
-        
-        // Then sort by date (if both have valid dates)
-        if (a.date && b.date) {
-          return new Date(a.date).getTime() - new Date(b.date).getTime();
-        } else if (a.date) {
-          return -1; // a has date, b doesn't
-        } else if (b.date) {
-          return 1;  // b has date, a doesn't
-        }
-        
-        return 0;
-      });
-      
-      console.log("Combined trending shows:", uniqueShows.length);
-      return uniqueShows.slice(0, limit);
+      // Now remove duplicate artists and limit to requested number
+      return removeDuplicateArtists(uniqueShowsById, limit);
     }
     
     console.log("Using only Ticketmaster shows");
-    return ticketmasterShows.slice(0, limit);
+    return removeDuplicateArtists(ticketmasterShows, limit);
   } catch (error) {
     console.error("Error getting trending shows:", error);
     return [];
   }
+}
+
+/**
+ * Removes duplicate artists from the list of shows and limits to the specified count
+ */
+function removeDuplicateArtists(shows: TrendingShow[], limit: number): TrendingShow[] {
+  // First, sort by votes (for shows with votes) and then by date
+  shows.sort((a, b) => {
+    // First prioritize shows with votes
+    if (a.votes && b.votes) {
+      return b.votes - a.votes;
+    } else if (a.votes) {
+      return -1; // a has votes, b doesn't
+    } else if (b.votes) {
+      return 1; // b has votes, a doesn't
+    }
+    
+    // Then sort by date (if both have valid dates)
+    if (a.date && b.date) {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    } else if (a.date) {
+      return -1; // a has date, b doesn't
+    } else if (b.date) {
+      return 1;  // b has date, a doesn't
+    }
+    
+    return 0;
+  });
+
+  // Set to track artist IDs we've already added
+  const seenArtistIds = new Set<string>();
+  const seenArtistNames = new Set<string>();
+  const result: TrendingShow[] = [];
+  
+  // Add shows with unique artists until we reach the limit
+  for (const show of shows) {
+    // Skip if we've hit the limit
+    if (result.length >= limit) break;
+    
+    // Skip shows with no artist information
+    if (!show.artist_id && !show.artist_name) continue;
+    
+    // Check if we've seen this artist before (by ID or name)
+    const artistId = show.artist_id || '';
+    const artistName = show.artist_name.toLowerCase();
+    
+    if ((artistId && seenArtistIds.has(artistId)) || seenArtistNames.has(artistName)) {
+      // Skip this show, we already have this artist
+      continue;
+    }
+    
+    // Add this show and mark the artist as seen
+    result.push(show);
+    if (artistId) seenArtistIds.add(artistId);
+    seenArtistNames.add(artistName);
+  }
+  
+  console.log(`Filtered to ${result.length} unique artists`);
+  return result;
 }

@@ -16,6 +16,7 @@ interface TrendingShow {
   venue_name: string;
   venue_city: string;
   image_url?: string;
+  artist_id?: string; // Added to track unique artists
 }
 
 const TrendingShows = () => {
