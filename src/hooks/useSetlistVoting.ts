@@ -62,6 +62,7 @@ export function useSetlistVoting(setlistId: string) {
             votes,
             position,
             song:songs (
+              id,
               name,
               album,
               duration_ms
@@ -77,16 +78,16 @@ export function useSetlistVoting(setlistId: string) {
         const formattedData: SetlistSong[] = data.map(item => ({
           id: item.id,
           song_id: item.song_id,
-          song_name: item.song.name,
+          song_name: item.song?.name || '',
           votes: item.votes,
           position: item.position,
-          album: item.song.album,
-          duration_ms: item.song.duration_ms,
+          album: item.song?.album,
+          duration_ms: item.song?.duration_ms,
           song: {
-            id: item.song_id,
-            name: item.song.name,
-            album: item.song.album,
-            duration_ms: item.song.duration_ms
+            id: item.song?.id || '',
+            name: item.song?.name || '',
+            album: item.song?.album,
+            duration_ms: item.song?.duration_ms
           }
         }));
 
@@ -199,9 +200,7 @@ export function useSetlistVoting(setlistId: string) {
           return updated;
         });
 
-        toast("Failed to vote", { 
-          description: insertError.message
-        });
+        toast("Failed to vote");
         return false;
       }
       
@@ -225,12 +224,18 @@ export function useSetlistVoting(setlistId: string) {
     }
   }, [user, userVotes, setlistId, songs]);
 
-  // Add a song to the setlist (for future implementation)
+  // Add a song to the setlist
   const addSong = useCallback(async (songId: string) => {
-    // Implementation for adding songs will go here
-    toast("This feature is coming soon!");
-    return false;
-  }, []);
+    if (!setlistId) return false;
+    try {
+      const success = await setlistService.addSongToSetlist(setlistId, songId);
+      return success;
+    } catch (error) {
+      console.error('Error adding song to setlist:', error);
+      toast("Failed to add song to setlist");
+      return false;
+    }
+  }, [setlistId]);
 
   return {
     songs,

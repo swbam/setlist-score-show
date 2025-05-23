@@ -2,7 +2,7 @@
 import { useAuth } from "@/context/AuthContext";
 import AppHeader from "@/components/AppHeader";
 import ShowHeader from "./ShowHeader";
-import { VotingSection } from "./VotingSection"; // Fixed import to use named export
+import { VotingSection } from "./VotingSection"; // Use named import
 import Sidebar from "./Sidebar";
 import useShowVoting from "./useShowVoting";
 
@@ -21,8 +21,15 @@ const ShowVoting = () => {
     handleSongAdded
   } = useShowVoting(user);
 
-  // Extract artist from show to pass to VotingSection
-  const artist = show?.artist || { 
+  // Format artist data to match SpotifyArtist type
+  const artist = show?.artist ? {
+    id: show.artist.id,
+    name: show.artist.name,
+    images: show.artist.image_url ? [{ url: show.artist.image_url }] : [],
+    popularity: show.artist.popularity || 0,
+    genres: show.artist.genres || [],
+    external_urls: { spotify: show.artist.spotify_url || '' }
+  } : { 
     id: '', 
     name: '', 
     images: [], 
@@ -40,16 +47,25 @@ const ShowVoting = () => {
 
       <div className="container mx-auto max-w-7xl px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Voting Section */}
-          <VotingSection
-            setlist={setlist}
-            show={show}
-            artist={artist}
-            onRefresh={handleSongAdded}
-          />
+          {/* Main Voting Section - 2 columns on large screens */}
+          <div className="lg:col-span-2">
+            <VotingSection
+              setlist={setlist}
+              show={show}
+              artist={artist}
+              onRefresh={handleSongAdded}
+              voteSubmitting={voteSubmitting}
+              handleVote={handleVote}
+              votesRemaining={votesRemaining}
+              usedVotesCount={usedVotesCount}
+              maxFreeVotes={maxFreeVotes}
+            />
+          </div>
 
-          {/* Sidebar */}
-          <Sidebar setlist={setlist} show={show} />
+          {/* Sidebar - 1 column */}
+          <div className="lg:col-span-1">
+            <Sidebar setlist={setlist} show={show} />
+          </div>
         </div>
       </div>
     </div>

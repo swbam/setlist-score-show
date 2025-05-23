@@ -7,30 +7,37 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/hooks/use-debounce";
-import { MoreVertical, CheckCircle, AlertTriangle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client"; // Added missing import
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import VotingStatsRefactored from "@/components/VotingStatsRefactored";
+import { ThumbsUp, Search, PlusCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client"; // Make sure this import is present
 import AddSongToSetlist from "@/components/AddSongToSetlist";
 import * as setlistService from "@/services/setlist";
 import { SpotifyArtist } from "@/services/spotify";
+import SongCard from "./SongCard";
 
 interface VotingSectionProps {
   show: any;
   artist: SpotifyArtist;
   setlist: setlistService.Setlist | null;
   onRefresh: () => Promise<void>;
+  voteSubmitting: string | null;
+  handleVote: (songId: string) => void;
+  votesRemaining: number | 'Unlimited';
+  usedVotesCount: number;
+  maxFreeVotes: number;
 }
 
-// Export as named export, not default
-export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectionProps) {
+// Export as named export
+export function VotingSection({ 
+  show, 
+  artist, 
+  setlist, 
+  onRefresh,
+  voteSubmitting,
+  handleVote,
+  votesRemaining,
+  usedVotesCount,
+  maxFreeVotes
+}: VotingSectionProps) {
   const [songToAdd, setSongToAdd] = useState("");
   const [songs, setSongs] = useState<setlistService.SetlistSong[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,136 +65,60 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       const success = await setlistService.addSongToSetlist(setlist.id, songId);
       if (success) {
         await refreshSetlist();
+        toast("Song added to setlist");
       }
       return success;
     } catch (error) {
       console.error("Error adding song:", error);
+      toast("Failed to add song");
       return false;
     }
-  };
-  
-  // Function to handle vote
-  const handleVote = async (songId: string) => {
-    // Optimistically update the UI
-    const updatedSongs = songs.map(song => {
-      if (song.song_id === songId) {
-        return { ...song, votes: song.votes + 1 };
-      }
-      return song;
-    }).sort((a, b) => b.votes - a.votes);
-    
-    setSongs(updatedSongs);
-    
-    // Call the API
-    try {
-      const { error } = await supabase.rpc('vote_for_song', {
-        setlist_song_id: songId
-      });
-      
-      if (error) {
-        console.error("Error voting for song:", error);
-        
-        toast("Failed to vote", {
-          description: "There was an error voting for this song"
-        });
-        
-        // Revert the UI
-        await refreshSetlist();
-      }
-    } catch (error) {
-      console.error("Error voting for song:", error);
-      
-      toast("Failed to vote", {
-        description: "There was an error voting for this song"
-      });
-      
-      // Revert the UI
-      await refreshSetlist();
-    }
-  };
-  
-  // Function to remove vote
-  const handleRemoveVote = async (songId: string) => {
-    // Optimistically update the UI
-    const updatedSongs = songs.map(song => {
-      if (song.song_id === songId) {
-        return { ...song, votes: Math.max(0, song.votes - 1) };
-      }
-      return song;
-    }).sort((a, b) => b.votes - a.votes);
-    
-    setSongs(updatedSongs);
-    
-    // Currently there is no RPC function for removing votes, so we need to show a message
-    toast("Feature coming soon", {
-      description: "Vote removal is not yet implemented"
-    });
-    
-    // Revert the UI after a short delay
-    setTimeout(async () => {
-      await refreshSetlist();
-    }, 1000);
   };
 
   return (
     <div className="space-y-8">
-      {/* Setlist Voting */}
+      {/* Setlist Voting Header */}
       <div>
-        <h2 className="text-2xl font-bold text-white mb-6">Setlist Voting</h2>
-        
-        {/* Voting Stats */}
-        <VotingStatsRefactored setlistId={setlist?.id || ''} />
-        
-        {/* Song List */}
-        <div className="mt-8">
-          <h3 className="text-lg font-medium text-white mb-4">Current Setlist</h3>
-          
-          {songs.length === 0 ? (
-            <Card className="bg-gray-900/40 border-gray-800/50">
-              <CardContent className="p-6">
-                <p className="text-gray-400">No songs in the setlist yet.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {songs.map((song, index) => (
-                <Card 
-                  key={song.song_id} 
-                  className="bg-gray-900/40 border-gray-800/50"
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-400">{index + 1}.</span>
-                      <div>
-                        <h4 className="text-white font-medium">{song.song?.name}</h4>
-                        <p className="text-sm text-gray-400">Votes: {song.votes}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="icon"
-                        onClick={() => handleVote(song.id)}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Vote
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => handleRemoveVote(song.id)}
-                      >
-                        <AlertTriangle className="h-4 w-4 mr-2" />
-                        Remove Vote
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        <h2 className="text-2xl font-bold text-white mb-4">Setlist Voting</h2>
       </div>
+
+      {/* Current Setlist */}
+      <div className="space-y-4">
+        <h3 className="text-xl font-medium text-white">Current Setlist</h3>
+        
+        {songs.length === 0 ? (
+          <Card className="bg-gray-900/40 border-gray-800/50">
+            <CardContent className="p-6">
+              <p className="text-gray-400">No songs in the setlist yet.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {songs.map((song, index) => (
+              <SongCard
+                key={song.id}
+                song={song}
+                index={index}
+                handleVote={handleVote}
+                voteSubmitting={voteSubmitting}
+                isDisabled={votesRemaining === 0}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* Voting Stats */}
+      {votesRemaining !== 'Unlimited' && (
+        <Card className="bg-gray-900/40 border-gray-800/50">
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center">
+              <span className="text-white">Votes used: {usedVotesCount}/{maxFreeVotes}</span>
+              <span className="text-white">Remaining: {votesRemaining}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Add Song Section */}
       <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
