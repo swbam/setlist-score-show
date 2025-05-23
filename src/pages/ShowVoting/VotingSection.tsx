@@ -1,12 +1,9 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useDebounce } from "@/hooks/use-debounce";
 import { 
   Select, 
   SelectContent, 
@@ -14,17 +11,16 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { ThumbsUp, Search, Music, PlusCircle } from "lucide-react";
+import { Music, PlusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import AddSongToSetlist from "@/components/AddSongToSetlist";
 import * as setlistService from "@/services/setlist";
-import { SpotifyArtist } from "@/services/spotify";
 import SongCard from "./SongCard";
+import { Setlist, SetlistSong, Show } from "./types";
 
 interface VotingSectionProps {
-  show: any;
-  artist: SpotifyArtist;
-  setlist: setlistService.Setlist | null;
+  show: Show | null;
+  artist: any; // Accept any artist format
+  setlist: Setlist | null;
   onRefresh: () => Promise<void>;
   voteSubmitting: string | null;
   handleVote: (songId: string) => void;
@@ -46,7 +42,7 @@ export function VotingSection({
   maxFreeVotes
 }: VotingSectionProps) {
   const [selectedSongId, setSelectedSongId] = useState("");
-  const [songs, setSongs] = useState<setlistService.SetlistSong[]>([]);
+  const [songs, setSongs] = useState<SetlistSong[]>([]);
   const [availableSongs, setAvailableSongs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSongs, setLoadingSongs] = useState(false);
@@ -63,11 +59,11 @@ export function VotingSection({
     if (artist && artist.id) {
       fetchAvailableSongs();
     }
-  }, [artist]);
+  }, [artist, songs]);
   
   // Fetch available songs for the artist from the database
   const fetchAvailableSongs = async () => {
-    if (!artist.id) return;
+    if (!artist?.id) return;
     
     try {
       setLoadingSongs(true);
@@ -107,6 +103,7 @@ export function VotingSection({
     if (!setlist || !selectedSongId) return false;
     
     try {
+      setLoading(true);
       const success = await setlistService.addSongToSetlist(setlist.id, selectedSongId);
       if (success) {
         await refreshSetlist();
@@ -118,6 +115,8 @@ export function VotingSection({
       console.error("Error adding song:", error);
       toast.error("Failed to add song");
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,13 +124,12 @@ export function VotingSection({
     <div className="space-y-8">
       {/* Setlist Voting Header */}
       <div>
-        <h2 className="text-2xl font-bold text-white mb-4">Setlist Voting</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">What do you want to hear?</h2>
+        <p className="text-gray-400">Vote for songs you want to hear at this show</p>
       </div>
 
       {/* Current Setlist */}
       <div className="space-y-4">
-        <h3 className="text-xl font-medium text-white">Current Setlist</h3>
-        
         {songs.length === 0 ? (
           <Card className="bg-gray-900/40 border-gray-800/50">
             <CardContent className="p-6">
@@ -166,13 +164,13 @@ export function VotingSection({
         </Card>
       )}
       
-      {/* Add Song Section - Now with dropdown */}
+      {/* Add Song Section - Dropdown */}
       <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-        <h3 className="text-lg font-medium text-white mb-4">Add a Song to Setlist</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Add a song to this setlist:</h3>
         
         <div className="space-y-4">
           <div className="grid gap-2">
-            <Label htmlFor="song-select" className="text-white">Choose a song</Label>
+            <Label htmlFor="song-select" className="text-gray-300">Select a song</Label>
             <Select 
               value={selectedSongId} 
               onValueChange={setSelectedSongId}

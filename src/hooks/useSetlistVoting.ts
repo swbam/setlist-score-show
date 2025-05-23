@@ -3,10 +3,25 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import * as setlistService from "@/services/setlist";
-import { SetlistSong, Song } from "@/pages/ShowVoting/types";
+
+// Define simpler types for internal use to avoid recursive type issues
+interface SimpleSong {
+  id: string;
+  name: string;
+  album?: string;
+  duration_ms?: number;
+}
+
+interface SimpleSetlistSong {
+  id: string;
+  song_id: string;
+  votes: number;
+  position: number;
+  song: SimpleSong;
+}
 
 export function useSetlistVoting(setlistId: string) {
-  const [songs, setSongs] = useState<SetlistSong[]>([]);
+  const [songs, setSongs] = useState<SimpleSetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
   const [user, setUser] = useState<any>(null);
@@ -56,7 +71,8 @@ export function useSetlistVoting(setlistId: string) {
           throw error;
         }
 
-        const formattedData: SetlistSong[] = data.map(item => ({
+        // Map to our simplified type structure
+        const formattedData: SimpleSetlistSong[] = data.map(item => ({
           id: item.id,
           song_id: item.song_id,
           votes: item.votes,

@@ -22,26 +22,14 @@ const ShowVoting = () => {
     handleSongAdded
   } = useShowVoting(user);
 
-  // Format artist data to match SpotifyArtist type
-  const artist: SpotifyArtist = show?.artist ? {
-    id: show.artist.id,
-    name: show.artist.name,
-    images: show.artist.image_url ? [{ 
-      url: show.artist.image_url,
-      height: 640, // Default values
-      width: 640
-    }] : [],
-    popularity: show.artist.popularity || 0,
-    genres: show.artist.genres || [],
-    external_urls: { spotify: show.artist.spotify_url || '' }
-  } : { 
-    id: '', 
-    name: '', 
-    images: [], 
-    popularity: 0,
-    genres: [],
-    external_urls: { spotify: '' }
-  };
+  // Convert our setlist type to match what VotingSection expects
+  const formattedSetlist = setlist ? {
+    id: setlist.id,
+    show_id: setlist.show_id,
+    created_at: setlist.created_at,
+    updated_at: setlist.updated_at,
+    songs: setlist.songs || []
+  } : null;
 
   return (
     <div className="min-h-screen bg-black">
@@ -55,21 +43,21 @@ const ShowVoting = () => {
           {/* Main Voting Section - 2 columns on large screens */}
           <div className="lg:col-span-2">
             <VotingSection
-              setlist={setlist}
               show={show}
-              artist={artist}
+              setlist={formattedSetlist}
               onRefresh={handleSongAdded}
               voteSubmitting={voteSubmitting}
               handleVote={handleVote}
               votesRemaining={typeof votesRemaining === 'string' ? votesRemaining : Number(votesRemaining)}
               usedVotesCount={usedVotesCount}
               maxFreeVotes={maxFreeVotes}
+              artist={show?.artist || null}
             />
           </div>
 
           {/* Sidebar - 1 column */}
           <div className="lg:col-span-1">
-            <Sidebar setlist={setlist} show={show} />
+            <Sidebar setlist={formattedSetlist} show={show} />
           </div>
         </div>
       </div>
