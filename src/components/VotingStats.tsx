@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, ThumbsUp, Clock } from "lucide-react";
@@ -75,10 +74,11 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     fetchStats();
     
     // Set up real-time subscription for votes
+    // Using specific channel name to avoid excessive nesting
     const channel = supabase
-      .channel('voting-stats')
+      .channel(`voting-stats-${setlistId}`)
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_song_id=eq.${setlistId}` },
+        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_id=eq.${setlistId}` },
         () => fetchStats()
       )
       .subscribe();

@@ -1,7 +1,9 @@
+
 import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
+import { initBackgroundUpdates } from "@/services/scheduler";
 import "./App.css";
 
 // Import pages
