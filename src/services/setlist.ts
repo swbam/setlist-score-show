@@ -29,20 +29,20 @@ export interface Setlist {
 }
 
 // Get or create a setlist for a show
-export async function getOrCreateSetlist(showId: string): Promise<string | null> {
+export async function getOrCreateSetlist(showId: string): Promise<string> {
   try {
     const { data, error } = await supabase
       .rpc('get_or_create_setlist', { show_id: showId });
     
     if (error) {
       console.error("Error getting or creating setlist:", error);
-      return null;
+      throw new Error(error.message);
     }
     
     return data;
   } catch (error) {
     console.error("Error in getOrCreateSetlist:", error);
-    return null;
+    throw error;
   }
 }
 
@@ -92,10 +92,6 @@ export async function getSetlistByShowId(showId: string): Promise<Setlist | null
   try {
     // First, get or create a setlist for this show
     const setlistId = await getOrCreateSetlist(showId);
-    
-    if (!setlistId) {
-      return null;
-    }
     
     // Then, get the setlist with songs
     return getSetlistWithSongs(setlistId);

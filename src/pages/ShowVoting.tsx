@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, XCircle } from "lucide-react";
@@ -34,27 +33,19 @@ interface Show {
   view_count: number;
 }
 
-interface Song {
-  id: string;
-  name: string;
-  album: string;
+// Use the same Song interface as the service to avoid conflicts
+interface Song extends setlistService.Song {
 }
 
-interface SetlistSong {
-  id: string;
-  song_id: string;
-  position: number;
-  votes: number;
-  song: Song;
+// Create a local SetlistSong interface that extends the service one with userVoted property
+interface SetlistSong extends Omit<setlistService.SetlistSong, "song"> {
+  song: Song;  // Make song required for the component
   userVoted?: boolean;
 }
 
-interface Setlist {
-  id: string;
-  show_id: string;
+// Create a local Setlist interface that uses our extended SetlistSong type
+interface Setlist extends Omit<setlistService.Setlist, "songs"> {
   songs: SetlistSong[];
-  created_at: string;
-  updated_at: string;
 }
 
 const ShowVoting = () => {
@@ -110,17 +101,16 @@ const ShowVoting = () => {
           
           // Get or create setlist for this show
           console.log("Getting or creating setlist for show:", showId);
-          const setlistData = await setlistService.getOrCreateSetlist(showId);
+          const setlistId = await setlistService.getOrCreateSetlist(showId);
           
-          if (setlistData) {
-            console.log("Setlist found or created:", setlistData.id);
+          if (setlistId) {
+            console.log("Setlist found or created:", setlistId);
             
             // Get setlist with songs
-            const setlistWithSongs = await setlistService.getSetlistWithSongs(setlistData.id);
+            const setlistWithSongs = await setlistService.getSetlistWithSongs(setlistId);
             
             if (setlistWithSongs) {
               console.log("Setlist with songs loaded:", setlistWithSongs);
-              let processedSetlist: Setlist;
               
               // Make sure the songs array exists
               if (setlistWithSongs.songs) {
@@ -138,36 +128,47 @@ const ShowVoting = () => {
                     });
                     setUserVotes(votesMap);
                     
-                    // Mark songs user has voted for
+                    // Mark songs user has voted for and ensure song property is present
                     const updatedSongs = setlistWithSongs.songs.map(song => ({
                       ...song,
+                      song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' },
                       userVoted: votesMap[song.id] || false
-                    }));
+                    })) as SetlistSong[];
                     
-                    processedSetlist = {
+                    setSetlist({
                       ...setlistWithSongs,
                       songs: updatedSongs
-                    };
+                    } as Setlist);
                   } else {
-                    processedSetlist = {
+                    // Ensure song property is present
+                    const updatedSongs = setlistWithSongs.songs.map(song => ({
+                      ...song,
+                      song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' }
+                    })) as SetlistSong[];
+                    
+                    setSetlist({
                       ...setlistWithSongs,
-                      songs: setlistWithSongs.songs
-                    };
+                      songs: updatedSongs
+                    } as Setlist);
                   }
                 } else {
-                  processedSetlist = {
+                  // Ensure song property is present
+                  const updatedSongs = setlistWithSongs.songs.map(song => ({
+                    ...song,
+                    song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' }
+                  })) as SetlistSong[];
+                  
+                  setSetlist({
                     ...setlistWithSongs,
-                    songs: setlistWithSongs.songs
-                  };
+                    songs: updatedSongs
+                  } as Setlist);
                 }
-                
-                setSetlist(processedSetlist);
               } else {
                 // Create an empty array if songs is undefined
                 setSetlist({
                   ...setlistWithSongs,
                   songs: []
-                });
+                } as Setlist);
                 
                 console.warn("No songs found in setlist");
               }
@@ -214,13 +215,16 @@ const ShowVoting = () => {
           setSetlist(prev => {
             if (!prev || !prev.songs) return prev;
             
+            // Create a new array with updated vote counts
+            const updatedSongs = prev.songs.map(song => 
+              song.id === payload.new.id
+                ? { ...song, votes: payload.new.votes }
+                : song
+            ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
+            
             return {
               ...prev,
-              songs: prev.songs.map(song => 
-                song.id === payload.new.id
-                  ? { ...song, votes: payload.new.votes }
-                  : song
-              ).sort((a, b) => b.votes - a.votes) // Re-sort by votes
+              songs: updatedSongs
             };
           });
         }
@@ -246,7 +250,17 @@ const ShowVoting = () => {
           if (setlist) {
             const refreshedSetlist = await setlistService.getSetlistWithSongs(setlist.id);
             if (refreshedSetlist) {
-              setSetlist(refreshedSetlist);
+              // Convert to our local Setlist type with consistent song property
+              const updatedSongs = refreshedSetlist.songs.map(song => ({
+                ...song,
+                song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' },
+                userVoted: userVotes[song.id] || false
+              })) as SetlistSong[];
+              
+              setSetlist({
+                ...refreshedSetlist,
+                songs: updatedSongs
+              } as Setlist);
             }
           }
         }
@@ -259,7 +273,7 @@ const ShowVoting = () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(insertChannel);
     };
-  }, [setlist]);
+  }, [setlist, userVotes]);
 
   // Handle voting for a song
   const handleVote = async (songId: string) => {
@@ -283,13 +297,15 @@ const ShowVoting = () => {
     setSetlist(prev => {
       if (!prev || !prev.songs) return prev;
       
+      const updatedSongs = prev.songs.map(song => 
+        song.id === songId
+          ? { ...song, votes: song.votes + 1, userVoted: true }
+          : song
+      ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
+      
       return {
         ...prev,
-        songs: prev.songs.map(song => 
-          song.id === songId
-            ? { ...song, votes: song.votes + 1, userVoted: true }
-            : song
-        ).sort((a, b) => b.votes - a.votes) // Re-sort by votes
+        songs: updatedSongs
       };
     });
     
@@ -305,13 +321,15 @@ const ShowVoting = () => {
         setSetlist(prev => {
           if (!prev || !prev.songs) return prev;
           
+          const updatedSongs = prev.songs.map(song => 
+            song.id === songId
+              ? { ...song, votes: song.votes - 1, userVoted: false }
+              : song
+          ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
+          
           return {
             ...prev,
-            songs: prev.songs.map(song => 
-              song.id === songId
-                ? { ...song, votes: song.votes - 1, userVoted: false }
-                : song
-            ).sort((a, b) => b.votes - a.votes) // Re-sort by votes
+            songs: updatedSongs
           };
         });
         
@@ -332,13 +350,15 @@ const ShowVoting = () => {
       setSetlist(prev => {
         if (!prev || !prev.songs) return prev;
         
+        const updatedSongs = prev.songs.map(song => 
+          song.id === songId
+            ? { ...song, votes: song.votes - 1, userVoted: false }
+            : song
+        ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
+        
         return {
           ...prev,
-          songs: prev.songs.map(song => 
-            song.id === songId
-              ? { ...song, votes: song.votes - 1, userVoted: false }
-              : song
-          ).sort((a, b) => b.votes - a.votes) // Re-sort by votes
+          songs: updatedSongs
         };
       });
       
@@ -358,7 +378,17 @@ const ShowVoting = () => {
       console.log("Refreshing setlist after song was added");
       const refreshedSetlist = await setlistService.getSetlistWithSongs(setlist.id);
       if (refreshedSetlist) {
-        setSetlist(refreshedSetlist);
+        // Convert to our local Setlist type
+        const updatedSongs = refreshedSetlist.songs.map(song => ({
+          ...song,
+          song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' },
+          userVoted: userVotes[song.id] || false
+        })) as SetlistSong[];
+        
+        setSetlist({
+          ...refreshedSetlist,
+          songs: updatedSongs
+        } as Setlist);
       }
     }
   };
