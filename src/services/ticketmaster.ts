@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Ticketmaster API key
@@ -154,6 +153,15 @@ export async function storeShowInDatabase(
       event.dates.status?.code === 'cancelled' ? 'canceled' :
       event.dates.status?.code === 'postponed' ? 'postponed' : 'scheduled';
     
+    // Find a good image
+    let imageUrl = null;
+    if (event.images && event.images.length > 0) {
+      // Try to find a 16:9 ratio image first
+      const wideImage = event.images.find(img => img.ratio === '16_9');
+      // Otherwise use the first image
+      imageUrl = wideImage ? wideImage.url : event.images[0].url;
+    }
+    
     const showData = {
       id: event.id,
       artist_id: artistId,
@@ -162,7 +170,8 @@ export async function storeShowInDatabase(
       date: event.dates.start.dateTime,
       start_time: event.dates.start.localTime || null,
       status: status,
-      ticketmaster_url: event.url || null
+      ticketmaster_url: event.url || null,
+      view_count: 0 // Initialize view count to 0
     };
     
     console.log("Show data to store:", showData);
