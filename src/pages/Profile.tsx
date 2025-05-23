@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { signOut, getUserTopArtists } from "@/services/auth";
+import { signOut } from "@/services/auth";
 import AppHeader from "@/components/AppHeader";
 
 interface UserArtist {
@@ -79,12 +79,6 @@ const Profile = () => {
         if (userArtists) {
           // Extract artists from joined query
           setFollowedArtists(userArtists.map(item => item.artists));
-        } else {
-          // Try to get from Spotify API for Spotify users
-          const spotifyArtists = await getUserTopArtists();
-          if (spotifyArtists.length > 0) {
-            setFollowedArtists(spotifyArtists);
-          }
         }
         
         // Get user's recent votes
