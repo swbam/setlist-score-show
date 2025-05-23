@@ -6,15 +6,20 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import * as setlistService from "@/services/setlist";
-import * as spotifyService from "@/services/spotify";
 
 interface AddSongToSetlistProps {
   artistId: string;
   setlistId: string;
   onAddSong: (songId: string) => Promise<boolean>;
+  onSongAdded?: () => Promise<void>; // Make this optional
 }
 
-export default function AddSongToSetlist({ artistId, setlistId, onAddSong }: AddSongToSetlistProps) {
+export default function AddSongToSetlist({ 
+  artistId, 
+  setlistId, 
+  onAddSong,
+  onSongAdded 
+}: AddSongToSetlistProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -63,6 +68,10 @@ export default function AddSongToSetlist({ artistId, setlistId, onAddSong }: Add
         title: "Song added to setlist",
         description: "Your song has been added to the setlist",
       });
+      // Call onSongAdded if it exists
+      if (onSongAdded) {
+        await onSongAdded();
+      }
     } else {
       toast({
         title: "Failed to add song",

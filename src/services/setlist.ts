@@ -292,9 +292,9 @@ export async function importTrackIfNeeded(track: spotifyService.SpotifyTrack) {
         id: track.id,
         artist_id: track.artists?.[0]?.id || '',
         name: track.name,
-        album: track.album.name,
-        duration_ms: track.duration_ms,
-        popularity: track.popularity,
+        album: track.album?.name || 'Unknown Album', // Use optional chaining
+        duration_ms: track.duration_ms || 0,
+        popularity: track.popularity || 0,
         spotify_url: track.external_urls?.spotify || '' 
       });
       
