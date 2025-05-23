@@ -11,13 +11,18 @@ export interface Song {
   spotify_url: string;
 }
 
+// Remove circular reference by not including song property in base interface
 export interface SetlistSong {
   id: string;
   setlist_id: string;
   song_id: string;
-  song?: Song;
   position: number;
   votes: number;
+}
+
+// Create a separate interface for setlist song with song data included
+export interface SetlistSongWithData extends SetlistSong {
+  song?: Song;
 }
 
 export interface Setlist {
@@ -25,7 +30,7 @@ export interface Setlist {
   show_id: string;
   created_at: string;
   updated_at: string;
-  songs: SetlistSong[];
+  songs: SetlistSongWithData[];
 }
 
 // Get or create a setlist for a show
@@ -173,7 +178,7 @@ export async function getSetlistWithSongs(setlistId: string): Promise<Setlist | 
     // Return the setlist with songs
     return {
       ...setlist,
-      songs: setlistSongs as SetlistSong[]
+      songs: setlistSongs as SetlistSongWithData[]
     };
   } catch (error) {
     console.error("Error in getSetlistWithSongs:", error);

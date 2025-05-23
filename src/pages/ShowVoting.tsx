@@ -17,6 +17,7 @@ interface Show {
   artist_id: string;
   venue_id: string;
   artist: {
+    id: string; // Adding id property that was missing
     name: string;
     image_url: string;
   };
