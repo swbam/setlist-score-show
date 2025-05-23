@@ -94,23 +94,23 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         <Button 
           variant="outline" 
           size="sm"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800"
+          className="border-slate-700 text-white hover:bg-slate-800"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add to Setlist
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-gray-900 border-gray-800 text-gray-100 max-w-2xl">
+      <DialogContent className="bg-black border-slate-800 text-white max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add a song to the setlist</DialogTitle>
         </DialogHeader>
         
         {/* Search input */}
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             placeholder="Search songs by name or album..."
-            className="pl-9 bg-gray-800 border-gray-700"
+            className="pl-9 bg-slate-900 border-slate-700"
             value={searchQuery}
             onChange={handleSearchChange}
           />
@@ -119,13 +119,13 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         {/* Song list */}
         {loading ? (
           <div className="text-center py-8">
-            <div className="w-8 h-8 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-gray-400 text-sm">Loading songs...</p>
+            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p className="text-slate-400 text-sm">Loading songs...</p>
           </div>
         ) : filteredSongs.length === 0 ? (
           <div className="text-center py-8">
-            <Music className="h-12 w-12 text-gray-600 mx-auto mb-2" />
-            <p className="text-gray-400">No songs found</p>
+            <Music className="h-12 w-12 text-slate-600 mx-auto mb-2" />
+            <p className="text-slate-400">No songs found</p>
           </div>
         ) : (
           <ScrollArea className="h-[300px] pr-4">
@@ -133,15 +133,15 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
               {filteredSongs.map(song => (
                 <div 
                   key={song.id}
-                  className="flex items-center justify-between p-3 rounded-md bg-gray-800 hover:bg-gray-700 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-md bg-slate-900 hover:bg-slate-800 transition-colors"
                 >
                   <div>
                     <p className="font-medium text-white">{song.name}</p>
-                    <p className="text-sm text-gray-400">{song.album}</p>
+                    <p className="text-sm text-slate-400">{song.album}</p>
                   </div>
                   <Button 
                     size="sm"
-                    className="bg-cyan-600 hover:bg-cyan-700"
+                    className="bg-white text-black hover:bg-slate-200"
                     onClick={() => handleAddSong(song)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
