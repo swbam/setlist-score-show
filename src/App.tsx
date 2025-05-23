@@ -33,14 +33,25 @@ function App() {
         <Routes>
           <Route path="/" element={<IndexPage />} />
           <Route path="/search" element={<SearchResults />} />
+          
+          {/* SEO-friendly URL structure for artists */}
           <Route path="/artist/:artistId" element={<ArtistPage />} />
+          <Route path="/artists/:artistId/:artistSlug" element={<ArtistPage />} />
+          
+          {/* SEO-friendly URL structure for shows */}
           <Route path="/show/:showId" element={<ShowVoting />} />
+          <Route path="/events/:showId/:showSlug" element={<ShowVoting />} />
+          
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/artists" element={<AllArtists />} />
+          
+          {/* SEO-friendly URL structure for setlist comparisons */}
           <Route path="/setlist-comparison/:showId" element={<SetlistComparison />} />
+          <Route path="/comparison/:showId/:showSlug" element={<SetlistComparison />} />
+          
           <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -25,6 +25,16 @@ const ArtistPage = () => {
   const [loading, setLoading] = useState(true);
   const [setlistId, setSetlistId] = useState<string | null>(null);
   
+  // Helper function to create URL-friendly slug
+  const createSlug = (name: string | null | undefined) => {
+    if (!name) return 'untitled';
+    
+    return name.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+  
   // Check if user is following this artist
   useEffect(() => {
     async function checkFollowingStatus() {
@@ -398,62 +408,66 @@ const ArtistPage = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {upcomingShows.map((show) => (
-                  <Card 
-                    key={show.id}
-                    className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
-                  >
-                    <CardContent className="p-0">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
-                        <div className="flex-grow space-y-2">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className={`px-2 py-0.5 text-xs rounded-full ${
-                              show.status === 'canceled' ? 'bg-red-900/50 text-red-300' :
-                              show.status === 'postponed' ? 'bg-yellow-900/50 text-yellow-300' :
-                              'bg-green-900/50 text-green-300'
-                            }`}>
-                              {show.status === 'canceled' ? 'Canceled' :
-                               show.status === 'postponed' ? 'Postponed' :
-                              'Upcoming'}
-                            </span>
-                            <h3 className="text-lg font-semibold text-white">
-                              {show.name}
-                            </h3>
-                          </div>
-                          
-                          <div className="flex flex-col space-y-2 text-gray-400">
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-2 text-cyan-500" />
-                              <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
-                              {show.start_time && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span>{format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}</span>
-                                </>
-                              )}
+                {upcomingShows.map((show) => {
+                  const showSlug = createSlug(show.name || artist.name);
+                  
+                  return (
+                    <Card 
+                      key={show.id}
+                      className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
+                    >
+                      <CardContent className="p-0">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
+                          <div className="flex-grow space-y-2">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${
+                                show.status === 'canceled' ? 'bg-red-900/50 text-red-300' :
+                                show.status === 'postponed' ? 'bg-yellow-900/50 text-yellow-300' :
+                                'bg-green-900/50 text-green-300'
+                              }`}>
+                                {show.status === 'canceled' ? 'Canceled' :
+                                 show.status === 'postponed' ? 'Postponed' :
+                                'Upcoming'}
+                              </span>
+                              <h3 className="text-lg font-semibold text-white">
+                                {show.name}
+                              </h3>
                             </div>
                             
-                            <div className="flex items-center">
-                              <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
-                              <span>
-                                {show.venue?.name}, {show.venue?.city}
-                                {show.venue?.state ? `, ${show.venue.state}` : ''}, {show.venue?.country}
-                              </span>
+                            <div className="flex flex-col space-y-2 text-gray-400">
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-2 text-cyan-500" />
+                                <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
+                                {show.start_time && (
+                                  <>
+                                    <span className="mx-2">•</span>
+                                    <span>{format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}</span>
+                                  </>
+                                )}
+                              </div>
+                              
+                              <div className="flex items-center">
+                                <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
+                                <span>
+                                  {show.venue?.name}, {show.venue?.city}
+                                  {show.venue?.state ? `, ${show.venue.state}` : ''}, {show.venue?.country}
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          
+                          <div className="mt-4 md:mt-0 flex space-x-3">
+                            <Link to={`/events/${show.id}/${showSlug}`}>
+                              <Button className="bg-cyan-600 hover:bg-cyan-700">
+                                Vote on Setlist
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
-                        
-                        <div className="mt-4 md:mt-0 flex space-x-3">
-                          <Link to={`/show/${show.id}`}>
-                            <Button className="bg-cyan-600 hover:bg-cyan-700">
-                              Vote on Setlist
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -470,50 +484,54 @@ const ArtistPage = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {pastShows.map((show) => (
-                  <Card 
-                    key={show.id}
-                    className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
-                  >
-                    <CardContent className="p-0">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
-                        <div className="flex-grow space-y-2">
-                          <h3 className="text-lg font-semibold text-white mb-1">
-                            {show.name}
-                          </h3>
-                          
-                          <div className="flex flex-col space-y-2 text-gray-400">
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-2 text-cyan-500" />
-                              <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
-                            </div>
+                {pastShows.map((show) => {
+                  const showSlug = createSlug(show.name || artist.name);
+                  
+                  return (
+                    <Card 
+                      key={show.id}
+                      className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
+                    >
+                      <CardContent className="p-0">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
+                          <div className="flex-grow space-y-2">
+                            <h3 className="text-lg font-semibold text-white mb-1">
+                              {show.name}
+                            </h3>
                             
-                            <div className="flex items-center">
-                              <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
-                              <span>
-                                {show.venue?.name}, {show.venue?.city}
-                                {show.venue?.state ? `, ${show.venue.state}` : ''}, {show.venue?.country}
-                              </span>
+                            <div className="flex flex-col space-y-2 text-gray-400">
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-2 text-cyan-500" />
+                                <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
+                              </div>
+                              
+                              <div className="flex items-center">
+                                <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
+                                <span>
+                                  {show.venue?.name}, {show.venue?.city}
+                                  {show.venue?.state ? `, ${show.venue.state}` : ''}, {show.venue?.country}
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          
+                          <div className="mt-4 md:mt-0 flex space-x-3">
+                            <Link to={`/comparison/${show.id}/${showSlug}`}>
+                              <Button variant="outline" className="border-cyan-600 text-cyan-500">
+                                View Comparison
+                              </Button>
+                            </Link>
+                            <Link to={`/events/${show.id}/${showSlug}`}>
+                              <Button className="bg-cyan-600 hover:bg-cyan-700">
+                                View Setlist
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
-                        
-                        <div className="mt-4 md:mt-0 flex space-x-3">
-                          <Link to={`/comparison/${show.id}`}>
-                            <Button variant="outline" className="border-cyan-600 text-cyan-500">
-                              View Comparison
-                            </Button>
-                          </Link>
-                          <Link to={`/show/${show.id}`}>
-                            <Button className="bg-cyan-600 hover:bg-cyan-700">
-                              View Setlist
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

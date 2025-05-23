@@ -13,11 +13,17 @@ interface ArtistCardProps {
 const ArtistCard = ({ artist }: ArtistCardProps) => {
   const { isMobile } = useMobile();
   
+  // Create URL-friendly slug from artist name
+  const artistSlug = artist.name.toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  
   return (
     <Card 
       className={`bg-gray-900 border-gray-800 overflow-hidden hover:border-[#f7f7f7] transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
     >
-      <Link to={`/artist/${artist.id}`} className="block h-full">
+      <Link to={`/artists/${artist.id}/${artistSlug}`} className="block h-full">
         <div className={`${isMobile ? 'h-32' : 'h-40'} bg-gray-800 relative`}>
           {artist.image_url ? (
             <img

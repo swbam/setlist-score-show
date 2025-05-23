@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CalendarDays, Check, X } from "lucide-react";
@@ -61,6 +60,16 @@ const SetlistComparison = () => {
     playedSetlist: [],
     matchPercentage: 0
   });
+
+  // Create URL-friendly slug
+  const createSlug = (text: string | null | undefined) => {
+    if (!text) return 'untitled';
+    
+    return text.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
 
   useEffect(() => {
     async function fetchComparisonData() {
@@ -192,7 +201,7 @@ const SetlistComparison = () => {
         <div className="absolute inset-0 bg-black/50" />
         <div className="container mx-auto max-w-7xl px-4 relative z-10">
           <Link 
-            to={show ? `/artist/${show.artist_id}` : '/'}
+            to={show ? `/artists/${show.artist_id}/${createSlug(show.artist?.name)}` : '/'}
             className="text-gray-300 hover:text-white inline-block mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2 inline-block" />
@@ -360,13 +369,15 @@ const SetlistComparison = () => {
             </div>
             
             <div className="mt-8 text-center">
-              <Button
-                onClick={() => window.history.back()}
-                className="bg-cyan-600 hover:bg-cyan-700"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Show
-              </Button>
+              {show && (
+                <Button
+                  onClick={() => window.history.back()}
+                  className="bg-cyan-600 hover:bg-cyan-700"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Show
+                </Button>
+              )}
             </div>
           </>
         )}

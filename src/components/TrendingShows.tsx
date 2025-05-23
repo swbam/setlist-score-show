@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +60,14 @@ const TrendingShows = () => {
       console.error('Error formatting date:', error, dateStr);
       return 'Date TBA';
     }
+  };
+
+  // Function to create URL-friendly slug
+  const createSlug = (text: string) => {
+    return text.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   };
 
   if (loading) {
@@ -135,48 +142,53 @@ const TrendingShows = () => {
         </div>
         
         <div className={`grid grid-cols-1 ${isMobile ? 'sm:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-4'} gap-6`}>
-          {shows.map(show => (
-            <Link to={`/show/${show.id}`} key={show.id} className={`${isMobile ? 'native-tap' : ''}`}>
-              <Card className="bg-transparent border-gray-800 overflow-hidden hover:border-[#f7f7f7] transition-all duration-300">
-                <div className={`${isMobile ? 'h-36' : 'h-40'} bg-gray-900 relative`}>
-                  {show.image_url ? (
-                    <img 
-                      src={show.image_url} 
-                      alt={show.name} 
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                      <Music className="h-10 w-10 text-gray-700" />
-                    </div>
-                  )}
-                </div>
-                
-                <CardContent className="p-5">
-                  <h3 className="text-lg font-medium text-white mb-1 line-clamp-2">{show.name}</h3>
-                  <p className="text-[#f7f7f7] text-sm font-medium mb-2">{show.artist_name}</p>
-                  
-                  <div className="flex items-start gap-2 text-sm text-gray-400 mb-1">
-                    <CalendarDays className="h-4 w-4 mt-0.5 shrink-0" />
-                    <span>{safeFormatDate(show.date)}</span>
+          {shows.map(show => {
+            // Create SEO-friendly slug for show
+            const showSlug = createSlug(show.name || show.artist_name);
+            
+            return (
+              <Link to={`/events/${show.id}/${showSlug}`} key={show.id} className={`${isMobile ? 'native-tap' : ''}`}>
+                <Card className="bg-transparent border-gray-800 overflow-hidden hover:border-[#f7f7f7] transition-all duration-300">
+                  <div className={`${isMobile ? 'h-36' : 'h-40'} bg-gray-900 relative`}>
+                    {show.image_url ? (
+                      <img 
+                        src={show.image_url} 
+                        alt={show.name} 
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                        <Music className="h-10 w-10 text-gray-700" />
+                      </div>
+                    )}
                   </div>
                   
-                  <div className="flex items-start gap-2 text-sm text-gray-400">
-                    <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                    <span className="line-clamp-1">{show.venue_name}, {show.venue_city}</span>
-                  </div>
-                  
-                  {show.votes > 0 && (
-                    <div className="flex items-center gap-1 mt-3 text-xs font-medium text-white">
-                      <ThumbsUp className="h-3 w-3 text-[#f7f7f7]" />
-                      <span>{show.votes} votes</span>
+                  <CardContent className="p-5">
+                    <h3 className="text-lg font-medium text-white mb-1 line-clamp-2">{show.name}</h3>
+                    <p className="text-[#f7f7f7] text-sm font-medium mb-2">{show.artist_name}</p>
+                    
+                    <div className="flex items-start gap-2 text-sm text-gray-400 mb-1">
+                      <CalendarDays className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>{safeFormatDate(show.date)}</span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                    
+                    <div className="flex items-start gap-2 text-sm text-gray-400">
+                      <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span className="line-clamp-1">{show.venue_name}, {show.venue_city}</span>
+                    </div>
+                    
+                    {show.votes > 0 && (
+                      <div className="flex items-center gap-1 mt-3 text-xs font-medium text-white">
+                        <ThumbsUp className="h-3 w-3 text-[#f7f7f7]" />
+                        <span>{show.votes} votes</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
