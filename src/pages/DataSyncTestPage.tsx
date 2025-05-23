@@ -2,7 +2,7 @@
 import React from 'react';
 import DataSyncTests from '@/tests/DataSyncTests';
 import AppHeader from '@/components/AppHeader';
-import { Helmet } from 'react-helmet';
+import { Helmet } from 'react-helmet-async';
 
 const DataSyncTestPage: React.FC = () => {
   return (

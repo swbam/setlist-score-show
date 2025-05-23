@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/sonner';
 import * as spotifyService from '@/services/spotify';
@@ -9,12 +10,13 @@ import * as setlistService from '@/services/setlist';
 import * as trendingService from '@/services/trending';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Code } from 'lucide-react';
+import { Code, Search } from 'lucide-react';
 
 const DataSyncTests: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
   const [detailedError, setDetailedError] = useState<string | null>(null);
+  const [artistName, setArtistName] = useState<string>('');
   
   const addResult = (message: string) => {
     setResults(prev => [...prev, message]);
@@ -29,6 +31,11 @@ const DataSyncTests: React.FC = () => {
     console.error(message, error);
     addResult(`❌ ${message}: ${typeof error === 'object' && error.message ? error.message : errorString.substring(0, 100)}`);
     setDetailedError(errorString);
+  };
+
+  const clearResults = () => {
+    setResults([]);
+    setDetailedError(null);
   };
 
   const checkDatabaseState = async () => {
@@ -125,6 +132,16 @@ const DataSyncTests: React.FC = () => {
         addResult("⚠️ RLS policies may be blocking insertions. Has the user been authenticated?");
       } else {
         addResult("✅ Artist inserted successfully");
+        
+        // Clean up the test artist
+        const { error: deleteError } = await supabase
+          .from('artists')
+          .delete()
+          .eq('id', 'test_artist_id');
+          
+        if (deleteError) {
+          logError("Error cleaning up test artist", deleteError);
+        }
       }
     } catch (error) {
       logError("RLS test error", error);
@@ -132,10 +149,14 @@ const DataSyncTests: React.FC = () => {
   };
   
   const handleSearchArtist = async () => {
+    if (!artistName.trim()) {
+      toast.error("Please enter an artist name to search");
+      return;
+    }
+
     try {
       setLoading(true);
-      setResults([]);
-      setDetailedError(null);
+      clearResults();
       addResult("===== Starting Artist Sync Test =====");
       
       // Check database state first
@@ -145,12 +166,13 @@ const DataSyncTests: React.FC = () => {
       await testRLS();
       
       addResult("\n===== Spotify API Test =====");
-      addResult("Searching for Taylor Swift on Spotify...");
+      addResult(`Searching for ${artistName} on Spotify...`);
       
-      const artists = await spotifyService.searchArtists("Taylor Swift");
+      const artists = await spotifyService.searchArtists(artistName);
       
       if (artists.length === 0) {
         addResult("❌ No artists found");
+        toast.error("Artist not found on Spotify");
         return;
       }
       
@@ -319,35 +341,57 @@ const DataSyncTests: React.FC = () => {
         <div className="p-6 border border-gray-800 rounded-lg bg-gray-900">
           <h2 className="text-xl font-semibold mb-4">Artist Sync Test</h2>
           <p className="text-gray-400 mb-6">
-            This will test the complete data synchronization flow: search for artists on Spotify, 
+            This will test the complete data synchronization flow: search for the artist on Spotify, 
             store them in the database, get their top tracks, find shows on Ticketmaster, create setlists, 
             and check trending shows functionality.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button 
-              onClick={handleSearchArtist}
-              disabled={loading}
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              {loading ? 'Running Test...' : 'Run Complete Test'}
-            </Button>
-            <Button 
-              onClick={checkDatabaseState}
-              disabled={loading}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              Check Database State
-            </Button>
-            <Button 
-              onClick={testRLS}
-              disabled={loading}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              Test RLS
-            </Button>
+          
+          <div className="flex flex-col space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-grow">
+                <Input
+                  placeholder="Enter artist name (e.g. Taylor Swift)"
+                  value={artistName}
+                  onChange={(e) => setArtistName(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <Button 
+                onClick={handleSearchArtist}
+                disabled={loading}
+                className="w-full sm:w-auto"
+              >
+                <Search className="h-4 w-4 mr-2" />
+                {loading ? 'Searching...' : 'Search & Sync Artist'}
+              </Button>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button 
+                onClick={checkDatabaseState}
+                disabled={loading}
+                variant="outline"
+                className="w-full sm:w-auto"
+              >
+                Check Database State
+              </Button>
+              <Button 
+                onClick={testRLS}
+                disabled={loading}
+                variant="outline"
+                className="w-full sm:w-auto"
+              >
+                Test RLS
+              </Button>
+              <Button 
+                onClick={clearResults}
+                disabled={loading}
+                variant="destructive"
+                className="w-full sm:w-auto"
+              >
+                Clear Results
+              </Button>
+            </div>
           </div>
           
           {loading && (
