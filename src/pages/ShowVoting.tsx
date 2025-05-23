@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, XCircle } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, XCircle, Clock, Music, Ticket, Share, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import * as setlistService from "@/services/setlist";
 import VotingStats from "@/components/VotingStats";
@@ -18,12 +18,14 @@ interface Show {
   venue_id: string;
   artist: {
     name: string;
+    image_url: string;
   };
   venue: {
     name: string;
     city: string;
     state: string | null;
     country: string;
+    address: string;
   };
   name: string | null;
   date: string;
@@ -56,6 +58,7 @@ const ShowVoting = () => {
   const [loading, setLoading] = useState(true);
   const [votingError, setVotingError] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
+  const [voteSubmitting, setVoteSubmitting] = useState<string | null>(null);
 
   // Fetch show data and create/get setlist
   useEffect(() => {
@@ -71,8 +74,8 @@ const ShowVoting = () => {
           .from('shows')
           .select(`
             *,
-            artist:artists(name),
-            venue:venues(name, city, state, country)
+            artist:artists(id, name, image_url),
+            venue:venues(name, city, state, country, address)
           `)
           .eq('id', showId)
           .single();
@@ -293,6 +296,9 @@ const ShowVoting = () => {
       return;
     }
     
+    // Track submitting state for this song
+    setVoteSubmitting(songId);
+    
     // Optimistically update UI
     setSetlist(prev => {
       if (!prev || !prev.songs) return prev;
@@ -369,6 +375,9 @@ const ShowVoting = () => {
       });
       
       toast.error("An error occurred while voting");
+    } finally {
+      // Clear submitting state
+      setVoteSubmitting(null);
     }
   };
 
@@ -398,51 +407,92 @@ const ShowVoting = () => {
   const maxFreeVotes = 3;
   const votesRemaining = user ? 'Unlimited' : maxFreeVotes - usedVotesCount;
 
+  // Format date safely
+  const formatShowDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'Date TBA';
+    
+    try {
+      const date = new Date(dateStr);
+      if (!isValid(date)) return 'Date TBA';
+      return format(date, 'EEEE, MMMM d, yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Date TBA';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black">
       <AppHeader />
       
-      {/* Show Header */}
-      <div className="relative h-64 bg-gradient-to-br from-cyan-600/20 to-blue-600/20">
-        <div className="absolute inset-0 bg-black/50" />
-        <div className="relative z-10 container mx-auto max-w-7xl px-4 h-full flex items-center">
-          {show?.artist_id && (
-            <Link to={`/artist/${show.artist_id}`} className="text-gray-300 hover:text-white mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2 inline-block" />
-              Back to artist
-            </Link>
-          )}
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 p-6">
-          <div className="container mx-auto max-w-7xl">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`px-2 py-1 rounded text-sm font-medium
-                ${show?.status === 'canceled' ? 'bg-red-600 text-white' : 
-                  show?.status === 'postponed' ? 'bg-yellow-600 text-white' :
-                  'bg-cyan-600 text-white'}`}>
+      {/* Enhanced Show Header */}
+      <div className="relative bg-gradient-to-br from-black to-gray-900">
+        {/* Artist image overlay */}
+        {show?.artist?.image_url && (
+          <div className="absolute inset-0 opacity-20 bg-cover bg-center" 
+               style={{ backgroundImage: `url(${show.artist.image_url})` }}>
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 to-black"></div>
+          </div>
+        )}
+        
+        <div className="relative container mx-auto max-w-7xl px-4 pt-8 pb-12">
+          {/* Navigation and status */}
+          <div className="flex justify-between items-center mb-6">
+            {show?.artist?.id && (
+              <Link to={`/artist/${show.artist.id}`} className="text-gray-400 hover:text-white flex items-center transition-colors">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to artist
+              </Link>
+            )}
+            
+            <div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium
+                ${show?.status === 'canceled' ? 'bg-red-900/30 text-red-300 border border-red-900/40' : 
+                  show?.status === 'postponed' ? 'bg-amber-900/30 text-amber-300 border border-amber-900/40' :
+                  'bg-cyan-900/30 text-cyan-300 border border-cyan-900/40'}`}>
                 {show?.status === 'scheduled' ? 'Upcoming' : 
                  show?.status === 'canceled' ? 'Canceled' : 'Postponed'}
               </span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+          </div>
+          
+          {/* Artist and show info */}
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-3 tracking-tight">
               {show?.artist?.name || "Loading..."}
             </h1>
-            <p className="text-xl text-gray-300 mb-4">
+            
+            <p className="text-xl md:text-2xl text-gray-300 mb-6">
               {show?.name || 'Concert'}
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 text-gray-300">
+            
+            {/* Show details */}
+            <div className="flex flex-col md:flex-row gap-4 md:gap-8 text-gray-300">
               {show?.date && (
                 <div className="flex items-center">
                   <Calendar className="h-5 w-5 mr-2 text-cyan-400" />
-                  {format(new Date(show.date), 'EEEE, MMMM d, yyyy')}
-                  {show.start_time && ` at ${format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}`}
+                  <div>
+                    <div className="font-medium">{formatShowDate(show.date)}</div>
+                    {show.start_time && (
+                      <div className="text-sm text-gray-400 flex items-center mt-1">
+                        <Clock className="h-3.5 w-3.5 mr-1" />
+                        {format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
+              
               {show?.venue && (
                 <div className="flex items-center">
                   <MapPin className="h-5 w-5 mr-2 text-cyan-400" />
-                  {show.venue.name}, {show.venue.city}
-                  {show.venue.state ? `, ${show.venue.state}` : ''}
+                  <div>
+                    <div className="font-medium">{show.venue.name}</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {show.venue.city}
+                      {show.venue.state ? `, ${show.venue.state}` : ''}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -455,14 +505,18 @@ const ShowVoting = () => {
           {/* Main Voting Section */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">What do you want to hear?</h2>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">Vote on Setlist</h2>
+                <p className="text-gray-400 text-sm">Help shape what will be played at this show</p>
+              </div>
               <div className="flex items-center gap-4">
-                <Button variant="outline" className="border-gray-700 text-gray-300">
-                  <Users className="h-4 w-4 mr-2" />
-                  {setlist?.songs?.reduce((total, song) => total + song.votes, 0) || 0} votes
+                <Button variant="outline" className="border-gray-700 text-gray-300 gap-2">
+                  <Users className="h-4 w-4" />
+                  <span className="hidden md:inline">Votes:</span> {setlist?.songs?.reduce((total, song) => total + song.votes, 0) || 0}
                 </Button>
-                <Button variant="outline" className="border-gray-700 text-gray-300">
-                  Share
+                <Button variant="outline" className="border-gray-700 text-gray-300 gap-2">
+                  <Share className="h-4 w-4" />
+                  <span className="hidden md:inline">Share</span>
                 </Button>
               </div>
             </div>
@@ -479,14 +533,12 @@ const ShowVoting = () => {
               </div>
             )}
 
-            <p className="text-gray-300 mb-6">Vote for songs you want to hear at this show.</p>
-
             {/* Add Song Section */}
             {setlist && show?.artist_id && (
-              <Card className="bg-gray-900 border-gray-800 mb-6">
+              <Card className="bg-gray-900/40 border border-gray-800/50 mb-6">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-300">Add a song to this setlist:</span>
+                    <span className="text-gray-300">Add songs to this setlist:</span>
                     <AddSongToSetlist
                       setlistId={setlist.id}
                       artistId={show.artist_id}
@@ -504,7 +556,7 @@ const ShowVoting = () => {
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map(i => (
-                  <Card key={i} className="bg-gray-900 border-gray-800 animate-pulse">
+                  <Card key={i} className="bg-gray-900/40 border-gray-800/50 animate-pulse">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-4">
@@ -523,11 +575,11 @@ const ShowVoting = () => {
                 ))}
               </div>
             ) : setlist && setlist.songs && setlist.songs.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {setlist.songs.map((song, index) => (
                   <Card 
                     key={song.id} 
-                    className={`bg-gray-900 border-gray-800 hover:border-cyan-500/50 transition-all duration-300 ${
+                    className={`bg-gray-900/40 border-gray-800/50 hover:border-cyan-500/50 transition-all duration-300 ${
                       song.userVoted ? 'border-l-4 border-l-cyan-500' : ''
                     }`}
                   >
@@ -537,9 +589,13 @@ const ShowVoting = () => {
                           <div className="text-2xl font-bold text-gray-400 w-8">
                             {index + 1}
                           </div>
-                          <div>
-                            <h3 className="text-white font-semibold">{song.song.name}</h3>
-                            <p className="text-gray-400 text-sm">{song.song.album}</p>
+                          <div className="overflow-hidden">
+                            <h3 className="text-white font-semibold truncate max-w-[200px] sm:max-w-[300px] md:max-w-full">
+                              {song.song.name}
+                            </h3>
+                            <p className="text-gray-400 text-sm truncate max-w-[200px] sm:max-w-[300px] md:max-w-full">
+                              {song.song.album}
+                            </p>
                           </div>
                         </div>
                         
@@ -548,21 +604,27 @@ const ShowVoting = () => {
                             <div className="text-white font-bold">{song.votes}</div>
                             <div className="text-gray-400 text-xs">VOTES</div>
                           </div>
-                          <div className="flex flex-col gap-1">
+                          <div>
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => handleVote(song.id)}
-                              className={`h-8 w-8 p-0 
-                                ${song.userVoted 
+                              disabled={song.userVoted || (usedVotesCount >= maxFreeVotes && !user) || voteSubmitting === song.id}
+                              className={`h-10 w-10 rounded-full p-0 
+                                ${voteSubmitting === song.id 
+                                  ? 'animate-pulse bg-gray-800/50 cursor-not-allowed' 
+                                  : song.userVoted 
                                   ? 'text-cyan-400 bg-cyan-400/20' 
                                   : usedVotesCount >= maxFreeVotes && !user
                                     ? 'text-gray-600 cursor-not-allowed'
-                                    : 'text-gray-400 hover:text-cyan-400'
+                                    : 'text-gray-400 hover:text-cyan-400 hover:bg-cyan-400/10'
                                 }`}
-                              disabled={song.userVoted || (usedVotesCount >= maxFreeVotes && !user)}
                             >
-                              <ChevronUp className="h-4 w-4" />
+                              {voteSubmitting === song.id ? (
+                                <div className="h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"/>
+                              ) : (
+                                <ThumbsUp className="h-4 w-4" />
+                              )}
                             </Button>
                           </div>
                         </div>
@@ -573,6 +635,7 @@ const ShowVoting = () => {
               </div>
             ) : (
               <div className="text-center py-12 bg-gray-900/50 border border-gray-800 rounded-lg">
+                <Music className="h-12 w-12 text-gray-700 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-300">No songs in setlist yet</h3>
                 <p className="text-gray-400 mt-2">Be the first to add a song!</p>
               </div>
@@ -588,10 +651,11 @@ const ShowVoting = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <VotingStats />
+            {/* Real voting stats */}
+            {setlist && <VotingStats setlistId={setlist.id} />}
             
             {/* How It Works */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 border-gray-800/50">
               <CardContent className="p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">How It Works</h3>
                 <ul className="space-y-3 text-sm text-gray-300">
@@ -601,7 +665,7 @@ const ShowVoting = () => {
                   </li>
                   <li className="flex items-start">
                     <div className="w-2 h-2 bg-cyan-400 rounded-full mt-2 mr-3 flex-shrink-0" />
-                    Anyone can add songs to the setlist. Select from the dropdown above to help build the perfect concert.
+                    Anyone can add songs to the setlist. Select from the artist's catalog to help build the perfect concert.
                   </li>
                   <li className="flex items-start">
                     <div className="w-2 h-2 bg-cyan-400 rounded-full mt-2 mr-3 flex-shrink-0" />
@@ -617,16 +681,32 @@ const ShowVoting = () => {
             
             {/* Ticket Link */}
             {show?.ticketmaster_url && (
-              <Card className="bg-gray-900 border-gray-800">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Tickets</h3>
+              <Card className="bg-gray-900/40 border-gray-800/50 relative overflow-hidden">
+                {/* Abstract ticket background */}
+                <div className="absolute inset-0 opacity-5">
+                  <div className="absolute inset-y-0 left-0 w-10 border-r border-dashed border-white/20"></div>
+                  <div className="absolute inset-x-0 top-0 h-10 border-b border-dashed border-white/20"></div>
+                </div>
+                
+                <CardContent className="p-6 relative">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Ticket className="h-5 w-5 text-cyan-400" />
+                    <h3 className="text-lg font-semibold text-white">Get Tickets</h3>
+                  </div>
+                  
+                  <p className="text-sm text-gray-400 mb-4">
+                    Secure your spot at this show through Ticketmaster, the official ticket provider.
+                  </p>
+                  
                   <a 
                     href={show.ticketmaster_url} 
                     target="_blank" 
                     rel="noopener noreferrer"
+                    className="block"
                   >
-                    <Button className="w-full bg-cyan-600 hover:bg-cyan-700">
-                      Buy Tickets on Ticketmaster
+                    <Button className="w-full bg-cyan-600 hover:bg-cyan-700 gap-2">
+                      <Ticket className="h-4 w-4" />
+                      Buy Tickets
                     </Button>
                   </a>
                 </CardContent>

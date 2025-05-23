@@ -44,8 +44,14 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
     setLoading(true);
     try {
       const artistSongs = await setlistService.getArtistSongs(artistId);
-      setSongs(artistSongs);
-      setFilteredSongs(artistSongs);
+      
+      // Sort songs alphabetically by name
+      const sortedSongs = [...artistSongs].sort((a, b) => 
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      );
+      
+      setSongs(sortedSongs);
+      setFilteredSongs(sortedSongs);
       setLoading(false);
     } catch (error) {
       console.error("Error fetching artist songs:", error);
@@ -116,6 +122,13 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
           />
         </div>
         
+        {/* Song count indicator */}
+        {!loading && (
+          <p className="text-sm text-slate-400 mb-2">
+            {filteredSongs.length} songs found {searchQuery ? `for "${searchQuery}"` : ''}
+          </p>
+        )}
+        
         {/* Song list */}
         {loading ? (
           <div className="text-center py-8">
@@ -135,13 +148,13 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
                   key={song.id}
                   className="flex items-center justify-between p-3 rounded-md bg-black border border-slate-800 hover:bg-slate-900 transition-colors"
                 >
-                  <div>
-                    <p className="font-medium text-white">{song.name}</p>
-                    <p className="text-sm text-slate-400">{song.album}</p>
+                  <div className="overflow-hidden">
+                    <p className="font-medium text-white truncate">{song.name}</p>
+                    <p className="text-sm text-slate-400 truncate">{song.album}</p>
                   </div>
                   <Button 
                     size="sm"
-                    className="bg-white text-black hover:bg-slate-200"
+                    className="bg-white text-black hover:bg-slate-200 ml-2 flex-shrink-0"
                     onClick={() => handleAddSong(song)}
                   >
                     <Plus className="h-4 w-4 mr-2" />

@@ -30,6 +30,25 @@ const isValidDateString = (dateStr: any): boolean => {
 };
 
 /**
+ * Safely parse a date string and return null if invalid
+ */
+const safeParseDateString = (dateStr: any): string | null => {
+  if (!dateStr) return null;
+  if (typeof dateStr !== 'string') return null;
+  
+  try {
+    const date = new Date(dateStr);
+    if (isValid(date)) {
+      return date.toISOString();
+    }
+  } catch (e) {
+    console.error("Error parsing date:", e, dateStr);
+  }
+  
+  return null;
+};
+
+/**
  * Fetch trending shows based on both Ticketmaster API and voting activity
  */
 export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[]> {
@@ -60,14 +79,8 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
         imageUrl = wideImage ? wideImage.url : event.images[0].url;
       }
       
-      // Ensure we have a valid date string
-      let dateString = null;
-      if (event.dates?.start?.dateTime && typeof event.dates.start.dateTime === 'string') {
-        // Validate the date
-        if (isValidDateString(event.dates.start.dateTime)) {
-          dateString = event.dates.start.dateTime;
-        }
-      }
+      // Ensure we have a valid date string using our helper
+      const dateString = safeParseDateString(event.dates?.start?.dateTime);
       
       return {
         id: event.id,
@@ -134,11 +147,8 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
             }, 0);
           }
           
-          // Ensure date is valid
-          let dateString = null;
-          if (show.date && isValidDateString(show.date)) {
-            dateString = show.date;
-          }
+          // Ensure date is valid using our helper function
+          const dateString = safeParseDateString(show.date);
               
           return {
             id: show.id,
@@ -151,7 +161,7 @@ export async function getTrendingShows(limit: number = 6): Promise<TrendingShow[
             image_url: show.artists.image_url
           };
         })
-        .filter(show => show.votes > 0 || isValidDateString(show.date)); // Only include shows with votes or valid dates
+        .filter(show => show.votes > 0 || show.date !== null); // Only include shows with votes or valid dates
       
       // Combine API and DB shows, prioritizing ones with votes
       const combinedShows = [...processedDbShows, ...ticketmasterShows];

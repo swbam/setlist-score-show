@@ -94,7 +94,7 @@ export async function getOrCreateSetlist(showId: string): Promise<string> {
       .from('songs')
       .select('id')
       .eq('artist_id', artistId)
-      .limit(50); // Get up to 50 songs to randomly select from
+      .limit(100); // Increase limit to get more songs to choose from
     
     if (songsError) {
       console.error("Error getting artist songs:", songsError);
@@ -298,7 +298,7 @@ export async function getArtistSongs(artistId: string): Promise<Song[]> {
       .from('songs')
       .select('*')
       .eq('artist_id', artistId)
-      .order('popularity', { ascending: false });
+      .order('name', { ascending: true }); // Sort alphabetically by default
     
     if (error) {
       console.error("Error getting artist songs:", error);
@@ -309,5 +309,49 @@ export async function getArtistSongs(artistId: string): Promise<Song[]> {
   } catch (error) {
     console.error("Error in getArtistSongs:", error);
     return [];
+  }
+}
+
+// Get voting statistics for a setlist
+export async function getSetlistVotingStats(setlistId: string) {
+  try {
+    // Get total votes
+    const { data: setlistSongs, error: songsError } = await supabase
+      .from('setlist_songs')
+      .select('votes')
+      .eq('setlist_id', setlistId);
+      
+    if (songsError) {
+      console.error("Error getting setlist songs for stats:", songsError);
+      return null;
+    }
+    
+    const totalVotes = setlistSongs.reduce((sum, song) => sum + (song.votes || 0), 0);
+    const songCount = setlistSongs.length;
+    
+    // Get unique voters
+    const { data: uniqueVoters, error: votersError } = await supabase
+      .from('votes')
+      .select('user_id')
+      .eq('setlist_id', setlistId)
+      .limit(1000);
+      
+    if (votersError) {
+      console.error("Error getting unique voters:", votersError);
+      return null;
+    }
+    
+    // Count unique user IDs
+    const uniqueUserIds = new Set();
+    uniqueVoters?.forEach(vote => uniqueUserIds.add(vote.user_id));
+    
+    return {
+      totalVotes,
+      songCount,
+      uniqueVoters: uniqueUserIds.size
+    };
+  } catch (error) {
+    console.error("Error getting setlist voting stats:", error);
+    return null;
   }
 }
