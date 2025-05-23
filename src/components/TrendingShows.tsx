@@ -2,36 +2,31 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
-import { CalendarDays, MapPin } from 'lucide-react';
+import { CalendarDays, MapPin, ThumbsUp } from 'lucide-react';
 import { format } from 'date-fns';
-import * as ticketmasterService from "@/services/ticketmaster";
+import * as trendingService from "@/services/trending";
 
-interface Show {
+interface TrendingShow {
   id: string;
   name: string;
   date: string;
-  artist: {
-    name: string;
-    image_url: string | null;
-  };
-  venue: {
-    name: string;
-    city: string;
-    state: string | null;
-    country: string;
-  };
-  view_count: number;
+  votes: number;
+  artist_name: string;
+  venue_name: string;
+  venue_city: string;
+  image_url?: string;
 }
 
 const TrendingShows = () => {
-  const [shows, setShows] = useState<Show[]>([]);
+  const [shows, setShows] = useState<TrendingShow[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     const fetchTrendingShows = async () => {
       setLoading(true);
       try {
-        const trendingShows = await ticketmasterService.getTrendingShows(6);
+        const trendingShows = await trendingService.getTrendingShows(6);
+        console.log('Fetched trending shows:', trendingShows);
         setShows(trendingShows);
       } catch (error) {
         console.error('Error fetching trending shows:', error);
@@ -91,21 +86,21 @@ const TrendingShows = () => {
             <Link to={`/show/${show.id}`} key={show.id}>
               <Card className="bg-gray-900 border-gray-800 hover:border-cyan-600/50 transition-all duration-300 overflow-hidden h-full">
                 <div className="h-48 bg-gray-800 relative">
-                  {show.artist.image_url ? (
+                  {show.image_url ? (
                     <img 
-                      src={show.artist.image_url} 
-                      alt={show.artist.name} 
+                      src={show.image_url} 
+                      alt={show.artist_name} 
                       className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-purple-900/30 flex items-center justify-center">
-                      <span className="text-xl text-white font-bold">{show.artist.name}</span>
+                      <span className="text-xl text-white font-bold">{show.artist_name}</span>
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
                   <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <h3 className="text-white font-bold text-xl line-clamp-1">{show.artist.name}</h3>
-                    <p className="text-gray-300 text-sm line-clamp-1">{show.name || 'Concert'}</p>
+                    <h3 className="text-white font-bold text-xl line-clamp-1">{show.artist_name}</h3>
+                    <p className="text-gray-300 text-sm line-clamp-1">{show.name}</p>
                   </div>
                 </div>
                 <CardContent className="p-4">
@@ -117,13 +112,12 @@ const TrendingShows = () => {
                     <div className="flex items-center text-gray-400">
                       <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
                       <span>
-                        {show.venue.name}, {show.venue.city}
-                        {show.venue.state ? `, ${show.venue.state}` : ''}
+                        {show.venue_name}, {show.venue_city}
                       </span>
                     </div>
                     <div className="text-right mt-2">
-                      <span className="bg-cyan-500/20 text-cyan-300 text-xs py-1 px-2 rounded">
-                        {show.view_count} view{show.view_count !== 1 ? 's' : ''}
+                      <span className="bg-cyan-500/20 text-cyan-300 text-xs py-1 px-2 rounded flex items-center justify-end gap-1">
+                        <ThumbsUp className="w-3 h-3" /> {show.votes} vote{show.votes !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
