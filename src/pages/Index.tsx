@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
@@ -23,17 +22,17 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen w-full bg-black">
       <AppHeader />
       
       {/* Hero Section */}
-      <section className="relative min-h-[80vh] flex items-center justify-center px-4">
+      <section className="relative min-h-[80vh] flex items-center justify-center w-full">
         {/* Background with grid pattern */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23374151%22%20fill-opacity%3D%220.1%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%227%22%20r%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-20"></div>
         </div>
 
-        <div className="relative z-10 text-center max-w-4xl mx-auto">
+        <div className="relative z-10 text-center max-w-4xl mx-auto px-4">
           <h1 className="text-5xl md:text-7xl font-bold mb-6">
             <span className="text-white">Crowdsourced</span>
             <br />
@@ -90,9 +89,9 @@ const Index = () => {
         </div>
       </section>
       
-      {/* Featured Shows Section */}
-      <section className="py-16 px-4 bg-gradient-to-b from-black to-gray-900/30">
-        <div className="container mx-auto max-w-7xl">
+      {/* Featured Shows Section - Full Width */}
+      <section className="py-16 w-full bg-gradient-to-b from-black to-gray-900/30">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-3xl font-bold text-white">Featured Shows</h2>
             <Button variant="link" className="text-cyan-400 flex items-center gap-1 hover:text-cyan-300">
@@ -127,9 +126,9 @@ const Index = () => {
         </div>
       </section>
       
-      {/* How It Works Section */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-7xl">
+      {/* How It Works Section - Full Width */}
+      <section className="py-16 w-full">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8">
           <h2 className="text-3xl font-bold text-white text-center mb-12">How TheSet Works</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -166,9 +165,9 @@ const Index = () => {
         </div>
       </section>
       
-      {/* Footer */}
-      <footer className="bg-gray-900 border-t border-gray-800 py-12 px-4">
-        <div className="container mx-auto max-w-7xl">
+      {/* Footer - Full Width */}
+      <footer className="w-full bg-gray-900 border-t border-gray-800 py-12">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <h3 className="text-xl font-bold gradient-text mb-4">TheSet</h3>

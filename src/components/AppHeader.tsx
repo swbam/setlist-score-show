@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, Search, User, LogOut, Music, Home } from "lucide-react";
@@ -61,7 +60,7 @@ const AppHeader = () => {
           isScrolled ? "bg-gray-900/95 backdrop-blur-md py-2 shadow-md" : "bg-transparent py-4"
         }`}
       >
-        <div className="container mx-auto max-w-7xl px-4">
+        <div className="w-full max-w-full px-4 lg:px-8">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div
