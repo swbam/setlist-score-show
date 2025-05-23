@@ -16,7 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import VotingStatsRefactored from "@/components/VotingStatsRefactored";
 import AddSongToSetlist from "@/components/AddSongToSetlist";
 import * as setlistService from "@/services/setlist";
@@ -86,10 +86,9 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       
       if (error) {
         console.error("Error voting for song:", error);
-        // Fixed toast call
+        
         toast("Failed to vote", {
-          description: "There was an error voting for this song",
-          variant: "destructive",
+          description: "There was an error voting for this song"
         });
         
         // Revert the UI
@@ -97,10 +96,9 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
       }
     } catch (error) {
       console.error("Error voting for song:", error);
-      // Fixed toast call
+      
       toast("Failed to vote", {
-        description: "There was an error voting for this song",
-        variant: "destructive",
+        description: "There was an error voting for this song"
       });
       
       // Revert the UI
@@ -120,34 +118,15 @@ export function VotingSection({ show, artist, setlist, onRefresh }: VotingSectio
     
     setSongs(updatedSongs);
     
-    // Call the API
-    try {
-      const { error } = await supabase.rpc('remove_vote_for_song', {
-        setlist_song_id: songId
-      });
-      
-      if (error) {
-        console.error("Error removing vote for song:", error);
-        // Fixed toast call
-        toast("Failed to remove vote", {
-          description: "There was an error removing your vote for this song",
-          variant: "destructive",
-        });
-        
-        // Revert the UI
-        await refreshSetlist();
-      }
-    } catch (error) {
-      console.error("Error removing vote for song:", error);
-      // Fixed toast call
-      toast("Failed to remove vote", {
-          description: "There was an error removing your vote for this song",
-          variant: "destructive",
-      });
-      
-      // Revert the UI
+    // Currently there is no RPC function for removing votes, so we need to show a message
+    toast("Feature coming soon", {
+      description: "Vote removal is not yet implemented"
+    });
+    
+    // Revert the UI after a short delay
+    setTimeout(async () => {
       await refreshSetlist();
-    }
+    }, 1000);
   };
 
   return (

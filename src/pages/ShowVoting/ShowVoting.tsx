@@ -21,6 +21,16 @@ const ShowVoting = () => {
     handleSongAdded
   } = useShowVoting(user);
 
+  // Extract artist from show to pass to VotingSection
+  const artist = show?.artist || { 
+    id: '', 
+    name: '', 
+    images: [], 
+    popularity: 0,
+    genres: [],
+    external_urls: { spotify: '' }
+  };
+
   return (
     <div className="min-h-screen bg-black">
       <AppHeader />
@@ -34,15 +44,8 @@ const ShowVoting = () => {
           <VotingSection
             setlist={setlist}
             show={show}
-            loading={loading}
-            votingError={votingError}
-            voteSubmitting={voteSubmitting}
-            handleVote={handleVote}
-            handleSongAdded={handleSongAdded}
-            usedVotesCount={usedVotesCount}
-            maxFreeVotes={maxFreeVotes}
-            votesRemaining={votesRemaining}
-            user={user}
+            artist={artist}
+            onRefresh={handleSongAdded}
           />
 
           {/* Sidebar */}

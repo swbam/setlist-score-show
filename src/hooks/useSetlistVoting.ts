@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
+import * as setlistService from "@/services/setlist";
 
 // Updated interfaces to avoid recursive type definitions
 export interface Song {
@@ -28,7 +28,25 @@ export function useSetlistVoting(setlistId: string) {
   const [songs, setSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
-  const { user } = useAuth();
+  const [user, setUser] = useState<any>(null);
+
+  // Get current user
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data?.user || null);
+    };
+    
+    getUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
@@ -92,7 +110,7 @@ export function useSetlistVoting(setlistId: string) {
         }
       } catch (error) {
         console.error('Error fetching setlist songs:', error);
-        toast("Failed to load setlist", { variant: "destructive" });
+        toast("Failed to load setlist");
       } finally {
         setLoading(false);
       }
@@ -129,13 +147,13 @@ export function useSetlistVoting(setlistId: string) {
   // Vote for a song
   const vote = useCallback(async (setlistSongId: string) => {
     if (!user) {
-      toast("Please sign in to vote", { variant: "destructive" });
+      toast("Please sign in to vote");
       return false;
     }
 
     // Check if user already voted for this song
     if (userVotes[setlistSongId]) {
-      toast("You already voted for this song", { variant: "destructive" });
+      toast("You already voted for this song");
       return false;
     }
 
@@ -182,8 +200,7 @@ export function useSetlistVoting(setlistId: string) {
         });
 
         toast("Failed to vote", { 
-          description: insertError.message,
-          variant: "destructive"
+          description: insertError.message
         });
         return false;
       }
@@ -199,11 +216,11 @@ export function useSetlistVoting(setlistId: string) {
         // We don't revert UI changes since the vote record was created
       }
 
-      toast("Your vote has been counted!", { variant: "default" });
+      toast("Your vote has been counted!");
       return true;
     } catch (error) {
       console.error('Error voting for song:', error);
-      toast("Something went wrong while voting", { variant: "destructive" });
+      toast("Something went wrong while voting");
       return false;
     }
   }, [user, userVotes, setlistId, songs]);
@@ -211,7 +228,7 @@ export function useSetlistVoting(setlistId: string) {
   // Add a song to the setlist (for future implementation)
   const addSong = useCallback(async (songId: string) => {
     // Implementation for adding songs will go here
-    toast("This feature is coming soon!", { variant: "default" });
+    toast("This feature is coming soon!");
     return false;
   }, []);
 
