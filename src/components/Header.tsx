@@ -29,6 +29,9 @@ const Header = () => {
           <Link to="/how-it-works" className="text-slate-300 hover:text-white transition-colors">
             How It Works
           </Link>
+          <Link to="/tests/data-sync" className="text-slate-300 hover:text-white transition-colors">
+            Run Tests
+          </Link>
         </nav>
 
         {/* Search & Auth */}
