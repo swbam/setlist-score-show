@@ -245,10 +245,11 @@ export async function voteForSong(setlistSongId: string): Promise<number | null>
       return null;
     }
     
-    if (data && data.success) {
-      return data.votes;
+    // Handle the response properly with type checking
+    if (data && typeof data === 'object' && 'success' in data && 'votes' in data) {
+      return data.votes as number;
     } else {
-      console.error("Vote failed:", data?.message || "Unknown error");
+      console.error("Vote failed:", data && typeof data === 'object' && 'message' in data ? data.message : "Unknown error");
       return null;
     }
   } catch (error) {

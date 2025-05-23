@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CalendarDays, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import AppHeader from "@/components/AppHeader";

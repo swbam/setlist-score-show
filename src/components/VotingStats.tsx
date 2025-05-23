@@ -1,185 +1,148 @@
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useEffect, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Users, ThumbsUp, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface VotingStatsProps {
-  setlistId?: string;
+  setlistId: string;
 }
 
-interface VoteActivity {
-  name: string;
-  votes: number;
+interface Stats {
+  totalVotes: number;
+  uniqueVoters: number;
+  lastVoteTime: string | null;
+  avgVotesPerSong: number;
 }
-
-// Helper to generate daily data labels for the past week
-const generateDayLabels = () => {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const today = new Date();
-  const dayLabels = [];
-  
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(today.getDate() - i);
-    dayLabels.push(days[date.getDay()]);
-  }
-  
-  return dayLabels;
-};
 
 const VotingStats = ({ setlistId }: VotingStatsProps) => {
-  const [voteActivity, setVoteActivity] = useState<VoteActivity[]>([]);
-  const [totalVotes, setTotalVotes] = useState(0);
-  const [uniqueVoters, setUniqueVoters] = useState(0);
-  const [songCount, setSongCount] = useState(0);
+  const [stats, setStats] = useState<Stats>({
+    totalVotes: 0,
+    uniqueVoters: 0,
+    lastVoteTime: null,
+    avgVotesPerSong: 0
+  });
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
-    const fetchVotingStats = async () => {
-      if (!setlistId) {
-        // If no setlist ID provided, initialize with empty data
-        setLoading(false);
-        return;
-      }
-      
+    async function fetchStats() {
       try {
-        // Get the setlist songs with votes
-        const { data: setlistSongs, error: songsError } = await supabase
+        setLoading(true);
+        
+        // Get total votes and songs count
+        const { data: songsData } = await supabase
           .from('setlist_songs')
-          .select('id, votes')
+          .select('votes')
           .eq('setlist_id', setlistId);
           
-        if (songsError) {
-          console.error('Error fetching setlist songs:', songsError);
-          return;
-        }
+        const totalVotes = songsData ? songsData.reduce((sum, song) => sum + song.votes, 0) : 0;
+        const songCount = songsData ? songsData.length : 1;
         
-        // Calculate total votes and song count
-        const totalVotesCount = setlistSongs?.reduce((sum, song) => sum + (song.votes || 0), 0) || 0;
-        setTotalVotes(totalVotesCount);
-        setSongCount(setlistSongs?.length || 0);
-        
-        // Get unique voters
-        const { data: votes, error: votesError } = await supabase
+        // Get unique voter count
+        const { count } = await supabase
           .from('votes')
-          .select('user_id')
-          .in(
-            'setlist_song_id', 
-            setlistSongs?.map(song => song.id) || []
-          );
-          
-        if (votesError) {
-          console.error('Error fetching votes:', votesError);
-        } else {
-          // Count unique users
-          const uniqueUsers = new Set(votes?.map(vote => vote.user_id));
-          setUniqueVoters(uniqueUsers.size);
-        }
+          .select('user_id', { count: 'exact', head: false })
+          .eq('setlist_song_id', setlistId);
         
-        // Generate vote activity data for the chart (past 7 days)
-        const dayLabels = generateDayLabels();
-        
-        // Get votes from the past week
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        const { data: recentVotes, error: recentVotesError } = await supabase
+        // Get last vote time
+        const { data: lastVoteData } = await supabase
           .from('votes')
           .select('created_at')
-          .in(
-            'setlist_song_id', 
-            setlistSongs?.map(song => song.id) || []
-          )
-          .gte('created_at', oneWeekAgo.toISOString());
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
           
-        if (recentVotesError) {
-          console.error('Error fetching recent votes:', recentVotesError);
-        } else {
-          // Group votes by day
-          const votesPerDay: Record<string, number> = {};
-          dayLabels.forEach(day => { votesPerDay[day] = 0 });
-          
-          recentVotes?.forEach(vote => {
-            const voteDate = new Date(vote.created_at);
-            const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][voteDate.getDay()];
-            votesPerDay[day] = (votesPerDay[day] || 0) + 1;
-          });
-          
-          // Create chart data
-          const chartData = dayLabels.map(day => ({
-            name: day,
-            votes: votesPerDay[day] || 0
-          }));
-          
-          setVoteActivity(chartData);
-        }
+        setStats({
+          totalVotes,
+          uniqueVoters: count || 0,
+          lastVoteTime: lastVoteData?.created_at || null,
+          avgVotesPerSong: songCount > 0 ? totalVotes / songCount : 0
+        });
       } catch (error) {
-        console.error('Error fetching voting stats:', error);
+        console.error("Error fetching voting stats:", error);
       } finally {
         setLoading(false);
       }
-    };
+    }
     
-    fetchVotingStats();
+    fetchStats();
+    
+    // Set up real-time subscription for votes
+    const channel = supabase
+      .channel('voting-stats')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'votes' },
+        () => fetchStats()
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [setlistId]);
   
-  // If there's no real data yet, use placeholder data for the chart
-  const displayData = voteActivity.length > 0 ? voteActivity : [
-    { name: "Sun", votes: 0 },
-    { name: "Mon", votes: 0 },
-    { name: "Tue", votes: 0 },
-    { name: "Wed", votes: 0 },
-    { name: "Thu", votes: 0 },
-    { name: "Fri", votes: 0 },
-    { name: "Sat", votes: 0 },
-  ];
-
+  // Format time ago
+  const formatTimeAgo = (timestamp: string | null) => {
+    if (!timestamp) return 'No votes yet';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    const intervals = {
+      year: 31536000,
+      month: 2592000,
+      week: 604800,
+      day: 86400,
+      hour: 3600,
+      minute: 60,
+      second: 1
+    };
+    
+    let counter;
+    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+      counter = Math.floor(seconds / secondsInUnit);
+      if (counter > 0) {
+        return `${counter} ${unit}${counter === 1 ? '' : 's'} ago`;
+      }
+    }
+    
+    return 'Just now';
+  };
+  
   return (
-    <Card className="bg-gray-900 border-gray-800">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-white">Voting Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[180px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={displayData}>
-              <XAxis
-                dataKey="name"
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${value}`}
-              />
-              <Bar
-                dataKey="votes"
-                fill="#06B6D4"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-3xl font-bold text-white">{loading ? '-' : totalVotes}</p>
-            <p className="text-xs text-gray-400">Total Votes</p>
+    <Card className="bg-gray-900/40 border-gray-800/50">
+      <CardContent className="p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Voting Stats</h3>
+        
+        {loading ? (
+          <div className="space-y-3">
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-2/3"></div>
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-1/2"></div>
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-3/4"></div>
           </div>
-          <div>
-            <p className="text-3xl font-bold text-white">{loading ? '-' : uniqueVoters}</p>
-            <p className="text-xs text-gray-400">Voters</p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold text-white">{loading ? '-' : songCount}</p>
-            <p className="text-xs text-gray-400">Songs</p>
-          </div>
-        </div>
+        ) : (
+          <ul className="space-y-4">
+            <li className="flex items-center text-gray-300">
+              <ThumbsUp className="h-4 w-4 mr-3 text-cyan-400" />
+              <span className="text-sm">
+                {stats.totalVotes} total {stats.totalVotes === 1 ? 'vote' : 'votes'}
+              </span>
+            </li>
+            <li className="flex items-center text-gray-300">
+              <Users className="h-4 w-4 mr-3 text-cyan-400" />
+              <span className="text-sm">
+                {stats.uniqueVoters} {stats.uniqueVoters === 1 ? 'person has' : 'people have'} voted
+              </span>
+            </li>
+            <li className="flex items-center text-gray-300">
+              <Clock className="h-4 w-4 mr-3 text-cyan-400" />
+              <span className="text-sm">
+                Last vote: {formatTimeAgo(stats.lastVoteTime)}
+              </span>
+            </li>
+          </ul>
+        )}
       </CardContent>
     </Card>
   );
