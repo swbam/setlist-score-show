@@ -63,7 +63,8 @@ export function useSetlistVoting(setlistId: string) {
           const { data: userVotesData, error: votesError } = await supabase
             .from('votes')
             .select('setlist_song_id')
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .eq('setlist_id', setlistId); // Added filter by setlist_id to match VotingStats
 
           if (!votesError && userVotesData) {
             const votesMap: Record<string, boolean> = {};

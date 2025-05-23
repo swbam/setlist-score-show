@@ -1,6 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "@/services/ticketmaster";
+import * as spotifyService from "@/services/spotify";
 
 export interface Artist {
   id: string;
@@ -8,55 +8,142 @@ export interface Artist {
   image_url?: string;
   genres?: string[];
   popularity?: number;
-  source?: 'database' | 'ticketmaster';
+  spotify_url?: string;
+  source?: 'database' | 'ticketmaster' | 'spotify';
 }
 
-// Store artist in Supabase database
-export const storeArtistInDatabase = async (artist: Artist): Promise<boolean> => {
+// Comprehensive function to ensure artist data is consistently stored in database
+export const ensureArtistInDatabase = async (
+  artist: Artist, 
+  fetchSpotifyData = false
+): Promise<Artist> => {
   try {
     // Skip if no valid ID
-    if (!artist.id) return false;
+    if (!artist.id) {
+      console.error("Invalid artist ID");
+      return artist;
+    }
     
     // Check if artist exists in database
     const { data: existingArtist } = await supabase
       .from('artists')
-      .select('id')
+      .select('*')
       .eq('id', artist.id)
       .maybeSingle();
     
     if (existingArtist) {
       console.log(`Artist ${artist.name} already exists in database`);
-      return true; // Artist already exists
+      
+      // If we have Spotify info but DB doesn't, or if fetchSpotifyData is true, update it
+      if ((artist.spotify_url && !existingArtist.spotify_url) || 
+          (fetchSpotifyData && !existingArtist.spotify_url)) {
+        
+        // Try to enrich with Spotify data if needed
+        let spotifyArtist = null;
+        if (fetchSpotifyData) {
+          // First try by ID in case it's already a Spotify ID
+          spotifyArtist = await spotifyService.getArtist(artist.id);
+          
+          // If not found by ID, search by name
+          if (!spotifyArtist) {
+            const searchResults = await spotifyService.searchArtists(artist.name);
+            if (searchResults && searchResults.length > 0) {
+              spotifyArtist = searchResults[0];
+            }
+          }
+        }
+        
+        // Update with enriched data
+        if (spotifyArtist) {
+          const { error } = await supabase
+            .from('artists')
+            .update({
+              spotify_url: spotifyArtist.external_urls?.spotify || artist.spotify_url || null,
+              image_url: spotifyArtist.images?.[0]?.url || existingArtist.image_url,
+              genres: spotifyArtist.genres || existingArtist.genres,
+              popularity: spotifyArtist.popularity || existingArtist.popularity,
+              last_synced_at: new Date().toISOString()
+            })
+            .eq('id', artist.id);
+          
+          if (error) {
+            console.error(`Error updating Spotify data for artist ${artist.name}:`, error);
+          } else {
+            console.log(`Updated Spotify data for artist ${artist.name}`);
+            
+            // Import tracks if this is a Spotify artist
+            if (spotifyArtist.id && spotifyArtist.id.length > 0) {
+              spotifyService.importArtistCatalog(spotifyArtist.id).catch(console.error);
+            }
+          }
+        }
+      }
+      
+      // Return existing artist with any updated fields
+      return {
+        ...existingArtist,
+        source: 'database'
+      };
     }
     
-    // Create artist in database with minimal information
-    // Later sync processes can fetch more details from Spotify
+    // Artist doesn't exist, try to enrich with Spotify data first
+    let spotifyArtist = null;
+    if (fetchSpotifyData) {
+      const searchResults = await spotifyService.searchArtists(artist.name);
+      if (searchResults && searchResults.length > 0) {
+        spotifyArtist = searchResults[0];
+      }
+    }
+    
+    // Prepare data for insert
+    const artistData = {
+      id: spotifyArtist?.id || artist.id,
+      name: artist.name,
+      image_url: spotifyArtist?.images?.[0]?.url || artist.image_url || null,
+      genres: spotifyArtist?.genres || artist.genres || [],
+      popularity: spotifyArtist?.popularity || artist.popularity || 0,
+      spotify_url: spotifyArtist?.external_urls?.spotify || artist.spotify_url || null,
+      last_synced_at: new Date().toISOString()
+    };
+    
+    // Create artist in database
     const { error } = await supabase
       .from('artists')
-      .insert({
-        id: artist.id,
-        name: artist.name,
-        image_url: artist.image_url || null,
-        genres: artist.genres || [],
-        popularity: artist.popularity || 0,
-        spotify_url: null,
-        last_synced_at: new Date().toISOString()
-      });
+      .insert(artistData);
     
     if (error) {
       console.error(`Error storing artist ${artist.name}:`, error);
-      return false;
+      return artist;
     }
     
     console.log(`Successfully stored artist ${artist.name} in database`);
+    
+    // If this is a Spotify artist, import their catalog
+    if (spotifyArtist && spotifyArtist.id) {
+      spotifyService.importArtistCatalog(spotifyArtist.id).catch(console.error);
+    }
+    
+    return {
+      ...artistData,
+      source: 'database'
+    };
+  } catch (error) {
+    console.error(`Error ensuring artist ${artist.name} in database:`, error);
+    return artist;
+  }
+};
+
+// Existing function - now a wrapper around ensureArtistInDatabase
+export const storeArtistInDatabase = async (artist: Artist): Promise<boolean> => {
+  try {
+    await ensureArtistInDatabase(artist);
     return true;
   } catch (error) {
-    console.error(`Error storing artist ${artist.name}:`, error);
     return false;
   }
 };
 
-// Extract unique artists from Ticketmaster events
+// Extract unique artists from Ticketmaster events with consistent data handling
 export const extractUniqueArtistsFromEvents = async (events: ticketmasterService.TicketmasterEvent[]): Promise<Artist[]> => {
   const artistMap = new Map<string, Artist>();
   
@@ -90,8 +177,8 @@ export const extractUniqueArtistsFromEvents = async (events: ticketmasterService
       
       artistMap.set(artistKey, artist);
       
-      // Store the artist in Supabase
-      await storeArtistInDatabase(artist);
+      // Store the artist in Supabase with Spotify enrichment
+      await ensureArtistInDatabase(artist, true);
     }
   }
   

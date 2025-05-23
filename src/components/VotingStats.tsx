@@ -8,13 +8,6 @@ interface VotingStatsProps {
   setlistId: string;
 }
 
-interface Stats {
-  totalVotes: number;
-  uniqueVoters: number;
-  lastVoteTime: string | null;
-  avgVotesPerSong: number;
-}
-
 const VotingStats = ({ setlistId }: VotingStatsProps) => {
   const [stats, setStats] = useState<Stats>({
     totalVotes: 0,
@@ -24,8 +17,21 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
   });
   const [loading, setLoading] = useState(true);
 
+  interface Stats {
+    totalVotes: number;
+    uniqueVoters: number;
+    lastVoteTime: string | null;
+    avgVotesPerSong: number;
+  }
+
   useEffect(() => {
     async function fetchStats() {
+      if (!setlistId) {
+        console.log("No setlistId provided to VotingStats");
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
         
@@ -41,13 +47,14 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
         // Get unique voter count
         const { count } = await supabase
           .from('votes')
-          .select('user_id', { count: 'exact', head: false })
-          .eq('setlist_song_id', setlistId);
+          .select('user_id', { count: 'exact', head: true })
+          .eq('setlist_id', setlistId);
         
         // Get last vote time
         const { data: lastVoteData } = await supabase
           .from('votes')
           .select('created_at')
+          .eq('setlist_id', setlistId)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
@@ -71,7 +78,7 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
     const channel = supabase
       .channel('voting-stats')
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'votes' },
+        { event: 'INSERT', schema: 'public', table: 'votes', filter: `setlist_id=eq.${setlistId}` },
         () => fetchStats()
       )
       .subscribe();

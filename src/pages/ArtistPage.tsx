@@ -23,6 +23,7 @@ const ArtistPage = () => {
   const [pastShows, setPastShows] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [setlistId, setSetlistId] = useState<string | null>(null);
   
   // Check if user is following this artist
   useEffect(() => {
@@ -265,6 +266,33 @@ const ArtistPage = () => {
     }
   };
   
+  // Add a new useEffect to get the most recent setlist for this artist
+  useEffect(() => {
+    async function fetchRecentSetlist() {
+      if (!artistId) return;
+      
+      try {
+        // Get the most recent setlist for this artist
+        const { data } = await supabase
+          .from('setlists')
+          .select('id')
+          .eq('show_id', upcomingShows[0]?.id)
+          .limit(1)
+          .single();
+          
+        if (data) {
+          setSetlistId(data.id);
+        }
+      } catch (error) {
+        console.error("Error fetching recent setlist:", error);
+      }
+    }
+    
+    if (upcomingShows.length > 0) {
+      fetchRecentSetlist();
+    }
+  }, [artistId, upcomingShows]);
+  
   // Show loading state
   if (loading || !artist) {
     return (
@@ -495,7 +523,16 @@ const ArtistPage = () => {
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-white mb-6">Artist Stats</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <VotingStats />
+            {setlistId ? (
+              <VotingStats setlistId={setlistId} />
+            ) : (
+              <Card className="bg-gray-900/40 border-gray-800/50">
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">Voting Stats</h3>
+                  <p className="text-gray-400">No setlist data available for this artist yet.</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>
