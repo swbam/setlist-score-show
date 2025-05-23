@@ -64,14 +64,16 @@ export async function getTrendingShows(limit: number = 4): Promise<TrendingShow[
       .filter(show => show.artists && show.venues) // Ensure we have related data
       .map(show => {
         // Calculate total votes across all setlist songs
-        const totalVotes = show.setlists && show.setlists.length > 0
-          ? show.setlists.reduce((sum, setlist) => {
-              if (setlist && setlist.setlist_songs) {
-                return sum + setlist.setlist_songs.reduce((songSum, song) => songSum + (song.votes || 0), 0);
-              }
-              return sum;
-            }, 0)
-          : 0;
+        let totalVotes = 0;
+        
+        if (show.setlists && Array.isArray(show.setlists) && show.setlists.length > 0) {
+          totalVotes = show.setlists.reduce((sum, setlist) => {
+            if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
+              return sum + setlist.setlist_songs.reduce((songSum, song) => songSum + (song?.votes || 0), 0);
+            }
+            return sum;
+          }, 0);
+        }
           
         return {
           id: show.id,
