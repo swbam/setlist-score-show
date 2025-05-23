@@ -320,10 +320,19 @@ const ShowVoting = () => {
     
     try {
       console.log("Voting for song:", songId);
-      const newVotes = await setlistService.voteForSong(songId);
       
-      if (newVotes === null) {
-        console.error("Vote failed, reverting UI");
+      // Record both setlist_id and setlist_song_id
+      const { error } = await supabase
+        .from('votes')
+        .insert({
+          user_id: user.id,
+          setlist_song_id: songId,
+          setlist_id: setlist?.id
+        });
+        
+      if (error) {
+        console.error("Vote failed:", error);
+        
         // Revert optimistic update
         setSetlist(prev => {
           if (!prev || !prev.songs) return prev;
@@ -333,7 +342,7 @@ const ShowVoting = () => {
               ? { ...song, votes: song.votes - 1, userVoted: false }
               : song
           ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
-          
+        
           return {
             ...prev,
             songs: updatedSongs
@@ -347,8 +356,18 @@ const ShowVoting = () => {
         });
         
         toast.error("Failed to vote for song");
-      } else {
-        console.log("Vote successful, new vote count:", newVotes);
+        return;
+      }
+      
+      // Update the song's vote count in the setlist_songs table
+      const { error: updateError } = await supabase
+        .from('setlist_songs')
+        .update({ votes: setlist?.songs.find(s => s.id === songId)?.votes + 1 })
+        .eq('id', songId);
+        
+      if (updateError) {
+        console.error("Failed to update vote count:", updateError);
+        // The vote was recorded, so we won't revert UI changes
       }
     } catch (error) {
       console.error("Error voting:", error);

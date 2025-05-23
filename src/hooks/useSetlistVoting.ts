@@ -64,7 +64,7 @@ export function useSetlistVoting(setlistId: string) {
             .from('votes')
             .select('setlist_song_id')
             .eq('user_id', user.id)
-            .eq('setlist_id', setlistId); // Added filter by setlist_id to match VotingStats
+            .eq('setlist_id', setlistId);
 
           if (!votesError && userVotesData) {
             const votesMap: Record<string, boolean> = {};
@@ -138,12 +138,18 @@ export function useSetlistVoting(setlistId: string) {
         [setlistSongId]: true
       }));
 
-      // Call the Supabase function to vote
-      const { data, error } = await supabase.rpc('vote_for_song', {
-        setlist_song_id: setlistSongId
-      });
+      // Insert the vote record directly with both setlist_id and setlist_song_id
+      const { error: insertError } = await supabase
+        .from('votes')
+        .insert({
+          user_id: user.id,
+          setlist_song_id: setlistSongId,
+          setlist_id: setlistId
+        });
 
-      if (error) {
+      if (insertError) {
+        console.error('Error inserting vote:', insertError);
+        
         // Revert the optimistic update if there was an error
         setSongs(currentSongs => 
           currentSongs.map(song => 
@@ -159,8 +165,19 @@ export function useSetlistVoting(setlistId: string) {
           return updated;
         });
 
-        toast.error('Failed to vote: ' + error.message);
+        toast.error('Failed to vote: ' + insertError.message);
         return false;
+      }
+      
+      // Update the song's vote count
+      const { error: updateError } = await supabase
+        .from('setlist_songs')
+        .update({ votes: songs.find(s => s.id === setlistSongId)?.votes + 1 })
+        .eq('id', setlistSongId);
+        
+      if (updateError) {
+        console.error('Error updating vote count:', updateError);
+        // We don't revert UI changes since the vote record was created
       }
 
       toast.success('Your vote has been counted!');
@@ -170,7 +187,7 @@ export function useSetlistVoting(setlistId: string) {
       toast.error('Something went wrong while voting');
       return false;
     }
-  }, [user, userVotes]);
+  }, [user, userVotes, setlistId, songs]);
 
   // Add a song to the setlist (for future implementation)
   const addSong = useCallback(async (songId: string) => {

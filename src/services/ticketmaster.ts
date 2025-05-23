@@ -11,13 +11,13 @@ export interface TicketmasterVenue {
   city: {
     name: string;
   };
-  state: {
+  state?: {
     name: string;
   };
   country: {
     name: string;
   };
-  address: {
+  address?: {
     line1: string;
   };
   location?: {
@@ -31,14 +31,14 @@ export interface TicketmasterEvent {
   name: string;
   dates: {
     start: {
-      dateTime: string;
+      dateTime?: string;
       localTime?: string;
     };
-    status: {
-      code: string;
+    status?: {
+      code?: string;
     };
   };
-  images: { url: string; ratio?: string; width?: number; height?: number }[];
+  images?: { url: string; ratio?: string; width?: number; height?: number }[];
   _embedded?: {
     venues?: TicketmasterVenue[];
     attractions?: {
@@ -138,12 +138,18 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
   try {
     console.log("Storing venue in database:", venue.name);
     
+    // Ensure required fields are present
+    if (!venue || !venue.id || !venue.name || !venue.city || !venue.city.name || !venue.country || !venue.country.name) {
+      console.error("Missing required venue data:", venue);
+      return false;
+    }
+    
     const venueData = {
       id: venue.id,
       name: venue.name,
-      city: venue.city?.name || '',
+      city: venue.city.name || '',
       state: venue.state?.name || null,
-      country: venue.country?.name || '',
+      country: venue.country.name || '',
       address: venue.address?.line1 || null,
       latitude: venue.location?.latitude || null,
       longitude: venue.location?.longitude || null
@@ -176,6 +182,18 @@ export async function storeShowInDatabase(
 ): Promise<boolean> {
   try {
     console.log("Storing show in database:", event.name);
+    
+    // Check for required fields
+    if (!event || !event.id || !event.name || !artistId || !venueId) {
+      console.error("Missing required show data:", { event, artistId, venueId });
+      return false;
+    }
+    
+    // Ensure we have a valid date
+    if (!event.dates?.start?.dateTime) {
+      console.error("Event missing required date:", event);
+      return false;
+    }
     
     const status = 
       event.dates.status?.code === 'cancelled' ? 'canceled' :
