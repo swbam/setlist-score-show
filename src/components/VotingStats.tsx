@@ -43,7 +43,7 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
           .select('votes')
           .eq('setlist_id', setlistId);
           
-        const totalVotes = songsData ? songsData.reduce((sum, song) => sum + song.votes, 0) : 0;
+        const totalVotes = songsData ? songsData.reduce((sum, song) => sum + (song.votes || 0), 0) : 0;
         const songCount = songsData ? songsData.length : 1;
         
         // Get unique voter count

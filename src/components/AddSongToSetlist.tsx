@@ -43,7 +43,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
   const fetchArtistSongs = async () => {
     setLoading(true);
     try {
-      const artistSongs = await setlistService.getArtistSongs(artistId);
+      const artistSongs = await setlistService.fetchArtistSongs(artistId);
       
       // Sort songs alphabetically by name
       const sortedSongs = [...artistSongs].sort((a, b) => 
@@ -79,15 +79,10 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
 
   const handleAddSong = async (song: Song) => {
     try {
-      const success = await setlistService.addSongToSetlist(setlistId, song.id);
-      
-      if (success) {
-        toast.success(`Added "${song.name}" to setlist`);
-        setOpen(false);
-        if (onSongAdded) onSongAdded();
-      } else {
-        toast.error("Failed to add song to setlist");
-      }
+      await setlistService.addSongToSetlist(setlistId, song.id);
+      toast.success(`Added "${song.name}" to setlist`);
+      setOpen(false);
+      if (onSongAdded) onSongAdded();
     } catch (error) {
       console.error("Error adding song to setlist:", error);
       toast.error("An error occurred while adding song to setlist");
