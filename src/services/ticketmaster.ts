@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Ticketmaster API key
@@ -101,6 +102,33 @@ export async function getArtistEvents(artistName: string): Promise<TicketmasterE
     return events;
   } catch (error) {
     console.error("Error getting artist events:", error);
+    return [];
+  }
+}
+
+// Get popular music events
+export async function getPopularEvents(limit: number = 10): Promise<TicketmasterEvent[]> {
+  try {
+    console.log("Fetching popular music events from Ticketmaster");
+    const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+    url.searchParams.append("apikey", TICKETMASTER_API_KEY);
+    url.searchParams.append("size", limit.toString());
+    url.searchParams.append("classificationName", "music");
+    url.searchParams.append("sort", "relevance,desc");
+    
+    const response = await fetch(url.toString());
+    
+    if (!response.ok) {
+      console.error("Ticketmaster API error:", response.status, await response.text());
+      throw new Error(`Failed to fetch popular events: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const events = data._embedded?.events || [];
+    console.log(`Found ${events.length} popular Ticketmaster events`);
+    return events;
+  } catch (error) {
+    console.error("Error fetching popular events:", error);
     return [];
   }
 }

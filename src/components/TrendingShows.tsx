@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
-import { CalendarDays, MapPin, ThumbsUp } from 'lucide-react';
+import { CalendarDays, MapPin, ThumbsUp, Music } from 'lucide-react';
 import { format } from 'date-fns';
 import * as trendingService from "@/services/trending";
 
@@ -67,6 +67,7 @@ const TrendingShows = () => {
         <div className="container mx-auto max-w-7xl px-4">
           <h2 className="text-3xl font-bold text-white mb-8">Trending Shows</h2>
           <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
+            <Music className="h-12 w-12 text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl font-medium text-white mb-2">No upcoming shows</h3>
             <p className="text-gray-400 mb-6">
               Search for your favorite artists to see their upcoming shows
@@ -115,11 +116,13 @@ const TrendingShows = () => {
                         {show.venue_name}, {show.venue_city}
                       </span>
                     </div>
-                    <div className="text-right mt-2">
-                      <span className="bg-cyan-500/20 text-cyan-300 text-xs py-1 px-2 rounded flex items-center justify-end gap-1">
-                        <ThumbsUp className="w-3 h-3" /> {show.votes} vote{show.votes !== 1 ? 's' : ''}
-                      </span>
-                    </div>
+                    {show.votes > 0 && (
+                      <div className="text-right mt-2">
+                        <span className="bg-cyan-500/20 text-cyan-300 text-xs py-1 px-2 rounded flex items-center justify-end gap-1">
+                          <ThumbsUp className="w-3 h-3" /> {show.votes} vote{show.votes !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
