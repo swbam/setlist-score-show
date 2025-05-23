@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Music, MapPin, Calendar, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
 import AppHeader from "@/components/AppHeader";
+import { debounce } from 'lodash';
 
 const SearchResults = () => {
   const location = useLocation();
@@ -49,6 +50,23 @@ const SearchResults = () => {
     }
   };
 
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce((query: string) => {
+      if (query.trim().length > 2) {
+        performSearch(query);
+      }
+    }, 300),
+    []
+  );
+
+  // Handle input change with debounce
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    debouncedSearch(query);
+  };
+
   // Perform search using APIs
   const performSearch = async (query: string) => {
     setLoading(true);
@@ -72,14 +90,103 @@ const SearchResults = () => {
   // Store artist in database and navigate to their page
   const handleArtistClick = async (artist: spotifyService.SpotifyArtist) => {
     try {
+      // Show loading toast
+      const loadingToast = toast.loading("Loading artist data...");
+      
+      // Store artist in database
+      const artistStored = await spotifyService.storeArtistInDatabase(artist);
+      
+      if (artistStored) {
+        // Get artist top tracks and store them
+        const tracks = await spotifyService.getArtistTopTracks(artist.id);
+        if (tracks.length > 0) {
+          await spotifyService.storeTracksInDatabase(artist.id, tracks);
+        }
+        
+        // Get artist events from Ticketmaster and store them
+        const events = await ticketmasterService.getArtistEvents(artist.name);
+        if (events.length > 0) {
+          for (const event of events) {
+            if (event._embedded?.venues?.[0]) {
+              const venue = event._embedded.venues[0];
+              
+              // Store venue in database
+              await ticketmasterService.storeVenueInDatabase(venue);
+              
+              // Store show in database
+              await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
+            }
+          }
+        }
+        
+        // Dismiss loading toast
+        toast.dismiss(loadingToast);
+        
+        // Show success toast
+        toast.success(`${artist.name} data loaded successfully`);
+        
+        // Navigate to artist page
+        navigate(`/artist/${artist.id}`);
+      } else {
+        toast.dismiss(loadingToast);
+        toast.error("Failed to load artist data");
+      }
+    } catch (error) {
+      console.error("Error handling artist click:", error);
+      toast.error("An error occurred while loading artist data");
+    }
+  };
+
+  // Handle event click
+  const handleEventClick = async (event: ticketmasterService.TicketmasterEvent) => {
+    try {
+      if (!event._embedded?.venues?.[0] || !event._embedded?.attractions?.[0]) {
+        toast.error("Incomplete event data");
+        return;
+      }
+      
+      const venue = event._embedded.venues[0];
+      const attraction = event._embedded.attractions[0];
+      
+      // Show loading toast
+      const loadingToast = toast.loading("Loading event data...");
+      
+      // Get attraction details from Spotify
+      const artistResults = await spotifyService.searchArtists(attraction.name);
+      if (artistResults.length === 0) {
+        toast.dismiss(loadingToast);
+        toast.error("Artist not found in Spotify");
+        return;
+      }
+      
+      const artist = artistResults[0];
+      
       // Store artist in database
       await spotifyService.storeArtistInDatabase(artist);
       
-      // Navigate to artist page
-      navigate(`/artist/${artist.id}`);
+      // Get artist top tracks and store them
+      const tracks = await spotifyService.getArtistTopTracks(artist.id);
+      if (tracks.length > 0) {
+        await spotifyService.storeTracksInDatabase(artist.id, tracks);
+      }
+      
+      // Store venue in database
+      await ticketmasterService.storeVenueInDatabase(venue);
+      
+      // Store show in database
+      await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
+      
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
+      // Show success toast
+      toast.success(`${event.name} data loaded successfully`);
+      
+      // Navigate to show page
+      navigate(`/show/${event.id}`);
     } catch (error) {
-      console.error("Error storing artist:", error);
-      toast.error("An error occurred");
+      console.error("Error handling event click:", error);
+      toast.error("An error occurred while loading event data");
     }
   };
 
@@ -95,7 +202,7 @@ const SearchResults = () => {
               placeholder="Search for artists, shows, or venues..."
               className="w-full py-6 pl-10 pr-4 bg-gray-900/70 border-gray-700 focus:border-cyan-500 text-lg"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleInputChange}
             />
           </div>
         </form>
@@ -209,7 +316,8 @@ const SearchResults = () => {
                   return (
                     <Card 
                       key={event.id}
-                      className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
+                      className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300 cursor-pointer"
+                      onClick={() => handleEventClick(event)}
                     >
                       <CardContent className="p-0">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
@@ -253,10 +361,6 @@ const SearchResults = () => {
                           
                           <div className="mt-4 md:mt-0">
                             <Button 
-                              onClick={() => {
-                                // This would normally store the event and navigate to its page
-                                toast.error("Show details not yet implemented");
-                              }}
                               className="bg-cyan-600 hover:bg-cyan-700"
                             >
                               View Details

@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, ChevronDown, Plus, XCircle } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Users, ChevronUp, Plus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
@@ -104,36 +105,55 @@ const ShowVoting = () => {
             // Get setlist with songs
             const setlistWithSongs = await setlistService.getSetlistWithSongs(setlistData.id);
             
-            if (setlistWithSongs && setlistWithSongs.songs) {
-              // Check user votes if logged in
-              if (user) {
-                const { data: votesData } = await supabase
-                  .from('votes')
-                  .select('setlist_song_id')
-                  .eq('user_id', user.id);
-                  
-                if (votesData) {
-                  const votesMap: Record<string, boolean> = {};
-                  votesData.forEach(vote => {
-                    votesMap[vote.setlist_song_id] = true;
-                  });
-                  setUserVotes(votesMap);
-                  
-                  // Mark songs user has voted for
-                  const updatedSongs = setlistWithSongs.songs.map(song => ({
-                    ...song,
-                    userVoted: votesMap[song.id] || false
-                  }));
-                  
-                  setSetlist({
-                    ...setlistWithSongs,
-                    songs: updatedSongs
-                  });
+            if (setlistWithSongs) {
+              let processedSetlist: Setlist;
+              
+              // Make sure the songs array exists
+              if (setlistWithSongs.songs) {
+                // Check user votes if logged in
+                if (user) {
+                  const { data: votesData } = await supabase
+                    .from('votes')
+                    .select('setlist_song_id')
+                    .eq('user_id', user.id);
+                    
+                  if (votesData) {
+                    const votesMap: Record<string, boolean> = {};
+                    votesData.forEach(vote => {
+                      votesMap[vote.setlist_song_id] = true;
+                    });
+                    setUserVotes(votesMap);
+                    
+                    // Mark songs user has voted for
+                    const updatedSongs = setlistWithSongs.songs.map(song => ({
+                      ...song,
+                      userVoted: votesMap[song.id] || false
+                    }));
+                    
+                    processedSetlist = {
+                      ...setlistWithSongs,
+                      songs: updatedSongs
+                    };
+                  } else {
+                    processedSetlist = {
+                      ...setlistWithSongs,
+                      songs: setlistWithSongs.songs
+                    };
+                  }
                 } else {
-                  setSetlist(setlistWithSongs);
+                  processedSetlist = {
+                    ...setlistWithSongs,
+                    songs: setlistWithSongs.songs
+                  };
                 }
+                
+                setSetlist(processedSetlist);
               } else {
-                setSetlist(setlistWithSongs);
+                // Create an empty array if songs is undefined
+                setSetlist({
+                  ...setlistWithSongs,
+                  songs: []
+                });
               }
             }
           }
