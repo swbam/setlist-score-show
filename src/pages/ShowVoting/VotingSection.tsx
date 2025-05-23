@@ -54,33 +54,38 @@ export function VotingSection({
     }
   }, [setlist]);
   
-  // Load available songs for the artist
+  // Load ALL available songs for the artist
   useEffect(() => {
     if (artist && artist.id) {
-      fetchAvailableSongs();
+      fetchAllArtistSongs();
     }
   }, [artist, songs]);
   
-  // Fetch available songs for the artist from the database
-  const fetchAvailableSongs = async () => {
+  // Fetch ALL available songs for the artist from the database
+  const fetchAllArtistSongs = async () => {
     if (!artist?.id) return;
     
     try {
       setLoadingSongs(true);
+      console.log("Fetching all songs for artist:", artist.id);
+      
       const { data, error } = await supabase
         .from('songs')
         .select('id, name, album')
         .eq('artist_id', artist.id)
-        .order('name', { ascending: true })
-        .limit(100);
+        .order('name', { ascending: true });
       
       if (error) {
         console.error("Error fetching songs:", error);
         toast.error("Failed to load songs");
       } else {
+        console.log(`Fetched ${data.length} songs for artist ${artist.name}`);
+        
         // Filter out songs that are already in the setlist
         const existingSongIds = songs.map(song => song.song_id);
         const filteredSongs = data.filter(song => !existingSongIds.includes(song.id));
+        
+        console.log(`${filteredSongs.length} songs available to add (after filtering out existing songs in setlist)`);
         setAvailableSongs(filteredSongs);
       }
     } catch (error) {
@@ -94,7 +99,7 @@ export function VotingSection({
   const refreshSetlist = useCallback(async () => {
     setLoading(true);
     await onRefresh();
-    await fetchAvailableSongs(); // Refresh available songs to exclude newly added ones
+    await fetchAllArtistSongs(); // Refresh available songs to exclude newly added ones
     setLoading(false);
   }, [onRefresh]);
 
@@ -133,7 +138,10 @@ export function VotingSection({
         {songs.length === 0 ? (
           <Card className="bg-gray-900/40 border-gray-800/50">
             <CardContent className="p-6">
-              <p className="text-gray-400">No songs in the setlist yet.</p>
+              <div className="flex flex-col items-center py-6">
+                <Music className="h-12 w-12 text-gray-700 mb-3" />
+                <p className="text-gray-400 mb-2 text-center">No songs in the setlist yet</p>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -164,7 +172,7 @@ export function VotingSection({
         </Card>
       )}
       
-      {/* Add Song Section - Dropdown */}
+      {/* Add Song Section - Dropdown with ALL artist songs */}
       <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
         <h3 className="text-lg font-medium text-white mb-4">Add a song to this setlist:</h3>
         
@@ -179,20 +187,36 @@ export function VotingSection({
               <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
                 <SelectValue placeholder={loadingSongs ? "Loading songs..." : "Select a song"} />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700 text-white max-h-80">
-                {availableSongs.map((song) => (
-                  <SelectItem key={song.id} value={song.id} className="focus:bg-gray-700">
-                    <div className="flex flex-col">
-                      <span>{song.name}</span>
-                      {song.album && <span className="text-xs text-gray-400">{song.album}</span>}
+              <SelectContent 
+                className="bg-gray-800 border-gray-700 text-white"
+                position="popper"
+                sideOffset={5}
+                align="start"
+                side="bottom"
+              >
+                <div className="max-h-[300px] overflow-y-auto">
+                  {availableSongs.map((song) => (
+                    <SelectItem key={song.id} value={song.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{song.name}</span>
+                        {song.album && <span className="text-xs text-gray-400">{song.album}</span>}
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {availableSongs.length === 0 && !loadingSongs && (
+                    <div className="p-4 text-center text-gray-400">
+                      <Music className="h-6 w-6 mx-auto mb-2" />
+                      <p>No songs available for this artist</p>
+                      <p className="text-xs mt-1">Try importing songs from Spotify</p>
                     </div>
-                  </SelectItem>
-                ))}
-                {availableSongs.length === 0 && !loadingSongs && (
-                  <div className="p-2 text-center text-gray-400">
-                    No songs available
-                  </div>
-                )}
+                  )}
+                  {loadingSongs && (
+                    <div className="p-4 text-center text-gray-400">
+                      <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p>Loading songs...</p>
+                    </div>
+                  )}
+                </div>
               </SelectContent>
             </Select>
           </div>
