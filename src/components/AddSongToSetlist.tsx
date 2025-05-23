@@ -43,7 +43,8 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
   const fetchArtistSongs = async () => {
     setLoading(true);
     try {
-      const artistSongs = await setlistService.fetchArtistSongs(artistId);
+      // Using the correct function name based on what's available in setlistService
+      const artistSongs = await setlistService.getArtistSongs(artistId);
       
       // Sort songs alphabetically by name
       const sortedSongs = [...artistSongs].sort((a, b) => 
@@ -95,13 +96,13 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         <Button 
           variant="outline" 
           size="sm"
-          className="border-slate-700 text-white hover:bg-white hover:text-black"
+          className="border-yellow-metal-700 text-white hover:bg-yellow-metal-100 hover:text-yellow-metal-950"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add to Setlist
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-black border-slate-800 text-white max-w-2xl">
+      <DialogContent className="bg-black border-yellow-metal-800 text-white max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add a song to the setlist</DialogTitle>
         </DialogHeader>
@@ -111,7 +112,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             placeholder="Search songs by name or album..."
-            className="pl-9 bg-black border-slate-700"
+            className="pl-9 bg-black border-yellow-metal-800"
             value={searchQuery}
             onChange={handleSearchChange}
           />
@@ -127,7 +128,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
         {/* Song list */}
         {loading ? (
           <div className="text-center py-8">
-            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <div className="w-8 h-8 border-4 border-yellow-metal-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
             <p className="text-slate-400 text-sm">Loading songs...</p>
           </div>
         ) : filteredSongs.length === 0 ? (
@@ -141,7 +142,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
               {filteredSongs.map(song => (
                 <div 
                   key={song.id}
-                  className="flex items-center justify-between p-3 rounded-md bg-black border border-slate-800 hover:bg-slate-900 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-md bg-black border border-yellow-metal-900 hover:bg-yellow-metal-950 transition-colors"
                 >
                   <div className="overflow-hidden">
                     <p className="font-medium text-white truncate">{song.name}</p>
@@ -149,7 +150,7 @@ const AddSongToSetlist = ({ setlistId, artistId, onSongAdded }: AddSongToSetlist
                   </div>
                   <Button 
                     size="sm"
-                    className="bg-white text-black hover:bg-slate-200 ml-2 flex-shrink-0"
+                    className="bg-yellow-metal-100 text-yellow-metal-950 hover:bg-yellow-metal-200 ml-2 flex-shrink-0"
                     onClick={() => handleAddSong(song)}
                   >
                     <Plus className="h-4 w-4 mr-2" />

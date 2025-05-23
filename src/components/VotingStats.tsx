@@ -124,32 +124,32 @@ const VotingStats = ({ setlistId }: VotingStatsProps) => {
   };
   
   return (
-    <Card className={`bg-gray-900/40 border-gray-800/50 ${isMobile ? 'mx-2 mb-20' : ''}`}>
+    <Card className={`bg-yellow-metal-950/40 border-yellow-metal-800/50 ${isMobile ? 'mx-2 mb-20' : ''}`}>
       <CardContent className="p-4 md:p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Voting Stats</h3>
         
         {loading ? (
           <div className="space-y-3">
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-2/3"></div>
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-1/2"></div>
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-3/4"></div>
+            <div className="h-5 bg-yellow-metal-900 rounded animate-pulse w-2/3"></div>
+            <div className="h-5 bg-yellow-metal-900 rounded animate-pulse w-1/2"></div>
+            <div className="h-5 bg-yellow-metal-900 rounded animate-pulse w-3/4"></div>
           </div>
         ) : (
           <ul className="space-y-4">
             <li className="flex items-center text-gray-300">
-              <ThumbsUp className="h-4 w-4 mr-3 text-[#f7f7f7]" />
+              <ThumbsUp className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 {stats.totalVotes} total {stats.totalVotes === 1 ? 'vote' : 'votes'}
               </span>
             </li>
             <li className="flex items-center text-gray-300">
-              <Users className="h-4 w-4 mr-3 text-[#f7f7f7]" />
+              <Users className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 {stats.uniqueVoters} {stats.uniqueVoters === 1 ? 'person has' : 'people have'} voted
               </span>
             </li>
             <li className="flex items-center text-gray-300">
-              <Clock className="h-4 w-4 mr-3 text-[#f7f7f7]" />
+              <Clock className="h-4 w-4 mr-3 text-yellow-metal-300" />
               <span className="text-sm">
                 Last vote: {formatTimeAgo(stats.lastVoteTime)}
               </span>

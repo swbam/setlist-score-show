@@ -17,7 +17,7 @@ const MobileBottomNav = () => {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-800 mobile-bottom-nav md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-yellow-metal-950/95 backdrop-blur-md border-t border-yellow-metal-800 mobile-bottom-nav md:hidden">
       <div className="grid grid-cols-4 h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.path || 
@@ -28,13 +28,13 @@ const MobileBottomNav = () => {
               key={item.path}
               className={cn(
                 "flex flex-col items-center justify-center native-tap",
-                isActive ? "text-[#f7f7f7]" : "text-gray-500"
+                isActive ? "text-yellow-metal-300" : "text-gray-500"
               )}
               onClick={() => navigate(item.path)}
             >
               <item.icon className={cn(
                 "h-5 w-5 mb-1",
-                isActive ? "text-[#f7f7f7]" : "text-gray-500"
+                isActive ? "text-yellow-metal-300" : "text-gray-500"
               )} />
               <span className="text-xs">{item.label}</span>
             </button>

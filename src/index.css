@@ -5,33 +5,33 @@
  
 @layer base {
   :root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
+    --background: 40 30% 5%;
+    --foreground: 40 30% 98%;
  
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 100%;
+    --card: 40 30% 8%;
+    --card-foreground: 40 30% 98%;
  
-    --popover: 0 0% 5%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 40 30% 8%;
+    --popover-foreground: 40 30% 98%;
  
-    --primary: 0 0% 97%; /* Changed from blue to #f7f7f7 */
-    --primary-foreground: 0 0% 0%;
+    --primary: 40 30% 95%; /* Changed from blue to yellow-metal-50 */
+    --primary-foreground: 40 40% 10%;
  
-    --secondary: 215 14% 16%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 40 30% 15%;
+    --secondary-foreground: 40 30% 98%;
  
-    --muted: 215 14% 16%;
-    --muted-foreground: 0 0% 70%;
+    --muted: 40 30% 15%;
+    --muted-foreground: 40 30% 70%;
  
-    --accent: 215 14% 20%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 40 30% 20%;
+    --accent-foreground: 40 30% 98%;
  
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
  
-    --border: 215 14% 25%;
-    --input: 215 14% 25%;
-    --ring: 0 0% 80%;
+    --border: 40 30% 20%;
+    --input: 40 30% 20%;
+    --ring: 40 30% 50%;
  
     --radius: 0.5rem;
 
@@ -58,11 +58,11 @@
 }
 
 .gradient-text {
-  @apply text-white;
+  @apply text-yellow-metal-300;
 }
 
 .app-gradient-bg {
-  background: radial-gradient(circle at center, rgba(100, 116, 139, 0.1), rgba(0, 0, 0, 0.2) 80%);
+  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.1), rgba(34, 31, 17, 0.2) 80%);
 }
 
 /* Loading placeholders animation */
