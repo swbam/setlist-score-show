@@ -3,11 +3,74 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "@/components/ui/sonner";
 import * as spotifyService from "./spotify";
+import * as userService from "./user";
 
 interface SpotifyTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
+}
+
+// Clean up authentication state
+export const cleanupAuthState = () => {
+  // Remove standard auth tokens
+  localStorage.removeItem('supabase.auth.token');
+  
+  // Remove all Supabase auth keys from localStorage
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      localStorage.removeItem(key);
+    }
+  });
+  
+  // Remove from sessionStorage if in use
+  Object.keys(sessionStorage || {}).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+};
+
+// Sign up with email/password
+export async function signUp(email: string, password: string, displayName: string) {
+  try {
+    // Clean up existing auth state
+    cleanupAuthState();
+    
+    // Attempt to sign up
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      }
+    });
+    
+    if (error) throw error;
+    
+    // If successful and have a user, store profile
+    if (data?.user) {
+      const userData = {
+        id: data.user.id,
+        email: data.user.email,
+        display_name: displayName || data.user.email?.split('@')[0] || 'User',
+        avatar_url: data.user.user_metadata?.avatar_url || null,
+        spotify_id: data.user.app_metadata?.provider === 'spotify' ? data.user.user_metadata?.sub : null,
+      };
+      
+      await supabase
+        .from('users')
+        .upsert(userData);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Error signing up:", error);
+    throw error;
+  }
 }
 
 // Sign in with email/password
@@ -67,7 +130,11 @@ export async function signInWithSpotify() {
 // Sign out
 export async function signOut() {
   try {
-    const { error } = await supabase.auth.signOut();
+    // Clean up auth state
+    cleanupAuthState();
+    
+    // Attempt global sign out
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) throw error;
   } catch (error) {
     console.error("Error signing out:", error);
