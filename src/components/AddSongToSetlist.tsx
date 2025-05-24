@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Search, Music } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import * as setlistService from "@/services/setlist";
 

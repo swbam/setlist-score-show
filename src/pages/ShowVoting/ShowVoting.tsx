@@ -39,7 +39,7 @@ const ShowVoting = () => {
               onRefresh={handleSongAdded}
               voteSubmitting={voteSubmitting}
               handleVote={handleVote}
-              votesRemaining={votesRemaining}
+              votesRemaining={votesRemaining as number}
               usedVotesCount={usedVotesCount}
               maxFreeVotes={maxFreeVotes}
             />

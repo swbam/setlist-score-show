@@ -18,7 +18,6 @@ interface SimpleSetlistSong {
   votes: number;
   position: number;
   song: SimpleSong;
-  userVoted?: boolean;
 }
 
 export function useSetlistVoting(setlistId: string) {

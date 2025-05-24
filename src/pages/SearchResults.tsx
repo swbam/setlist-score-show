@@ -1,256 +1,177 @@
 
-import { useState, useEffect, useCallback } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Music } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import { SearchIcon, Music, Calendar, MapPin } from "lucide-react";
+import AppHeader from "@/components/AppHeader";
+import ArtistCard from "@/components/ArtistCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
-import { useAuth } from "@/context/AuthContext";
-import * as spotifyService from "@/services/spotify";
-import * as ticketmasterService from "@/services/ticketmaster";
-import * as artistUtils from "@/utils/artistUtils";
-import * as catalogService from "@/services/catalog";
-import AppHeader from "@/components/AppHeader";
-import { debounce } from 'lodash';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import * as searchService from "@/services/search";
+import { supabase } from "@/integrations/supabase/client";
 
-const SearchResults = () => {
+export default function SearchResults() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("q") || "";
   
-  const [searchQuery, setSearchQuery] = useState("");
-  const [artists, setArtists] = useState<spotifyService.SpotifyArtist[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Parse query from URL
+  const [searchQuery, setSearchQuery] = useState(query);
+  const [artistResults, setArtistResults] = useState<any[]>([]);
+  const [showResults, setShowResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("artists");
+  
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const query = params.get('q');
     if (query) {
-      setSearchQuery(query);
       performSearch(query);
+    } else {
+      setLoading(false);
     }
-  }, [location.search]);
-
-  // Handle search form submission
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      performSearch(searchQuery);
-    }
-  };
-
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce((query: string) => {
-      if (query.trim().length > 2) {
-        performSearch(query);
-      }
-    }, 500),
-    []
-  );
-
-  // Handle input change with debounce
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    debouncedSearch(query);
-  };
-
-  // Perform search using Spotify API for artists
-  const performSearch = async (query: string) => {
-    if (!query.trim() || query.trim().length < 2) return;
-    
+  }, [query]);
+  
+  const performSearch = async (searchTerm: string) => {
     setLoading(true);
-    console.log("Performing search for:", query);
-
     try {
-      // First check the database for existing artists
-      const { data: dbArtists, error: dbError } = await supabase
-        .from('artists')
-        .select('*')
-        .ilike('name', `%${query}%`)
-        .order('popularity', { ascending: false })
-        .limit(10);
-      
-      if (dbError) {
-        console.error("Database search error:", dbError);
-      }
-      
-      // Format database results to match Spotify format
-      const formattedDbArtists: spotifyService.SpotifyArtist[] = (dbArtists || []).map(artist => ({
-        id: artist.id,
-        name: artist.name,
-        popularity: artist.popularity || 0,
-        images: artist.image_url ? [{ url: artist.image_url }] : [],
-        external_urls: { spotify: artist.spotify_url || '' },
-        genres: artist.genres || [],
-        type: 'artist',
-        uri: '',
-        followers: { total: 0, href: null }
-      }));
-      
-      // Then search Spotify for artists
-      const spotifyResults = await spotifyService.searchArtists(query);
-      
-      // Merge results, preferring database entries over Spotify
-      const dbArtistsMap = new Map(formattedDbArtists.map(artist => [artist.id, artist]));
-      const allArtists = [...formattedDbArtists];
-      
-      spotifyResults.forEach(artist => {
-        if (!dbArtistsMap.has(artist.id)) {
-          allArtists.push(artist);
-        }
-      });
-      
-      console.log("Combined search results:", allArtists.length, "artists");
-      setArtists(allArtists);
+      const results = await searchService.searchAll(searchTerm);
+      setArtistResults(results.artists);
+      setShowResults(results.shows);
     } catch (error) {
-      console.error("Search error:", error);
-      toast.error("An error occurred during search");
+      console.error("Error performing search:", error);
     } finally {
       setLoading(false);
     }
   };
-
-  // Store artist in database and navigate to their page
-  const handleArtistClick = async (artist: spotifyService.SpotifyArtist) => {
-    try {
-      // Show loading toast
-      const loadingToast = toast.loading(`Loading ${artist.name} data...`);
-      
-      // Store artist in database
-      const artistStored = await spotifyService.storeArtistInDatabase(artist);
-      
-      if (artistStored) {
-        // Import the artist's catalog (all tracks)
-        console.log("Importing catalog for artist:", artist.id);
-        const catalogSynced = await catalogService.syncArtistCatalog(artist.id);
-        
-        if (catalogSynced) {
-          console.log(`Successfully synced catalog for ${artist.name}`);
-        } else {
-          console.warn(`Catalog sync may have been incomplete for ${artist.name}`);
-        }
-        
-        // Get artist events from Ticketmaster and store them
-        console.log("Fetching Ticketmaster events for artist:", artist.name);
-        const events = await ticketmasterService.getArtistEvents(artist.name);
-        let eventCount = 0;
-        
-        if (events && events.length > 0) {
-          console.log(`Found ${events.length} events for ${artist.name}`);
-          
-          for (const event of events) {
-            if (event._embedded?.venues?.[0]) {
-              const venue = event._embedded.venues[0];
-              
-              // Store venue in database
-              await ticketmasterService.storeVenueInDatabase(venue);
-              
-              // Store show in database with the normalized artist ID
-              await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
-              eventCount++;
-            }
-          }
-          console.log(`Stored ${eventCount} events for ${artist.name}`);
-        } else {
-          console.log(`No events found for ${artist.name}`);
-        }
-        
-        // Dismiss loading toast
-        toast.dismiss(loadingToast);
-        
-        // Show success toast
-        toast.success(
-          `${artist.name} data loaded with ${eventCount} upcoming shows`
-        );
-        
-        // Navigate to artist page
-        navigate(`/artist/${artist.id}`);
-      } else {
-        toast.dismiss(loadingToast);
-        toast.error(`Failed to load ${artist.name} data`);
-      }
-    } catch (error) {
-      console.error("Error handling artist click:", error);
-      toast.error("An error occurred while loading artist data");
+  
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      setSearchParams({ q: searchQuery.trim() });
+    }
+  };
+  
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
     }
   };
 
   return (
     <div className="min-h-screen bg-black">
+      <Helmet>
+        <title>Search Results - TheSet</title>
+      </Helmet>
       <AppHeader />
-      <div className="container mx-auto max-w-7xl px-4 pt-24 pb-16">
-        {/* Search Form */}
-        <form onSubmit={handleSearch} className="max-w-2xl mx-auto mb-8">
+      
+      <div className="container mx-auto pt-20 pb-10 px-4">
+        <div className="max-w-3xl mx-auto">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
             <Input
-              placeholder="Search for artists..."
-              className="w-full py-6 pl-10 pr-4 bg-slate-900/70 border-slate-700 focus:border-white text-lg"
+              type="text"
               value={searchQuery}
-              onChange={handleInputChange}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyUp={handleKeyPress}
+              placeholder="Search artists, shows, songs..."
+              className="pl-10 py-6 text-lg"
             />
-          </div>
-        </form>
-        
-        {/* Artist Results */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-xl font-semibold text-white">Artists</h2>
+            <Button 
+              onClick={handleSearch} 
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+            >
+              Search
+            </Button>
           </div>
           
-          {/* Loading State */}
-          {loading && (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-slate-400">Searching...</p>
-            </div>
-          )}
-          
-          {/* Results */}
-          {!loading && searchQuery && artists.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900/50 rounded-lg border border-slate-800">
-              <Music className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">No artists found</h3>
-              <p className="text-slate-400 mb-6">
-                Try searching by artist name or try another search term
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {artists.map(artist => (
-                <Card 
-                  key={artist.id}
-                  onClick={() => handleArtistClick(artist)}
-                  className="bg-slate-900 border-slate-800 overflow-hidden hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 cursor-pointer"
-                >
-                  <div className="h-48 bg-slate-800 relative">
-                    {artist.images && artist.images[0] ? (
-                      <img
-                        src={artist.images[0].url}
-                        alt={artist.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-                        <Music className="h-12 w-12 text-slate-600" />
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-4">
-                    <h3 className="text-lg font-medium text-white">{artist.name}</h3>
-                    {artist.genres && artist.genres.length > 0 && (
-                      <p className="text-sm text-slate-400 mt-1 truncate">
-                        {artist.genres.slice(0, 3).join(", ")}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+          {query && (
+            <div className="mt-8">
+              <h1 className="text-2xl font-bold mb-6">Results for "{query}"</h1>
+              
+              <Tabs 
+                defaultValue="artists" 
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="mb-8"
+              >
+                <TabsList className="grid grid-cols-2">
+                  <TabsTrigger value="artists" className="flex items-center">
+                    <Music className="h-4 w-4 mr-2" />
+                    Artists
+                  </TabsTrigger>
+                  <TabsTrigger value="shows" className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Shows
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="artists" className="mt-6">
+                  {loading ? (
+                    <div className="flex justify-center py-12">
+                      <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : artistResults.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {artistResults.map((artist) => (
+                        <ArtistCard 
+                          key={artist.id} 
+                          artist={artist}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Music className="h-12 w-12 mx-auto mb-4 text-gray-700" />
+                      <h3 className="text-xl font-medium mb-2">No artists found</h3>
+                      <p className="text-gray-400">Try searching for another artist name</p>
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="shows" className="mt-6">
+                  {loading ? (
+                    <div className="flex justify-center py-12">
+                      <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : showResults.length > 0 ? (
+                    <div className="space-y-4">
+                      {showResults.map((show) => (
+                        <div 
+                          key={show.id}
+                          className="p-4 rounded-lg border border-gray-800 hover:border-cyan-800 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="font-semibold">{show.name || show.artist?.name}</h3>
+                              <div className="flex items-center text-sm text-gray-400 mt-1">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                <span>
+                                  {new Date(show.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-400 mt-1">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                <span>{show.venue?.name}, {show.venue?.city}</span>
+                              </div>
+                            </div>
+                            <Button size="sm" asChild>
+                              <a href={`/shows/${show.id}`}>View Show</a>
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-700" />
+                      <h3 className="text-xl font-medium mb-2">No shows found</h3>
+                      <p className="text-gray-400">Try searching for another artist or event name</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </div>
@@ -258,5 +179,3 @@ const SearchResults = () => {
     </div>
   );
 }
-
-export default SearchResults;

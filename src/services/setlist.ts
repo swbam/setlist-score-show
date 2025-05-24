@@ -256,3 +256,109 @@ export async function searchSongsByArtist(artistId: string, query: string) {
     return [];
   }
 }
+
+// NEW FUNCTIONS BEING ADDED:
+
+// Get popular songs for an artist
+export async function getPopularSongsForArtist(artistId: string, limit: number = 10): Promise<Song[]> {
+  try {
+    console.log(`Getting popular songs for artist: ${artistId}`);
+    
+    // Check if we have songs for this artist
+    const { data: songCount, error: countError } = await supabase
+      .from('songs')
+      .select('id', { count: 'exact', head: true })
+      .eq('artist_id', artistId);
+      
+    if (countError) {
+      console.error("Error checking song count:", countError);
+      return [];
+    }
+    
+    // If we don't have any songs, fetch them first
+    if (!songCount || songCount.length === 0) {
+      console.log("No songs found for artist, fetching from Spotify");
+      await fetchArtistSongs(artistId);
+    }
+    
+    // Get popular songs
+    const { data: songs, error } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('artist_id', artistId)
+      .order('popularity', { ascending: false })
+      .limit(limit);
+      
+    if (error) {
+      console.error("Error getting popular songs:", error);
+      return [];
+    }
+    
+    return songs || [];
+  } catch (error) {
+    console.error("Error in getPopularSongsForArtist:", error);
+    return [];
+  }
+}
+
+// Search for songs by an artist with a query
+export async function searchArtistSongs(artistId: string, query: string): Promise<Song[]> {
+  try {
+    console.log(`Searching for songs by artist ${artistId} with query: ${query}`);
+    
+    // Try to search locally first
+    const { data: songs, error } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('artist_id', artistId)
+      .ilike('name', `%${query}%`)
+      .order('name')
+      .limit(20);
+      
+    if (error) {
+      console.error("Error searching for songs:", error);
+      return [];
+    }
+    
+    // If we have results, return them
+    if (songs && songs.length > 0) {
+      return songs;
+    }
+    
+    // If no results, try to fetch from Spotify first and then search again
+    console.log("No songs found locally, fetching from Spotify first");
+    await fetchArtistSongs(artistId);
+    
+    // Try searching again
+    const { data: refreshedSongs, error: refreshError } = await supabase
+      .from('songs')
+      .select('*')
+      .eq('artist_id', artistId)
+      .ilike('name', `%${query}%`)
+      .order('name')
+      .limit(20);
+      
+    if (refreshError) {
+      console.error("Error searching for songs after refresh:", refreshError);
+      return [];
+    }
+    
+    return refreshedSongs || [];
+  } catch (error) {
+    console.error("Error in searchArtistSongs:", error);
+    return [];
+  }
+}
+
+// Fetch artist songs from Spotify and store them in the database
+export async function fetchArtistSongs(artistId: string): Promise<boolean> {
+  try {
+    console.log("Fetching artist songs from Spotify:", artistId);
+    
+    // Use the Spotify service to get and store the artist's tracks
+    return await spotifyService.importArtistCatalog(artistId);
+  } catch (error) {
+    console.error("Error in fetchArtistSongs:", error);
+    return false;
+  }
+}
