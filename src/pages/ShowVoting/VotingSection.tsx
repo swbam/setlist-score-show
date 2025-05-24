@@ -14,6 +14,7 @@ import {
 import { Music, PlusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import * as setlistService from "@/services/setlist";
+import * as catalogService from "@/services/catalog";
 import SongCard from "./SongCard";
 import { Setlist, SetlistSong, Show } from "./types";
 
@@ -29,7 +30,6 @@ interface VotingSectionProps {
   maxFreeVotes: number;
 }
 
-// Export as named export
 export function VotingSection({ 
   show, 
   artist, 
@@ -69,27 +69,46 @@ export function VotingSection({
       setLoadingSongs(true);
       console.log("Fetching all songs for artist:", artist.id);
       
-      const { data, error } = await supabase
-        .from('songs')
-        .select('id, name, album')
-        .eq('artist_id', artist.id)
-        .order('name', { ascending: true });
+      // Use catalog service to get all songs
+      const allSongs = await catalogService.getArtistSongCatalog(artist.id);
       
-      if (error) {
-        console.error("Error fetching songs:", error);
-        toast.error("Failed to load songs");
-      } else {
-        console.log(`Fetched ${data.length} songs for artist ${artist.name}`);
+      if (allSongs && allSongs.length > 0) {
+        console.log(`Fetched ${allSongs.length} songs for artist ${artist.name}`);
         
         // Filter out songs that are already in the setlist
         const existingSongIds = songs.map(song => song.song_id);
-        const filteredSongs = data.filter(song => !existingSongIds.includes(song.id));
+        const filteredSongs = allSongs.filter(song => !existingSongIds.includes(song.id));
         
         console.log(`${filteredSongs.length} songs available to add (after filtering out existing songs in setlist)`);
         setAvailableSongs(filteredSongs);
+      } else {
+        console.log("No songs found for artist, initiating catalog sync");
+        
+        // If no songs found, try to sync the catalog
+        const synced = await catalogService.syncArtistCatalog(artist.id, true);
+        
+        if (synced) {
+          // Try to fetch songs again after sync
+          const syncedSongs = await catalogService.getArtistSongCatalog(artist.id);
+          
+          if (syncedSongs && syncedSongs.length > 0) {
+            // Filter out existing songs
+            const existingSongIds = songs.map(song => song.song_id);
+            const filteredSongs = syncedSongs.filter(song => !existingSongIds.includes(song.id));
+            
+            setAvailableSongs(filteredSongs);
+          } else {
+            setAvailableSongs([]);
+            toast.error("No songs found for this artist, even after syncing");
+          }
+        } else {
+          setAvailableSongs([]);
+          toast.error("Failed to sync artist catalog");
+        }
       }
     } catch (error) {
       console.error("Error loading songs:", error);
+      toast.error("Failed to load artist songs");
     } finally {
       setLoadingSongs(false);
     }
@@ -114,6 +133,8 @@ export function VotingSection({
         await refreshSetlist();
         toast.success("Song added to setlist");
         setSelectedSongId(""); // Reset selection
+      } else {
+        toast.error("Failed to add song. It might already be in the setlist.");
       }
       return success;
     } catch (error) {
@@ -207,7 +228,7 @@ export function VotingSection({
                     <div className="p-4 text-center text-gray-400">
                       <Music className="h-6 w-6 mx-auto mb-2" />
                       <p>No songs available for this artist</p>
-                      <p className="text-xs mt-1">Try importing songs from Spotify</p>
+                      <p className="text-xs mt-1">Try refreshing to import songs from Spotify</p>
                     </div>
                   )}
                   {loadingSongs && (

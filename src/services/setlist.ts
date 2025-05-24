@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
+import * as catalogService from "@/services/catalog";
 
 // Define types for better TypeScript support
 export interface Song {
@@ -136,46 +137,15 @@ async function createInitialSetlistSongs(setlistId: string, artistId: string) {
   try {
     console.log("Creating initial setlist songs for artist:", artistId);
     
-    // Check if artist songs already in database
-    const { data: existingSongs, error: checkError } = await supabase
-      .from('songs')
-      .select('id')
-      .eq('artist_id', artistId)
-      .limit(1);
-      
-    if (checkError) {
-      console.error("Error checking for existing songs:", checkError);
-      return;
-    }
+    // Use catalog service to get/create random songs for the setlist
+    const randomSongs = await catalogService.getRandomSongsForSetlist(artistId, 5);
     
-    // If no existing songs in database, fetch from Spotify and store
-    if (!existingSongs || existingSongs.length === 0) {
-      console.log("No existing songs in database, fetching from Spotify");
-      await fetchArtistSongs(artistId);
-    }
-    
-    // Get all songs for this artist
-    const { data: songs, error: songsError } = await supabase
-      .from('songs')
-      .select('*')
-      .eq('artist_id', artistId);
-      
-    if (songsError) {
-      console.error("Error getting artist songs:", songsError);
-      return;
-    }
-    
-    if (!songs || songs.length === 0) {
+    if (!randomSongs || randomSongs.length === 0) {
       console.error("No songs found for artist:", artistId);
       return;
     }
     
-    console.log(`Found ${songs.length} songs for artist, selecting 5 random songs`);
-    
-    // Select 5 random songs
-    const randomSongs = getRandomSongs(songs, 5);
-    
-    console.log("Selected random songs:", randomSongs);
+    console.log(`Selected ${randomSongs.length} random songs for initial setlist`);
     
     // Insert into setlist_songs
     const setlistSongs = randomSongs.map((song, index) => ({
@@ -199,32 +169,10 @@ async function createInitialSetlistSongs(setlistId: string, artistId: string) {
   }
 }
 
-// Get random songs from array
-function getRandomSongs(songs: any[], count: number) {
-  const shuffled = [...songs].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, Math.min(count, songs.length));
-}
-
 // Add song to setlist
 export async function addSongToSetlist(setlistId: string, songId: string) {
   try {
     console.log("Adding song to setlist:", setlistId, songId);
-    
-    // Get next position
-    const { data: maxPosition, error: positionError } = await supabase
-      .from('setlist_songs')
-      .select('position')
-      .eq('setlist_id', setlistId)
-      .order('position', { ascending: false })
-      .limit(1)
-      .single();
-      
-    if (positionError && positionError.code !== 'PGRST116') {
-      console.error("Error getting max position:", positionError);
-      return false;
-    }
-    
-    const nextPosition = maxPosition ? maxPosition.position + 1 : 1;
     
     // Check if song already in setlist
     const { data: existingSong, error: checkError } = await supabase
@@ -243,6 +191,22 @@ export async function addSongToSetlist(setlistId: string, songId: string) {
       console.log("Song already in setlist");
       return false;
     }
+    
+    // Get next position
+    const { data: maxPosition, error: positionError } = await supabase
+      .from('setlist_songs')
+      .select('position')
+      .eq('setlist_id', setlistId)
+      .order('position', { ascending: false })
+      .limit(1)
+      .single();
+      
+    if (positionError && positionError.code !== 'PGRST116') {
+      console.error("Error getting max position:", positionError);
+      return false;
+    }
+    
+    const nextPosition = maxPosition ? maxPosition.position + 1 : 1;
     
     // Add song to setlist
     const { error: insertError } = await supabase
@@ -266,98 +230,13 @@ export async function addSongToSetlist(setlistId: string, songId: string) {
   }
 }
 
-// Import track to database if not exists
-export async function importTrackIfNeeded(track: spotifyService.SpotifyTrack) {
+// Search for songs by artist
+export async function searchSongsByArtist(artistId: string, query: string) {
   try {
-    // Check if song exists
-    const { data: existingSong, error: checkError } = await supabase
-      .from('songs')
-      .select('id')
-      .eq('id', track.id)
-      .maybeSingle();
-      
-    if (checkError) {
-      console.error("Error checking for existing song:", checkError);
-      return;
-    }
+    // First make sure we have the artist's catalog
+    await catalogService.syncArtistCatalog(artistId);
     
-    if (existingSong) {
-      return; // Song already exists
-    }
-    
-    // Add song to database
-    const { error: insertError } = await supabase
-      .from('songs')
-      .insert({
-        id: track.id,
-        artist_id: track.artists?.[0]?.id || '',
-        name: track.name,
-        album: track.album?.name || 'Unknown Album', // Use optional chaining
-        duration_ms: track.duration_ms || 0,
-        popularity: track.popularity || 0,
-        spotify_url: track.external_urls?.spotify || '' 
-      });
-      
-    if (insertError) {
-      console.error("Error adding song to database:", insertError);
-    }
-  } catch (error) {
-    console.error("Error in importTrackIfNeeded:", error);
-  }
-}
-
-// Get popular songs for artist
-export async function getPopularSongsForArtist(artistId: string, limit = 10) {
-  try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('*')
-      .eq('artist_id', artistId)
-      .order('popularity', { ascending: false })
-      .limit(limit);
-      
-    if (error) {
-      console.error("Error getting popular songs:", error);
-      return [];
-    }
-    
-    return data;
-  } catch (error) {
-    console.error("Error in getPopularSongsForArtist:", error);
-    return [];
-  }
-}
-
-// Fetch and store artist songs in database
-export async function fetchArtistSongs(artistId: string) {
-  try {
-    console.log("Fetching songs for artist:", artistId);
-    
-    // Get artist's top tracks from Spotify
-    const tracks = await spotifyService.getArtistTopTracks(artistId);
-    
-    if (!tracks || tracks.length === 0) {
-      console.error("No tracks found for artist:", artistId);
-      return false;
-    }
-    
-    console.log(`Found ${tracks.length} tracks for artist ${artistId}, importing to database`);
-    
-    // Import all tracks to database
-    for (const track of tracks) {
-      await importTrackIfNeeded(track);
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("Error in fetchArtistSongs:", error);
-    return false;
-  }
-}
-
-// Get all songs for an artist that match a search term
-export async function searchArtistSongs(artistId: string, query: string) {
-  try {
+    // Then search songs
     const { data, error } = await supabase
       .from('songs')
       .select('*')
@@ -367,13 +246,13 @@ export async function searchArtistSongs(artistId: string, query: string) {
       .limit(20);
       
     if (error) {
-      console.error("Error searching artist songs:", error);
+      console.error("Error searching songs by artist:", error);
       return [];
     }
     
-    return data;
+    return data || [];
   } catch (error) {
-    console.error("Error in searchArtistSongs:", error);
+    console.error("Error in searchSongsByArtist:", error);
     return [];
   }
 }

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import * as setlistService from "@/services/setlist";
 
-// Define simpler types for internal use to avoid recursive type issues
+// Define simple types that avoid the recursive type issue
 interface SimpleSong {
   id: string;
   name: string;
@@ -18,6 +18,7 @@ interface SimpleSetlistSong {
   votes: number;
   position: number;
   song: SimpleSong;
+  userVoted?: boolean;
 }
 
 export function useSetlistVoting(setlistId: string) {
@@ -71,7 +72,7 @@ export function useSetlistVoting(setlistId: string) {
           throw error;
         }
 
-        // Map to our simplified type structure
+        // Map to our simplified type structure to avoid recursive type issue
         const formattedData: SimpleSetlistSong[] = data.map(item => ({
           id: item.id,
           song_id: item.song_id,

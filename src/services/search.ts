@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
@@ -71,6 +70,17 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
             image_url: artist.images?.[0]?.url,
             score: calculateRelevanceScore(artist.name, query, 'spotify')
           });
+          
+          // Store artist in background for future searches
+          artistUtils.ensureArtistInDatabase({
+            id: artist.id,
+            name: artist.name,
+            image_url: artist.images?.[0]?.url,
+            genres: artist.genres,
+            popularity: artist.popularity,
+            spotify_url: artist.external_urls?.spotify,
+            source: 'spotify'
+          }, true).catch(console.error);
         }
       });
     }
@@ -134,6 +144,29 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
           });
           
           addedShows.add(event.id);
+          
+          // Store event in database in background
+          if (artist && venue) {
+            const artistData = {
+              id: artist.id,
+              name: artist.name,
+              image_url: artist.images?.[0]?.url,
+              source: 'ticketmaster'
+            };
+            
+            // Store artist and show in background
+            artistUtils.ensureArtistInDatabase(artistData as any, true)
+              .then(savedArtist => {
+                // Store venue
+                ticketmasterService.storeVenueInDatabase(venue)
+                  .then(() => {
+                    // Store show
+                    ticketmasterService.storeShowInDatabase(event, savedArtist.id, venue.id);
+                  })
+                  .catch(console.error);
+              })
+              .catch(console.error);
+          }
         });
       }
     }

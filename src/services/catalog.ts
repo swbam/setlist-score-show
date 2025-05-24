@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import { toast } from "@/components/ui/sonner";
@@ -26,7 +27,7 @@ export async function syncArtistCatalog(
         .from('artists')
         .select('last_synced_at')
         .eq('id', artistId)
-        .single();
+        .maybeSingle();
       
       // If we have this artist and they were synced less than 7 days ago, skip
       if (artist && artist.last_synced_at) {
@@ -116,6 +117,7 @@ async function checkArtistExists(artistId: string): Promise<boolean> {
 
 /**
  * Gets the song catalog for an artist from the database
+ * If not found, synchronizes with Spotify first
  */
 export async function getArtistSongCatalog(artistId: string): Promise<any[]> {
   try {
@@ -124,7 +126,7 @@ export async function getArtistSongCatalog(artistId: string): Promise<any[]> {
       .from('songs')
       .select('*')
       .eq('artist_id', artistId)
-      .order('popularity', { ascending: false });
+      .order('name', { ascending: true }); // Alphabetical order for better browsing
       
     if (dbError) {
       console.error("Error fetching songs from database:", dbError);
@@ -151,7 +153,7 @@ export async function getArtistSongCatalog(artistId: string): Promise<any[]> {
       .from('songs')
       .select('*')
       .eq('artist_id', artistId)
-      .order('popularity', { ascending: false });
+      .order('name', { ascending: true });
       
     if (syncError) {
       console.error("Error fetching songs after sync:", syncError);

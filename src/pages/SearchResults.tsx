@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Music } from "lucide-react";
@@ -9,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
 import * as artistUtils from "@/utils/artistUtils";
+import * as catalogService from "@/services/catalog";
 import AppHeader from "@/components/AppHeader";
 import { debounce } from 'lodash';
 
@@ -65,10 +67,46 @@ const SearchResults = () => {
     console.log("Performing search for:", query);
 
     try {
-      // Search Spotify for artists
-      const artistResults = await spotifyService.searchArtists(query);
-      console.log("Spotify artists search results:", artistResults.length, "artists");
-      setArtists(artistResults);
+      // First check the database for existing artists
+      const { data: dbArtists, error: dbError } = await supabase
+        .from('artists')
+        .select('*')
+        .ilike('name', `%${query}%`)
+        .order('popularity', { ascending: false })
+        .limit(10);
+      
+      if (dbError) {
+        console.error("Database search error:", dbError);
+      }
+      
+      // Format database results to match Spotify format
+      const formattedDbArtists: spotifyService.SpotifyArtist[] = (dbArtists || []).map(artist => ({
+        id: artist.id,
+        name: artist.name,
+        popularity: artist.popularity || 0,
+        images: artist.image_url ? [{ url: artist.image_url }] : [],
+        external_urls: { spotify: artist.spotify_url || '' },
+        genres: artist.genres || [],
+        type: 'artist',
+        uri: '',
+        followers: { total: 0, href: null }
+      }));
+      
+      // Then search Spotify for artists
+      const spotifyResults = await spotifyService.searchArtists(query);
+      
+      // Merge results, preferring database entries over Spotify
+      const dbArtistsMap = new Map(formattedDbArtists.map(artist => [artist.id, artist]));
+      const allArtists = [...formattedDbArtists];
+      
+      spotifyResults.forEach(artist => {
+        if (!dbArtistsMap.has(artist.id)) {
+          allArtists.push(artist);
+        }
+      });
+      
+      console.log("Combined search results:", allArtists.length, "artists");
+      setArtists(allArtists);
     } catch (error) {
       console.error("Search error:", error);
       toast.error("An error occurred during search");
@@ -83,19 +121,18 @@ const SearchResults = () => {
       // Show loading toast
       const loadingToast = toast.loading(`Loading ${artist.name} data...`);
       
-      // Store artist in database with normalized ID
+      // Store artist in database
       const artistStored = await spotifyService.storeArtistInDatabase(artist);
       
       if (artistStored) {
-        // Import the artist's top tracks
-        console.log("Importing top tracks for artist:", artist.id);
-        const tracks = await spotifyService.getArtistTopTracks(artist.id);
+        // Import the artist's catalog (all tracks)
+        console.log("Importing catalog for artist:", artist.id);
+        const catalogSynced = await catalogService.syncArtistCatalog(artist.id);
         
-        if (tracks && tracks.length > 0) {
-          await spotifyService.storeTracksInDatabase(artist.id, tracks);
-          console.log(`Stored ${tracks.length} top tracks for ${artist.name}`);
+        if (catalogSynced) {
+          console.log(`Successfully synced catalog for ${artist.name}`);
         } else {
-          console.warn("No top tracks found for artist");
+          console.warn(`Catalog sync may have been incomplete for ${artist.name}`);
         }
         
         // Get artist events from Ticketmaster and store them
@@ -131,14 +168,8 @@ const SearchResults = () => {
           `${artist.name} data loaded with ${eventCount} upcoming shows`
         );
         
-        // Create URL-friendly slug from artist name
-        const artistSlug = artist.name.toLowerCase()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/[\s_-]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        
-        // Navigate to artist page with SEO-friendly URL
-        navigate(`/artists/${artist.id}/${artistSlug}`);
+        // Navigate to artist page
+        navigate(`/artist/${artist.id}`);
       } else {
         toast.dismiss(loadingToast);
         toast.error(`Failed to load ${artist.name} data`);
@@ -226,6 +257,6 @@ const SearchResults = () => {
       </div>
     </div>
   );
-};
+}
 
 export default SearchResults;

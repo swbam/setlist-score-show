@@ -21,20 +21,11 @@ const ShowVoting = () => {
     handleSongAdded
   } = useShowVoting(user);
 
-  // Convert our setlist type to match what VotingSection expects
-  const formattedSetlist = setlist ? {
-    id: setlist.id,
-    show_id: setlist.show_id,
-    created_at: setlist.created_at,
-    updated_at: setlist.updated_at,
-    songs: setlist.songs || []
-  } : null;
-
   return (
     <div className="min-h-screen bg-black">
       <AppHeader />
       
-      {/* Show Header with fixed layout */}
+      {/* Enhanced Show Header */}
       <ShowHeader show={show} />
 
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -43,20 +34,20 @@ const ShowVoting = () => {
           <div className="lg:col-span-2">
             <VotingSection
               show={show}
-              setlist={formattedSetlist}
+              artist={show?.artist || null}
+              setlist={setlist}
               onRefresh={handleSongAdded}
               voteSubmitting={voteSubmitting}
               handleVote={handleVote}
-              votesRemaining={votesRemaining === 'Unlimited' ? 'Unlimited' : Number(votesRemaining)}
+              votesRemaining={votesRemaining}
               usedVotesCount={usedVotesCount}
               maxFreeVotes={maxFreeVotes}
-              artist={show?.artist || null}
             />
           </div>
 
           {/* Sidebar - 1 column */}
           <div className="lg:col-span-1">
-            <Sidebar setlist={formattedSetlist} show={show} />
+            <Sidebar setlist={setlist} show={show} />
           </div>
         </div>
       </div>
