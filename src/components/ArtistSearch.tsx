@@ -12,6 +12,7 @@ interface ArtistSearchProps {
   loading?: boolean;
   placeholder?: string;
   buttonText?: string;
+  className?: string;
 }
 
 const ArtistSearch = ({
@@ -21,7 +22,8 @@ const ArtistSearch = ({
   handleReset,
   loading = false,
   placeholder = "Search artists...",
-  buttonText = "Refresh"
+  buttonText = "Refresh",
+  className = ""
 }: ArtistSearchProps) => {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -30,7 +32,7 @@ const ArtistSearch = ({
   };
   
   return (
-    <div className="w-full md:w-auto flex gap-4">
+    <div className={`w-full md:w-auto flex gap-4 ${className}`}>
       <form onSubmit={handleSearch} className="relative flex-1 md:flex-none md:w-64">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
         <Input

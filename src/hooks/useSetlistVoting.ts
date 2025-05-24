@@ -72,17 +72,12 @@ export function useSetlistVoting(setlistId: string) {
         }
 
         // Map to our simplified type structure to avoid recursive type issue
-        const formattedData: SimpleSetlistSong[] = data.map(item => ({
+        const formattedData = data.map(item => ({
           id: item.id,
           song_id: item.song_id,
           votes: item.votes,
           position: item.position,
-          song: {
-            id: item.song?.id || '',
-            name: item.song?.name || '',
-            album: item.song?.album,
-            duration_ms: item.song?.duration_ms
-          }
+          song: item.song as SimpleSong
         }));
 
         setSongs(formattedData);

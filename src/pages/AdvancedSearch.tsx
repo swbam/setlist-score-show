@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Search, MapPin, Calendar, Music, Mic, X } from "lucide-react";
@@ -86,7 +85,9 @@ const AdvancedSearch = () => {
         setResults(searchResults);
         
         // Store results in background to build up database
-        searchService.storeSearchResults(searchResults).catch(console.error);
+        if (searchResults.length > 0) {
+          searchService.storeSearchResults(searchResults).catch(console.error);
+        }
       } catch (error) {
         console.error("Search error:", error);
         toast.error("An error occurred during search");

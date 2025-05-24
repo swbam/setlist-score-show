@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { SearchIcon, Music, Calendar, MapPin } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as searchService from "@/services/search";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function SearchResults() {
   const location = useLocation();
@@ -33,8 +32,13 @@ export default function SearchResults() {
   const performSearch = async (searchTerm: string) => {
     setLoading(true);
     try {
-      const options = { query: searchTerm, limit: 20 };
-      const results = await searchService.search(options);
+      const searchOptions: searchService.SearchOptions = { 
+        query: searchTerm, 
+        limit: 20,
+        sortBy: 'relevance'
+      };
+      
+      const results = await searchService.search(searchOptions);
       
       // Separate artists and shows from results
       const artists = results.filter(item => item.type === 'artist');
@@ -42,6 +46,9 @@ export default function SearchResults() {
       
       setArtistResults(artists);
       setShowResults(shows);
+      
+      // Store search results in the background to build database
+      searchService.storeSearchResults(results).catch(console.error);
     } catch (error) {
       console.error("Error performing search:", error);
     } finally {
@@ -58,6 +65,19 @@ export default function SearchResults() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
+    }
+  };
+
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return "Date TBA";
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (e) {
+      return "Date TBA";
     }
   };
 
@@ -119,7 +139,11 @@ export default function SearchResults() {
                       {artistResults.map((artist) => (
                         <ArtistCard 
                           key={artist.id} 
-                          artist={artist}
+                          artist={{
+                            id: artist.id,
+                            name: artist.name,
+                            image_url: artist.image_url
+                          }}
                         />
                       ))}
                     </div>
@@ -149,13 +173,7 @@ export default function SearchResults() {
                               <h3 className="font-semibold">{show.name || show.artist_name}</h3>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <Calendar className="h-3 w-3 mr-1" />
-                                <span>
-                                  {show.date ? new Date(show.date).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  }) : 'Date TBA'}
-                                </span>
+                                <span>{formatDate(show.date)}</span>
                               </div>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <MapPin className="h-3 w-3 mr-1" />
@@ -163,7 +181,7 @@ export default function SearchResults() {
                               </div>
                             </div>
                             <Button size="sm" asChild>
-                              <a href={`/shows/${show.id}`}>View Show</a>
+                              <Link to={`/shows/${show.id}`}>View Show</Link>
                             </Button>
                           </div>
                         </div>
