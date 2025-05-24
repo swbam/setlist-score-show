@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
@@ -365,68 +366,4 @@ function sortResults(results: SearchResult[], sortBy: string, query?: string): S
     
     return scoreDiff;
   });
-}
-
-/**
- * Store search results in database
- * This helps build up our local database over time
- */
-export async function storeSearchResults(results: SearchResult[]): Promise<void> {
-  for (const result of results) {
-    if (result.type === 'artist') {
-      // Store artist
-      const artist = {
-        id: result.id,
-        name: result.name,
-        image_url: result.image_url,
-        source: 'search' as any
-      };
-      
-      // Use existing utility to store and enrich artist data
-      await artistUtils.ensureArtistInDatabase(artist, true);
-    }
-    else if (result.type === 'show' && result.artist_name) {
-      // For shows, we need to get more details from Ticketmaster
-      try {
-        const events = await ticketmasterService.searchEvents(result.name);
-        const event = events.find(e => e.id === result.id);
-        
-        if (event && event._embedded?.venues?.[0]) {
-          const venue = event._embedded.venues[0];
-          
-          // Store venue
-          await ticketmasterService.storeVenueInDatabase(venue);
-          
-          // Look up artist by name if no attraction
-          const attraction = event._embedded?.attractions?.[0];
-          let artistId = attraction?.id;
-          
-          if (!artistId) {
-            const { data: artistData } = await supabase
-              .from('artists')
-              .select('id')
-              .eq('name', result.artist_name)
-              .maybeSingle();
-            
-            artistId = artistData?.id;
-            
-            if (!artistId) {
-              // As a last resort, search Spotify
-              const spotifyArtists = await spotifyService.searchArtists(result.artist_name);
-              if (spotifyArtists.length > 0) {
-                artistId = spotifyArtists[0].id;
-              }
-            }
-          }
-          
-          if (artistId) {
-            // Store show
-            await ticketmasterService.storeShowInDatabase(event, artistId, venue.id);
-          }
-        }
-      } catch (error) {
-        console.error(`Error storing show result: ${result.id}`, error);
-      }
-    }
-  }
 }

@@ -33,9 +33,15 @@ export default function SearchResults() {
   const performSearch = async (searchTerm: string) => {
     setLoading(true);
     try {
-      const results = await searchService.searchAll(searchTerm);
-      setArtistResults(results.artists);
-      setShowResults(results.shows);
+      const options = { query: searchTerm, limit: 20 };
+      const results = await searchService.search(options);
+      
+      // Separate artists and shows from results
+      const artists = results.filter(item => item.type === 'artist');
+      const shows = results.filter(item => item.type === 'show');
+      
+      setArtistResults(artists);
+      setShowResults(shows);
     } catch (error) {
       console.error("Error performing search:", error);
     } finally {
@@ -140,20 +146,20 @@ export default function SearchResults() {
                         >
                           <div className="flex items-start justify-between">
                             <div>
-                              <h3 className="font-semibold">{show.name || show.artist?.name}</h3>
+                              <h3 className="font-semibold">{show.name || show.artist_name}</h3>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <Calendar className="h-3 w-3 mr-1" />
                                 <span>
-                                  {new Date(show.date).toLocaleDateString('en-US', {
+                                  {show.date ? new Date(show.date).toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     year: 'numeric'
-                                  })}
+                                  }) : 'Date TBA'}
                                 </span>
                               </div>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <MapPin className="h-3 w-3 mr-1" />
-                                <span>{show.venue?.name}, {show.venue?.city}</span>
+                                <span>{show.venue || show.location || 'Venue TBA'}</span>
                               </div>
                             </div>
                             <Button size="sm" asChild>
