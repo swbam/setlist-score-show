@@ -4,24 +4,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import * as setlistService from "@/services/setlist";
 
-// Define simple types that avoid the recursive type issue
-interface SimpleSong {
+// Simple types to avoid recursion
+interface Song {
   id: string;
   name: string;
   album?: string;
   duration_ms?: number;
 }
 
-interface SimpleSetlistSong {
+interface SetlistSong {
   id: string;
   song_id: string;
   votes: number;
   position: number;
-  song: SimpleSong;
+  song: Song;
 }
 
 export function useSetlistVoting(setlistId: string) {
-  const [songs, setSongs] = useState<SimpleSetlistSong[]>([]);
+  const [songs, setSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
   const [user, setUser] = useState<any>(null);
@@ -71,13 +71,17 @@ export function useSetlistVoting(setlistId: string) {
           throw error;
         }
 
-        // Map to our simplified type structure to avoid recursive type issue
-        const formattedData = data.map(item => ({
+        const formattedData: SetlistSong[] = (data || []).map(item => ({
           id: item.id,
           song_id: item.song_id,
           votes: item.votes,
           position: item.position,
-          song: item.song as SimpleSong
+          song: {
+            id: item.song?.id || '',
+            name: item.song?.name || '',
+            album: item.song?.album,
+            duration_ms: item.song?.duration_ms
+          }
         }));
 
         setSongs(formattedData);
@@ -87,8 +91,7 @@ export function useSetlistVoting(setlistId: string) {
           const { data: userVotesData, error: votesError } = await supabase
             .from('votes')
             .select('setlist_song_id')
-            .eq('user_id', user.id)
-            .eq('setlist_id', setlistId);
+            .eq('user_id', user.id);
 
           if (!votesError && userVotesData) {
             const votesMap: Record<string, boolean> = {};
@@ -118,7 +121,6 @@ export function useSetlistVoting(setlistId: string) {
       .on('postgres_changes', 
         { event: 'UPDATE', schema: 'public', table: 'setlist_songs', filter: `setlist_id=eq.${setlistId}` },
         (payload) => {
-          // Update the songs state with the new vote count
           setSongs(currentSongs => currentSongs.map(song => 
             song.id === payload.new.id 
               ? { ...song, votes: payload.new.votes } 
@@ -128,7 +130,6 @@ export function useSetlistVoting(setlistId: string) {
       )
       .subscribe();
 
-    // Clean up subscription
     return () => {
       supabase.removeChannel(channel);
     };
@@ -141,7 +142,6 @@ export function useSetlistVoting(setlistId: string) {
       return false;
     }
 
-    // Check if user already voted for this song
     if (userVotes[setlistSongId]) {
       toast("You already voted for this song");
       return false;
@@ -162,19 +162,18 @@ export function useSetlistVoting(setlistId: string) {
         [setlistSongId]: true
       }));
 
-      // Insert the vote record directly with both setlist_id and setlist_song_id
+      // Insert the vote record
       const { error: insertError } = await supabase
         .from('votes')
         .insert({
           user_id: user.id,
-          setlist_song_id: setlistSongId,
-          setlist_id: setlistId
+          setlist_song_id: setlistSongId
         });
 
       if (insertError) {
         console.error('Error inserting vote:', insertError);
         
-        // Revert the optimistic update if there was an error
+        // Revert the optimistic update
         setSongs(currentSongs => 
           currentSongs.map(song => 
             song.id === setlistSongId 
@@ -194,14 +193,14 @@ export function useSetlistVoting(setlistId: string) {
       }
       
       // Update the song's vote count
+      const currentVotes = songs.find(s => s.id === setlistSongId)?.votes || 0;
       const { error: updateError } = await supabase
         .from('setlist_songs')
-        .update({ votes: songs.find(s => s.id === setlistSongId)?.votes + 1 })
+        .update({ votes: currentVotes + 1 })
         .eq('id', setlistSongId);
         
       if (updateError) {
         console.error('Error updating vote count:', updateError);
-        // We don't revert UI changes since the vote record was created
       }
 
       toast("Your vote has been counted!");
@@ -211,7 +210,7 @@ export function useSetlistVoting(setlistId: string) {
       toast("Something went wrong while voting");
       return false;
     }
-  }, [user, userVotes, setlistId, songs]);
+  }, [user, userVotes, songs]);
 
   // Add a song to the setlist
   const addSong = useCallback(async (songId: string) => {
