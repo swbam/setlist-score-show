@@ -1,4 +1,5 @@
 
+import React from "react";
 import { SetlistSong } from "./types";
 import SongCard from "./SongCard";
 
@@ -42,3 +43,5 @@ export const VotingSection = ({ setlistSongs, onVote, loading }: VotingSectionPr
     </div>
   );
 };
+
+export default VotingSection;

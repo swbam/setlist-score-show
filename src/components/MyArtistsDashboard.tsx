@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Music, Calendar, TrendingUp } from "lucide-react";
@@ -36,12 +35,12 @@ const MyArtistsDashboard = () => {
     try {
       setLoading(true);
 
-      // First, try to get user's top artists from our database
+      // Fix the relationship hint to specify which foreign key to use
       const { data: userArtists, error } = await supabase
         .from('user_artists')
         .select(`
           rank,
-          artist:artists (
+          artists!user_artists_artist_id_fkey (
             id,
             name,
             image_url,
@@ -60,7 +59,7 @@ const MyArtistsDashboard = () => {
         // Format the data and get show counts
         const formattedArtists = await Promise.all(
           userArtists.map(async (ua) => {
-            const artist = ua.artist;
+            const artist = ua.artists;
             if (!artist) return null;
 
             // Get upcoming shows count

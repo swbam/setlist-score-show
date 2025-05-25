@@ -22,6 +22,13 @@ interface SetlistSong {
   song: Song;
 }
 
+// Type for the vote function response
+interface VoteResponse {
+  success: boolean;
+  votes?: number;
+  message?: string;
+}
+
 export function useSetlistVoting(setlistId: string) {
   const [songs, setSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,12 +177,15 @@ export function useSetlistVoting(setlistId: string) {
         return false;
       }
 
-      if (data && data.success) {
+      // Type assertion for the response
+      const voteResponse = data as VoteResponse;
+
+      if (voteResponse && voteResponse.success) {
         // Optimistically update the UI
         setSongs(currentSongs => 
           currentSongs.map(song => 
             song.id === setlistSongId 
-              ? { ...song, votes: data.votes || song.votes + 1 } 
+              ? { ...song, votes: voteResponse.votes || song.votes + 1 } 
               : song
           ).sort((a, b) => b.votes - a.votes)
         );
@@ -188,7 +198,7 @@ export function useSetlistVoting(setlistId: string) {
         toast("Your vote has been counted!");
         return true;
       } else {
-        toast(data?.message || "Failed to vote");
+        toast(voteResponse?.message || "Failed to vote");
         return false;
       }
     } catch (error) {

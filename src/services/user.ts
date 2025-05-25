@@ -89,11 +89,12 @@ export async function getUserArtists(): Promise<UserArtist[]> {
       return [];
     }
     
+    // Fix the relationship hint to specify which foreign key to use
     const { data, error } = await supabase
       .from('user_artists')
       .select(`
         *,
-        artist:artists(id, name, image_url)
+        artists!user_artists_artist_id_fkey(id, name, image_url)
       `)
       .eq('user_id', authUser.user.id)
       .order('rank');
@@ -103,7 +104,20 @@ export async function getUserArtists(): Promise<UserArtist[]> {
       return [];
     }
     
-    return data || [];
+    // Transform the data to ensure type safety
+    const transformedData: UserArtist[] = (data || []).map(item => ({
+      id: item.id,
+      user_id: item.user_id,
+      artist_id: item.artist_id,
+      rank: item.rank,
+      artist: item.artists ? {
+        id: item.artists.id,
+        name: item.artists.name,
+        image_url: item.artists.image_url
+      } : undefined
+    }));
+    
+    return transformedData;
   } catch (error) {
     console.error("Error getting user artists:", error);
     return [];

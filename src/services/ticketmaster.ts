@@ -1,8 +1,44 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
 const TICKETMASTER_BASE_URL = "https://app.ticketmaster.com/discovery/v2";
+
+// Export the TicketmasterEvent interface
+export interface TicketmasterEvent {
+  id: string;
+  name: string;
+  dates: {
+    start: {
+      localDate: string;
+      localTime?: string;
+      dateTime?: string;
+    };
+    status?: {
+      code: string;
+    };
+  };
+  url?: string;
+  _embedded?: {
+    venues?: Array<{
+      id: string;
+      name: string;
+      city: any;
+      state: any;
+      country: any;
+      address?: {
+        line1?: string;
+      };
+      location?: {
+        latitude?: string;
+        longitude?: string;
+      };
+    }>;
+    attractions?: Array<{
+      id: string;
+      name: string;
+    }>;
+  };
+}
 
 // Helper function to safely extract city name
 function extractCityName(city: any): string {
