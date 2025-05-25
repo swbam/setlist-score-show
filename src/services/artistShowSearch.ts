@@ -22,7 +22,7 @@ export async function searchArtistsWithUpcomingShows(query: string, limit: numbe
     }
 
     // First, search Ticketmaster for events and import any new artists/shows
-    await ticketmasterService.searchAndImportEvents(query, 20);
+    await ticketmasterService.searchEvents(query, 20);
 
     // Then search our database for artists with upcoming shows
     const today = new Date().toISOString();
@@ -44,7 +44,7 @@ export async function searchArtistsWithUpcomingShows(query: string, limit: numbe
         )
       `)
       .ilike('name', `%${query}%`)
-      .limit(limit * 2); // Get more to filter properly
+      .limit(limit * 2);
 
     if (error) {
       console.error("Error searching artists:", error);
@@ -124,7 +124,7 @@ export async function getTrendingArtistsWithShows(limit: number = 10): Promise<A
         )
       `)
       .order('popularity', { ascending: false })
-      .limit(limit * 3); // Get more to filter properly
+      .limit(limit * 3);
 
     if (error) {
       console.error("Error getting trending artists:", error);
@@ -159,7 +159,7 @@ export async function getTrendingArtistsWithShows(limit: number = 10): Promise<A
           id: artist.id,
           name: artist.name,
           image_url: artist.image_url,
-          popularity: trendingScore, // Use trending score as popularity
+          popularity: trendingScore,
           upcoming_shows_count: upcomingShows.length,
           next_show_date: nextShow.date,
           next_show_venue: venue ? `${venue.name}, ${venue.city}` : undefined
