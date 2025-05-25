@@ -508,3 +508,126 @@ function sortResults(results: SearchResult[], sortBy: string, query?: string): S
     return scoreDiff;
   });
 }
+
+/**
+ * Search for artists with shows
+ */
+export async function searchArtistsWithShows(query: string): Promise<Artist[]> {
+  try {
+    console.log(`Searching for artists with shows: ${query}`);
+    
+    // Search Ticketmaster for events
+    const events = await ticketmasterService.searchEvents(query);
+    console.log(`Found ${events.length} events matching "${query}"`);
+    
+    const artistMap = new Map<string, Artist>();
+    
+    // Process each event to extract unique artists
+    for (const event of events) {
+      if (!event._embedded?.attractions) continue;
+      
+      for (const attraction of event._embedded.attractions) {
+        if (!artistMap.has(attraction.id)) {
+          // Create artist data object
+          const artistData = {
+            id: attraction.id,
+            name: attraction.name,
+            image_url: attraction.images?.[0]?.url,
+            ticketmaster_id: attraction.id
+          };
+          
+          // Ensure artist exists in database
+          await artistUtils.ensureArtistInDatabase(artistData);
+          
+          artistMap.set(attraction.id, {
+            id: attraction.id,
+            name: attraction.name,
+            image_url: attraction.images?.[0]?.url,
+            source: 'ticketmaster'
+          });
+        }
+      }
+    }
+    
+    return Array.from(artistMap.values());
+  } catch (error) {
+    console.error("Error searching artists with shows:", error);
+    return [];
+  }
+}
+
+/**
+ * Search for shows
+ */
+export async function searchShows(query: string): Promise<Show[]> {
+  try {
+    console.log(`Searching for shows: ${query}`);
+    
+    // Search Ticketmaster for events
+    const events = await ticketmasterService.searchEvents(query);
+    console.log(`Found ${events.length} events matching "${query}"`);
+    
+    const shows: Show[] = [];
+    
+    // Process each event
+    for (const event of events) {
+      if (!event._embedded?.attractions?.[0] || !event._embedded?.venues?.[0]) {
+        continue;
+      }
+      
+      const artist = event._embedded.attractions[0];
+      const venue = event._embedded.venues[0];
+      
+      // Store venue in database
+      await ticketmasterService.storeVenueInDatabase(venue);
+      
+      // Create artist data object
+      const artistData = {
+        id: artist.id,
+        name: artist.name,
+        image_url: artist.images?.[0]?.url,
+        ticketmaster_id: artist.id
+      };
+      
+      // Ensure artist exists in database
+      const artistStored = await artistUtils.ensureArtistInDatabase(artistData);
+      
+      if (artistStored) {
+        // Store show in database
+        await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
+        
+        // Add to results
+        shows.push({
+          id: event.id,
+          artist_id: artist.id,
+          venue_id: venue.id,
+          name: event.name,
+          date: event.dates?.start?.dateTime || event.dates?.start?.localDate || '',
+          start_time: event.dates?.start?.localTime || null,
+          status: event.dates?.status?.code === 'cancelled' ? 'canceled' : 
+                 event.dates?.status?.code === 'postponed' ? 'postponed' : 'scheduled',
+          ticketmaster_url: event.url || null,
+          view_count: 0,
+          artist: {
+            id: artist.id,
+            name: artist.name,
+            image_url: artist.images?.[0]?.url
+          },
+          venue: {
+            id: venue.id,
+            name: venue.name,
+            city: typeof venue.city === 'object' ? venue.city?.name : venue.city || '',
+            state: typeof venue.state === 'object' ? venue.state?.name : venue.state || null,
+            country: typeof venue.country === 'object' ? venue.country?.name : venue.country || ''
+          }
+        });
+      }
+    }
+    
+    console.log(`Processed ${shows.length} shows from search results`);
+    return shows;
+  } catch (error) {
+    console.error("Error searching shows:", error);
+    return [];
+  }
+}

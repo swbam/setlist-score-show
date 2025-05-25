@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -161,12 +160,12 @@ export async function updateTrends(): Promise<boolean> {
         id: artist.id,
         name: artist.name,
         image_url: artist.images?.[0]?.url,
-        source: 'ticketmaster'
+        ticketmaster_id: artist.id
       };
       
       // Store artist with Spotify enrichment
       const { artistUtils } = await getServices();
-      await artistUtils.ensureArtistInDatabase(artistData as any, true);
+      await artistUtils.ensureArtistInDatabase(artistData);
       
       // Store show
       await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);

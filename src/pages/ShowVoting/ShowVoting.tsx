@@ -3,11 +3,12 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Show } from "./types";
 import { SetlistSong } from "./types";
-import VotingSection from "./VotingSection";
+import { VotingSection } from "./VotingSection";
 import Sidebar from "./Sidebar";
 import ShowHeader from "./ShowHeader";
 import AppHeader from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureSetlistExists } from "@/services/setlistCreation";
 
 interface RouteParams extends Record<string, string | undefined> {
   showId: string;
@@ -19,7 +20,7 @@ const ShowVoting = () => {
   const [setlistSongs, setSetlistSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [votingLoading, setVotingLoading] = useState(false);
+  const [submitting, setSubmitting] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchShowAndSetlist = async () => {
@@ -88,6 +89,9 @@ const ShowVoting = () => {
 
         setShow(transformedShow);
 
+        // Ensure setlist exists for this show
+        await ensureSetlistExists(showId as string);
+
         // Fetch setlist songs with proper column hints
         const { data: setlistData, error: setlistError } = await supabase
           .from('setlist_songs')
@@ -145,7 +149,7 @@ const ShowVoting = () => {
   }, [showId]);
 
   const handleVote = async (setlistSongId: string) => {
-    setVotingLoading(true);
+    setSubmitting(setlistSongId);
     try {
       // Optimistically update the UI
       const updatedSetlistSongs = setlistSongs.map(song =>
@@ -176,7 +180,7 @@ const ShowVoting = () => {
       );
       setSetlistSongs(revertedSetlistSongs);
     } finally {
-      setVotingLoading(false);
+      setSubmitting(null);
     }
   };
 
@@ -233,11 +237,10 @@ const ShowVoting = () => {
             <ShowHeader show={show} />
             
             <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-800 p-6">
-              <h2 className="text-xl font-bold text-white mb-6">Fan Setlist</h2>
               <VotingSection
-                setlistSongs={setlistSongs}
+                songs={setlistSongs}
                 onVote={handleVote}
-                loading={votingLoading}
+                submitting={submitting}
               />
             </div>
           </div>
