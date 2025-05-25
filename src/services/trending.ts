@@ -31,7 +31,7 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
   try {
     console.log("Fetching trending shows...");
     
-    // Get shows with vote activity in the last 7 days
+    // Get shows with vote activity and high view counts
     const { data: showsData, error: showsError } = await supabase
       .from('shows')
       .select(`
@@ -56,38 +56,76 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
       `)
       .gte('date', new Date().toISOString())
       .order('view_count', { ascending: false })
-      .limit(limit);
+      .limit(limit * 2); // Get more to filter properly
 
     if (showsError) {
       console.error("Error fetching trending shows:", showsError);
       return [];
     }
 
-    // Transform the data to ensure type safety
-    const trendingShows: TrendingShow[] = (showsData || []).map(show => ({
-      id: show.id,
-      name: show.name,
-      date: show.date,
-      start_time: show.start_time,
-      ticketmaster_url: show.ticketmaster_url,
-      view_count: show.view_count,
-      votes: 0, // Will be calculated separately
-      artist_name: (show.artists as any)?.name || 'Unknown Artist',
-      venue_name: (show.venues as any)?.name || 'Unknown Venue',
-      venue_city: (show.venues as any)?.city || '',
-      artist: {
-        id: (show.artists as any)?.id || '',
-        name: (show.artists as any)?.name || 'Unknown Artist',
-        image_url: (show.artists as any)?.image_url
-      },
-      venue: {
-        id: (show.venues as any)?.id || '',
-        name: (show.venues as any)?.name || 'Unknown Venue',
-        city: (show.venues as any)?.city || '',
-        state: (show.venues as any)?.state,
-        country: (show.venues as any)?.country || ''
-      }
-    }));
+    if (!showsData || showsData.length === 0) {
+      console.log("No shows found for trending");
+      return [];
+    }
+
+    // Calculate vote counts for each show
+    const showsWithVotes = await Promise.all(
+      showsData.map(async (show) => {
+        // Get total votes for this show
+        const { data: setlist } = await supabase
+          .from('setlists')
+          .select('id')
+          .eq('show_id', show.id)
+          .maybeSingle();
+
+        let totalVotes = 0;
+        if (setlist) {
+          const { data: votes } = await supabase
+            .from('setlist_songs')
+            .select('votes')
+            .eq('setlist_id', setlist.id);
+          
+          totalVotes = votes?.reduce((sum, song) => sum + song.votes, 0) || 0;
+        }
+
+        const artist = show.artists as any;
+        const venue = show.venues as any;
+
+        return {
+          id: show.id,
+          name: show.name,
+          date: show.date,
+          start_time: show.start_time,
+          ticketmaster_url: show.ticketmaster_url,
+          view_count: show.view_count,
+          votes: totalVotes,
+          artist_name: artist?.name || 'Unknown Artist',
+          venue_name: venue?.name || 'Unknown Venue',
+          venue_city: venue?.city || '',
+          artist: {
+            id: artist?.id || '',
+            name: artist?.name || 'Unknown Artist',
+            image_url: artist?.image_url
+          },
+          venue: {
+            id: venue?.id || '',
+            name: venue?.name || 'Unknown Venue',
+            city: venue?.city || '',
+            state: venue?.state,
+            country: venue?.country || ''
+          }
+        };
+      })
+    );
+
+    // Sort by a combination of view count and votes (trending score)
+    const trendingShows = showsWithVotes
+      .map(show => ({
+        ...show,
+        trendingScore: show.view_count + (show.votes * 5) // Weight votes more heavily
+      }))
+      .sort((a, b) => b.trendingScore - a.trendingScore)
+      .slice(0, limit);
 
     console.log(`Found ${trendingShows.length} trending shows`);
     return trendingShows;
@@ -137,30 +175,35 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
     }
 
     // Transform the data to ensure type safety
-    const popularShows: TrendingShow[] = (showsData || []).map(show => ({
-      id: show.id,
-      name: show.name,
-      date: show.date,
-      start_time: show.start_time,
-      ticketmaster_url: show.ticketmaster_url,
-      view_count: show.view_count,
-      votes: 0,
-      artist_name: (show.artists as any)?.name || 'Unknown Artist',
-      venue_name: (show.venues as any)?.name || 'Unknown Venue', 
-      venue_city: (show.venues as any)?.city || '',
-      artist: {
-        id: (show.artists as any)?.id || '',
-        name: (show.artists as any)?.name || 'Unknown Artist',
-        image_url: (show.artists as any)?.image_url
-      },
-      venue: {
-        id: (show.venues as any)?.id || '',
-        name: (show.venues as any)?.name || 'Unknown Venue',
-        city: (show.venues as any)?.city || '',
-        state: (show.venues as any)?.state,
-        country: (show.venues as any)?.country || ''
-      }
-    }));
+    const popularShows: TrendingShow[] = (showsData || []).map(show => {
+      const artist = show.artists as any;
+      const venue = show.venues as any;
+      
+      return {
+        id: show.id,
+        name: show.name,
+        date: show.date,
+        start_time: show.start_time,
+        ticketmaster_url: show.ticketmaster_url,
+        view_count: show.view_count,
+        votes: 0, // Will be calculated if needed
+        artist_name: artist?.name || 'Unknown Artist',
+        venue_name: venue?.name || 'Unknown Venue', 
+        venue_city: venue?.city || '',
+        artist: {
+          id: artist?.id || '',
+          name: artist?.name || 'Unknown Artist',
+          image_url: artist?.image_url
+        },
+        venue: {
+          id: venue?.id || '',
+          name: venue?.name || 'Unknown Venue',
+          city: venue?.city || '',
+          state: venue?.state,
+          country: venue?.country || ''
+        }
+      };
+    });
 
     console.log(`Found ${popularShows.length} popular shows`);
     return popularShows;
@@ -173,16 +216,31 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
 // Increment view count for a show
 export async function incrementShowViews(showId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('shows')
-      .update({ 
-        view_count: (await supabase.from('shows').select('view_count').eq('id', showId).single()).data?.view_count + 1 || 1
-      })
-      .eq('id', showId);
+    // Use a database function to atomically increment the view count
+    const { error } = await supabase.rpc('increment_show_views', {
+      show_id: showId
+    });
 
     if (error) {
       console.error("Error incrementing view count:", error);
-      return false;
+      // Fallback to manual increment
+      const { data: currentShow } = await supabase
+        .from('shows')
+        .select('view_count')
+        .eq('id', showId)
+        .single();
+
+      if (currentShow) {
+        const { error: updateError } = await supabase
+          .from('shows')
+          .update({ view_count: currentShow.view_count + 1 })
+          .eq('id', showId);
+
+        if (updateError) {
+          console.error("Fallback increment failed:", updateError);
+          return false;
+        }
+      }
     }
 
     return true;

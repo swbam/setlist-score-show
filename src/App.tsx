@@ -12,7 +12,7 @@ import IndexPage from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import SearchResults from "./pages/SearchResults";
 import ArtistPage from "./pages/ArtistPage";
-import ShowVoting from "./pages/ShowVoting";
+import ShowVoting from "./pages/ShowVoting/ShowVoting";
 import AuthCallback from "./pages/AuthCallback";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
@@ -38,7 +38,7 @@ function App() {
           <Route path="/artist/:artistId" element={<ArtistPage />} />
           <Route path="/artists/:artistId/:artistSlug" element={<ArtistPage />} />
           
-          {/* SEO-friendly URL structure for shows */}
+          {/* SEO-friendly URL structure for shows - consolidated routing */}
           <Route path="/show/:showId" element={<ShowVoting />} />
           <Route path="/events/:showId/:showSlug" element={<ShowVoting />} />
           

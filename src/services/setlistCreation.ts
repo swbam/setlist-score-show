@@ -1,77 +1,54 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { importArtistCatalog } from "@/services/spotify";
+import * as spotifyService from "./spotify";
 
-export interface SetlistCreationResult {
-  success: boolean;
-  message: string;
-  setlistId?: string;
-  songsAdded?: number;
-}
-
-/**
- * Create a setlist for a show with 5 random songs from the artist's catalog
- */
-export const createSetlistForShow = async (showId: string): Promise<SetlistCreationResult> => {
+// Ensure a setlist exists for a given show, creating one if necessary
+export async function ensureSetlistExists(showId: string): Promise<string | null> {
   try {
-    console.log(`Creating setlist for show ${showId}`);
-
-    // Check if setlist already exists
-    const { data: existingSetlist } = await supabase
+    console.log("Checking if setlist exists for show:", showId);
+    
+    // First check if a setlist already exists for this show
+    const { data: existingSetlist, error: setlistError } = await supabase
       .from('setlists')
       .select('id')
       .eq('show_id', showId)
       .maybeSingle();
 
+    if (setlistError) {
+      console.error("Error checking existing setlist:", setlistError);
+      return null;
+    }
+
     if (existingSetlist) {
-      return {
-        success: true,
-        message: 'Setlist already exists',
-        setlistId: existingSetlist.id
-      };
+      console.log("Found existing setlist:", existingSetlist.id);
+      
+      // Check if it has songs
+      const { data: existingSongs, error: songsError } = await supabase
+        .from('setlist_songs')
+        .select('id')
+        .eq('setlist_id', existingSetlist.id)
+        .limit(1);
+
+      if (songsError) {
+        console.error("Error checking existing songs:", songsError);
+        return existingSetlist.id; // Return the setlist ID even if we can't check songs
+      }
+
+      if (existingSongs && existingSongs.length > 0) {
+        console.log("Setlist already has songs, returning existing setlist");
+        return existingSetlist.id;
+      }
+
+      // Setlist exists but has no songs, we'll add them
+      console.log("Setlist exists but has no songs, adding songs...");
+      const songsAdded = await addSongsToSetlist(existingSetlist.id, showId);
+      return songsAdded ? existingSetlist.id : null;
     }
 
-    // Get show and artist information
-    const { data: show } = await supabase
-      .from('shows')
-      .select(`
-        id,
-        artist_id,
-        artists!shows_artist_id_fkey(id, name)
-      `)
-      .eq('id', showId)
-      .single();
-
-    if (!show) {
-      return {
-        success: false,
-        message: 'Show not found'
-      };
-    }
-
-    // Ensure artist has song catalog
-    await importArtistCatalog(show.artist_id);
-
-    // Get random songs from artist's catalog
-    const { data: artistSongs } = await supabase
-      .from('songs')
-      .select('id, name, popularity')
-      .eq('artist_id', show.artist_id)
-      .order('popularity', { ascending: false })
-      .limit(50); // Get top 50 songs to choose from
-
-    if (!artistSongs || artistSongs.length === 0) {
-      return {
-        success: false,
-        message: 'No songs found for artist'
-      };
-    }
-
-    // Select 5 random songs (with bias towards popular songs)
-    const selectedSongs = selectRandomSongs(artistSongs, 5);
-
-    // Create setlist
-    const { data: newSetlist, error: setlistError } = await supabase
+    // No setlist exists, create a new one
+    console.log("Creating new setlist for show:", showId);
+    
+    const { data: newSetlist, error: createError } = await supabase
       .from('setlists')
       .insert({
         show_id: showId
@@ -79,104 +56,155 @@ export const createSetlistForShow = async (showId: string): Promise<SetlistCreat
       .select('id')
       .single();
 
-    if (setlistError || !newSetlist) {
-      console.error('Error creating setlist:', setlistError);
-      return {
-        success: false,
-        message: 'Failed to create setlist'
-      };
+    if (createError) {
+      console.error("Error creating setlist:", createError);
+      return null;
     }
 
-    // Add songs to setlist
-    const setlistSongs = selectedSongs.map((song, index) => ({
-      setlist_id: newSetlist.id,
+    if (!newSetlist) {
+      console.error("No setlist returned after creation");
+      return null;
+    }
+
+    console.log("Created new setlist:", newSetlist.id);
+
+    // Add initial songs to the new setlist
+    const songsAdded = await addSongsToSetlist(newSetlist.id, showId);
+    return songsAdded ? newSetlist.id : null;
+
+  } catch (error) {
+    console.error("Error in ensureSetlistExists:", error);
+    return null;
+  }
+}
+
+// Add initial songs to a setlist
+async function addSongsToSetlist(setlistId: string, showId: string): Promise<boolean> {
+  try {
+    console.log("Adding songs to setlist:", setlistId);
+    
+    // Get the artist ID from the show
+    const { data: showData, error: showError } = await supabase
+      .from('shows')
+      .select('artist_id')
+      .eq('id', showId)
+      .single();
+
+    if (showError || !showData) {
+      console.error("Error fetching show data:", showError);
+      return false;
+    }
+
+    const artistId = showData.artist_id;
+    console.log("Artist ID for show:", artistId);
+
+    // Get songs for this artist from the database
+    const { data: artistSongs, error: songsError } = await supabase
+      .from('songs')
+      .select('id, name, album, popularity')
+      .eq('artist_id', artistId)
+      .order('popularity', { ascending: false })
+      .limit(20); // Get top 20 songs to choose from
+
+    if (songsError) {
+      console.error("Error fetching artist songs:", songsError);
+      return false;
+    }
+
+    if (!artistSongs || artistSongs.length === 0) {
+      console.log("No songs found in database, importing from Spotify...");
+      
+      // Try to import the artist's catalog first
+      const catalogImported = await spotifyService.importArtistCatalog(artistId);
+      if (!catalogImported) {
+        console.error("Failed to import artist catalog");
+        return false;
+      }
+
+      // Try to fetch songs again after import
+      const { data: importedSongs, error: importedSongsError } = await supabase
+        .from('songs')
+        .select('id, name, album, popularity')
+        .eq('artist_id', artistId)
+        .order('popularity', { ascending: false })
+        .limit(20);
+
+      if (importedSongsError || !importedSongs || importedSongs.length === 0) {
+        console.error("Still no songs found after import:", importedSongsError);
+        return false;
+      }
+
+      artistSongs.push(...importedSongs);
+    }
+
+    console.log(`Found ${artistSongs.length} songs for artist`);
+
+    // Randomly select 5 songs from the available songs
+    const shuffledSongs = [...artistSongs].sort(() => Math.random() - 0.5);
+    const selectedSongs = shuffledSongs.slice(0, Math.min(5, shuffledSongs.length));
+
+    console.log(`Selected ${selectedSongs.length} songs for initial setlist`);
+
+    // Insert the selected songs into the setlist
+    const setlistSongsToInsert = selectedSongs.map((song, index) => ({
+      setlist_id: setlistId,
       song_id: song.id,
       position: index + 1,
       votes: 0
     }));
 
-    const { error: songsError } = await supabase
+    const { error: insertError } = await supabase
       .from('setlist_songs')
-      .insert(setlistSongs);
+      .insert(setlistSongsToInsert);
 
-    if (songsError) {
-      console.error('Error adding songs to setlist:', songsError);
-      return {
-        success: false,
-        message: 'Failed to add songs to setlist'
-      };
+    if (insertError) {
+      console.error("Error inserting setlist songs:", insertError);
+      return false;
     }
 
-    console.log(`Created setlist with ${selectedSongs.length} songs for show ${showId}`);
-
-    return {
-      success: true,
-      message: `Setlist created with ${selectedSongs.length} songs`,
-      setlistId: newSetlist.id,
-      songsAdded: selectedSongs.length
-    };
+    console.log(`Successfully added ${selectedSongs.length} songs to setlist`);
+    return true;
 
   } catch (error) {
-    console.error('Error creating setlist for show:', error);
-    return {
-      success: false,
-      message: 'Failed to create setlist'
-    };
+    console.error("Error in addSongsToSetlist:", error);
+    return false;
   }
-};
-
-/**
- * Select random songs with bias towards more popular songs
- */
-function selectRandomSongs(songs: any[], count: number) {
-  if (songs.length <= count) {
-    return songs;
-  }
-
-  // Create weighted array based on popularity
-  const weightedSongs = songs.flatMap(song => {
-    const weight = Math.max(1, Math.floor(song.popularity / 20)); // Higher popularity = more weight
-    return Array(weight).fill(song);
-  });
-
-  const selected = new Set();
-  const result = [];
-
-  while (result.length < count && selected.size < songs.length) {
-    const randomIndex = Math.floor(Math.random() * weightedSongs.length);
-    const song = weightedSongs[randomIndex];
-    
-    if (!selected.has(song.id)) {
-      selected.add(song.id);
-      result.push(song);
-    }
-  }
-
-  return result;
 }
 
-/**
- * Ensure setlist exists for a show, create if needed
- */
-export const ensureSetlistExists = async (showId: string): Promise<string | null> => {
+// Get setlist for a show
+export async function getSetlistForShow(showId: string) {
   try {
-    // Check if setlist exists
-    const { data: setlist } = await supabase
+    const { data: setlist, error } = await supabase
       .from('setlists')
-      .select('id')
+      .select(`
+        id,
+        show_id,
+        created_at,
+        updated_at,
+        setlist_songs (
+          id,
+          song_id,
+          votes,
+          position,
+          songs (
+            id,
+            name,
+            album,
+            spotify_url
+          )
+        )
+      `)
       .eq('show_id', showId)
-      .maybeSingle();
+      .single();
 
-    if (setlist) {
-      return setlist.id;
+    if (error) {
+      console.error("Error fetching setlist:", error);
+      return null;
     }
 
-    // Create setlist if it doesn't exist
-    const result = await createSetlistForShow(showId);
-    return result.success ? result.setlistId || null : null;
-
+    return setlist;
   } catch (error) {
-    console.error('Error ensuring setlist exists:', error);
+    console.error("Error in getSetlistForShow:", error);
     return null;
   }
-};
+}
