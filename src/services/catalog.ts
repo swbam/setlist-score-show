@@ -1,7 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
-import { toast } from "@/components/ui/sonner";
+import { importFullArtistCatalog } from "@/services/catalogImport";
 
 /**
  * Synchronizes an artist's catalog from Spotify and stores it in the database
@@ -219,4 +218,107 @@ export async function getRandomSongsForSetlist(artistId: string, count: number =
     console.error("Error getting random songs for setlist:", error);
     return [];
   }
+}
+
+/**
+ * Enhanced catalog sync that uses the new full import system
+ */
+export async function syncArtistCatalogEnhanced(
+  artistId: string, 
+  forceUpdate: boolean = false,
+  useFullImport: boolean = false
+): Promise<boolean> {
+  try {
+    if (!artistId) {
+      console.error("Invalid artist ID");
+      return false;
+    }
+    
+    console.log(`Syncing catalog for artist: ${artistId} (full import: ${useFullImport})`);
+    
+    // Check if we've already imported this artist's catalog recently
+    if (!forceUpdate) {
+      const { data: artist, error: artistError } = await supabase
+        .from('artists')
+        .select('last_synced_at')
+        .eq('id', artistId)
+        .maybeSingle();
+      
+      // If we have this artist and they were synced less than 7 days ago, skip
+      if (artist && artist.last_synced_at) {
+        const lastSynced = new Date(artist.last_synced_at);
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        if (lastSynced > sevenDaysAgo) {
+          console.log(`Artist ${artistId} was synced recently (${lastSynced.toISOString()}), skipping catalog import`);
+          return true;
+        }
+      }
+    }
+    
+    if (useFullImport) {
+      // Use the new full import system
+      const result = await importFullArtistCatalog(artistId);
+      return result.success;
+    } else {
+      // Use the existing sync method for backward compatibility
+      return await syncArtistCatalog(artistId, forceUpdate);
+    }
+  } catch (error) {
+    console.error(`Error syncing catalog for artist: ${artistId}`, error);
+    return false;
+  }
+}
+
+/**
+ * Get catalog statistics for multiple artists
+ */
+export async function getMultipleArtistStats(artistIds: string[]): Promise<{
+  [artistId: string]: {
+    totalSongs: number;
+    lastSynced: string | null;
+    needsSync: boolean;
+  }
+}> {
+  const stats: { [artistId: string]: any } = {};
+  
+  for (const artistId of artistIds) {
+    try {
+      // Get song count
+      const { count } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact', head: true })
+        .eq('artist_id', artistId);
+
+      // Get last sync date
+      const { data: artist } = await supabase
+        .from('artists')
+        .select('last_synced_at')
+        .eq('id', artistId)
+        .single();
+
+      const lastSynced = artist?.last_synced_at || null;
+      
+      // Check if needs sync (older than 7 days or no songs)
+      const needsSync = !lastSynced || 
+        new Date(lastSynced) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) ||
+        (count || 0) === 0;
+
+      stats[artistId] = {
+        totalSongs: count || 0,
+        lastSynced,
+        needsSync
+      };
+    } catch (error) {
+      console.error(`Error getting stats for artist ${artistId}:`, error);
+      stats[artistId] = {
+        totalSongs: 0,
+        lastSynced: null,
+        needsSync: true
+      };
+    }
+  }
+  
+  return stats;
 }
