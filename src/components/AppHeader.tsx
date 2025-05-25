@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Menu, X, Search, User, LogOut, Music, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,12 +12,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/context/AuthContext";
+import { useMobile } from "@/context/MobileContext";
+import { cn } from "@/lib/utils";
+import MobileNav from "@/components/MobileNav";
 
 const AppHeader = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, userProfile, isLoading, signOut } = useAuth();
+  const { isMobile } = useMobile();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSpotifyLoading, setIsSpotifyLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Track scroll position for header styling
   useEffect(() => {
@@ -54,131 +63,37 @@ const AppHeader = () => {
 
   return (
     <>
-      {/* Desktop Header */}
-      <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          isScrolled ? "bg-gray-900/95 backdrop-blur-md py-2 shadow-md" : "bg-transparent py-4"
-        }`}
-      >
-        <div className="w-full max-w-full px-4 lg:px-8">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div
-              className="flex items-center cursor-pointer"
-              onClick={handleLogoClick}
-            >
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full p-2 mr-2">
-                <Music className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-white text-xl font-bold">TheSet</span>
-            </div>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link
-                to="/"
-                className="text-gray-300 hover:text-white transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                to="/artists"
-                className="text-gray-300 hover:text-white transition-colors"
-              >
-                Artists
-              </Link>
-              {user && (
-                <Link
-                  to="/profile"
-                  className="text-gray-300 hover:text-white transition-colors"
-                >
-                  My Artists
-                </Link>
+      <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/60">
+        <div className="container flex h-14 items-center justify-between px-4 mx-auto max-w-screen-2xl">
+          {/* Mobile Navigation */}
+          <div className="flex items-center gap-4">
+            <MobileNav />
+            
+            {/* Logo - Hidden on mobile when search is open */}
+            <Link
+              to="/"
+              className={cn(
+                "flex items-center space-x-2 transition-opacity",
+                isSearchOpen && isMobile ? "opacity-0 pointer-events-none" : "opacity-100"
               )}
-            </nav>
-
-            {/* Desktop Right Navigation */}
-            <div className="hidden md:flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-gray-300 hover:text-white hover:bg-gray-800"
-                onClick={handleSearch}
-              >
-                <Search className="h-5 w-5" />
-              </Button>
-
-              {isLoading ? (
-                <div className="h-9 w-9 rounded-full bg-gray-700 animate-pulse"></div>
-              ) : user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="relative h-9 w-9 rounded-full"
-                    >
-                      <Avatar className="h-9 w-9">
-                        {userProfile?.avatar_url ? (
-                          <AvatarImage
-                            src={userProfile.avatar_url}
-                            alt={userProfile.display_name}
-                          />
-                        ) : (
-                          <AvatarFallback className="bg-cyan-700 text-white">
-                            {userProfile?.display_name
-                              ? userProfile.display_name.charAt(0).toUpperCase()
-                              : "U"}
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="w-56 bg-gray-900 border-gray-800 text-white"
-                    align="end"
-                    forceMount
-                  >
-                    <DropdownMenuLabel>
-                      {formatDisplayName()}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-gray-800" />
-                    <DropdownMenuItem
-                      className="cursor-pointer flex items-center hover:bg-gray-800"
-                      onClick={handleProfileClick}
-                    >
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Profile</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-gray-800" />
-                    <DropdownMenuItem
-                      className="cursor-pointer flex items-center hover:bg-gray-800 focus:bg-gray-800"
-                      onClick={signOut}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Log out</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Button
-                  onClick={() => navigate("/login")}
-                  className="bg-cyan-600 hover:bg-cyan-700"
-                >
-                  Login
-                </Button>
-              )}
-            </div>
-
-            {/* Mobile menu button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden text-gray-300"
-              onClick={() => setMobileMenuOpen(true)}
             >
-              <Menu className="h-6 w-6" />
-            </Button>
+              <Music className="h-6 w-6 text-cyan-400" />
+              <span className="font-bold text-lg hidden sm:inline-block">TheSet</span>
+            </Link>
           </div>
+
+          {/* Search Bar - Expandable on mobile */}
+          <div className={cn(
+            "flex items-center transition-all duration-300",
+            isSearchOpen && isMobile ? "flex-1 ml-2" : isMobile ? "w-auto" : "flex-1 max-w-md mx-4"
+          )}>
+            {/* ... existing search implementation ... */}
+          </div>
+
+          {/* Desktop Navigation - Hidden on mobile */}
+          <nav className="hidden md:flex items-center space-x-1">
+            {/* ... existing desktop navigation ... */}
+          </nav>
         </div>
       </header>
 

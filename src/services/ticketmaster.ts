@@ -2,7 +2,12 @@ import { supabase } from "@/integrations/supabase/client";
 import * as artistMapping from "./artistMapping";
 
 // Ticketmaster API key
-const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
+const TICKETMASTER_API_KEY = import.meta.env.VITE_TICKETMASTER_API_KEY;
+
+// Validate that required environment variable is set
+if (!TICKETMASTER_API_KEY) {
+  console.error("Ticketmaster API key is not configured. Please set VITE_TICKETMASTER_API_KEY environment variable.");
+}
 
 // Types for Ticketmaster API responses
 export interface TicketmasterVenue {

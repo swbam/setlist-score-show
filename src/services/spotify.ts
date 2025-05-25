@@ -1,10 +1,14 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Spotify API endpoints
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
-const SPOTIFY_CLIENT_ID = "2946864dc822469b9c672292ead45f43";
-const SPOTIFY_CLIENT_SECRET = "feaf0fc901124b839b11e02f97d18a8d";
+const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = import.meta.env.VITE_SPOTIFY_CLIENT_SECRET;
+
+// Validate that required environment variables are set
+if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+  console.error("Spotify API credentials are not configured. Please set VITE_SPOTIFY_CLIENT_ID and VITE_SPOTIFY_CLIENT_SECRET environment variables.");
+}
 
 // Types for Spotify API responses
 export interface SpotifyArtist {

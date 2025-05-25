@@ -1,8 +1,12 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Setlist.fm API key
-const SETLISTFM_API_KEY = "xkutflW-aRy_Df9rF4OkJyCsHBYN88V37EBL";
+const SETLISTFM_API_KEY = import.meta.env.VITE_SETLISTFM_API_KEY;
+
+// Validate that required environment variable is set
+if (!SETLISTFM_API_KEY) {
+  console.error("Setlist.fm API key is not configured. Please set VITE_SETLISTFM_API_KEY environment variable.");
+}
 
 // Types for Setlist.fm API responses
 export interface SetlistFmSong {

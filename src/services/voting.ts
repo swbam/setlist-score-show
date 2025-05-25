@@ -1,4 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { SetlistSong } from "@/types";
+import { toast } from "sonner";
+import { withRateLimit, RATE_LIMITS } from "@/utils/rateLimiter";
 
 // Types for voting
 export interface VoteRecord {
@@ -158,67 +161,54 @@ export async function checkVoteStatus(
   }
 }
 
-// Submit a vote for a song
-export async function submitVote(
-  userId: string,
-  setlistSongId: string,
-  setlistId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Check if user can vote
-    const voteStatus = await checkVoteStatus(userId, setlistId, setlistSongId);
-    
-    if (!voteStatus.canVote) {
-      if (voteStatus.hasVoted) {
-        return { success: false, error: "You've already voted for this song" };
+// Wrap the vote function with rate limiting
+const voteWithRateLimit = withRateLimit(
+  async (setlistSongId: string, userId?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Check if user is authenticated
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          return { success: false, error: "You must be logged in to vote" };
+        }
+        userId = user.id;
       }
-      return { success: false, error: "You've reached your vote limit for this show" };
-    }
-    
-    // Start a transaction-like operation
-    // First, insert the vote
-    const { error: voteError } = await supabase
-      .from('votes')
-      .insert({
-        user_id: userId,
-        setlist_song_id: setlistSongId
-      });
-      
-    if (voteError) {
-      console.error("Error inserting vote:", voteError);
-      return { success: false, error: "Failed to submit vote" };
-    }
-    
-    // Then, increment the vote count on the setlist song
-    const { data: currentSong, error: fetchError } = await supabase
-      .from('setlist_songs')
-      .select('votes')
-      .eq('id', setlistSongId)
-      .single();
-      
-    if (fetchError) {
-      console.error("Error fetching current votes:", fetchError);
-      // Vote was recorded but count update failed - not critical
+
+      // Call the vote_for_song database function
+      const { data, error } = await supabase
+        .rpc('vote_for_song', { setlist_song_id: setlistSongId });
+
+      if (error) {
+        console.error("Error voting:", error);
+        if (error.message.includes('Already voted')) {
+          return { success: false, error: "You've already voted for this song" };
+        }
+        return { success: false, error: "Failed to vote" };
+      }
+
+      // Type guard for the response
+      if (data && typeof data === 'object' && 'success' in data) {
+        const result = data as { success: boolean; error?: string };
+        if (!result.success) {
+          return { success: false, error: result.error || "Failed to vote" };
+        }
+      }
+
       return { success: true };
+    } catch (error) {
+      console.error("Error in vote function:", error);
+      return { success: false, error: "An unexpected error occurred" };
     }
-    
-    const newVoteCount = (currentSong.votes || 0) + 1;
-    
-    const { error: updateError } = await supabase
-      .from('setlist_songs')
-      .update({ votes: newVoteCount })
-      .eq('id', setlistSongId);
-      
-    if (updateError) {
-      console.error("Error updating vote count:", updateError);
-      // Vote was recorded but count update failed - not critical
-    }
-    
-    return { success: true };
-  } catch (error) {
-    console.error("Error in submitVote:", error);
-    return { success: false, error: "An unexpected error occurred" };
+  },
+  { ...RATE_LIMITS.VOTING, key: 'voting' },
+  () => {
+    toast.error("You're voting too quickly. Please slow down.");
   }
+);
+
+// Export the rate-limited vote function
+export async function vote(setlistSongId: string, userId?: string): Promise<{ success: boolean; error?: string }> {
+  return voteWithRateLimit(setlistSongId, userId);
 }
 
 // Remove a vote (for future undo functionality)

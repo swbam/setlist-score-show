@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { format, isValid } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import * as trendingService from "@/services/trending";
 import { useMobile } from '@/context/MobileContext';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 interface TrendingShow {
   id: string;
@@ -72,7 +72,8 @@ const TrendingShows = () => {
   };
 
   if (loading) {
-    return <section className="py-10">
+    return (
+      <section className="py-10">
         <div className="container mx-auto max-w-7xl px-4">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-3xl font-bold text-white">Trending Shows</h2>
@@ -86,18 +87,11 @@ const TrendingShows = () => {
             </div>
           </div>
           <div className={`grid grid-cols-1 ${isMobile ? 'grid-cols-1 sm:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-4'} gap-6`}>
-            {[1, 2, 3, 4].map(item => <Card key={item} className="bg-transparent border-gray-800 animate-pulse">
-                <div className="h-48 bg-gray-900"></div>
-                <CardContent className="p-5">
-                  <div className="h-4 bg-gray-800 rounded w-3/4 mb-4"></div>
-                  <div className="h-3 bg-gray-800 rounded w-1/2 mb-2"></div>
-                  <div className="h-3 bg-gray-800 rounded w-5/6 mb-2"></div>
-                  <div className="h-3 bg-gray-800 rounded w-1/4"></div>
-                </CardContent>
-              </Card>)}
+            <LoadingSkeleton type="show-card" count={isMobile ? 4 : 6} />
           </div>
         </div>
-      </section>;
+      </section>
+    );
   }
   
   if (shows.length === 0) {
