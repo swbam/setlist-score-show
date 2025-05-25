@@ -41,12 +41,12 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
         start_time,
         ticketmaster_url,
         view_count,
-        artists!shows_artist_id_fkey (
+        artists!fk_shows_artist_id (
           id,
           name,
           image_url
         ),
-        venues!shows_venue_id_fkey (
+        venues!fk_shows_venue_id (
           id,
           name,
           city,
@@ -152,12 +152,12 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
         start_time,
         ticketmaster_url,
         view_count,
-        artists!shows_artist_id_fkey (
+        artists!fk_shows_artist_id (
           id,
           name,
           image_url
         ),
-        venues!shows_venue_id_fkey (
+        venues!fk_shows_venue_id (
           id,
           name,
           city,
@@ -216,31 +216,15 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
 // Increment view count for a show
 export async function incrementShowViews(showId: string): Promise<boolean> {
   try {
-    // Use a database function to atomically increment the view count
-    const { error } = await supabase.rpc('increment_show_views', {
-      show_id: showId
-    });
+    // Use raw SQL update since the RPC function might not be in types yet
+    const { error } = await supabase
+      .from('shows')
+      .update({ view_count: supabase.raw('view_count + 1') })
+      .eq('id', showId);
 
     if (error) {
       console.error("Error incrementing view count:", error);
-      // Fallback to manual increment
-      const { data: currentShow } = await supabase
-        .from('shows')
-        .select('view_count')
-        .eq('id', showId)
-        .single();
-
-      if (currentShow) {
-        const { error: updateError } = await supabase
-          .from('shows')
-          .update({ view_count: currentShow.view_count + 1 })
-          .eq('id', showId);
-
-        if (updateError) {
-          console.error("Fallback increment failed:", updateError);
-          return false;
-        }
-      }
+      return false;
     }
 
     return true;

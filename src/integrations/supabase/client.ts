@@ -17,3 +17,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     }
   }
 });
+
+// Define additional RPC functions that aren't in the generated types
+export interface SupabaseRPCFunctions {
+  increment_show_views: (args: { show_id: string }) => void;
+  create_setlist_with_songs: (args: { p_show_id: string }) => { setlist_id: string; songs_added: number }[];
+}

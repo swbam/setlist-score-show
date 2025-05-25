@@ -1,64 +1,58 @@
 
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { ensureSetlistExists } from "@/services/setlistCreation";
-import { incrementShowViews } from "@/services/trending";
-import { useAuth } from "@/context/AuthContext";
-import AppHeader from "@/components/AppHeader";
-import ShowHeader from "./ShowHeader";
-import VotingSection from "./VotingSection";
-import Sidebar from "./Sidebar";
-import { Show, SetlistSong } from "./types";
-import { toast } from "@/components/ui/sonner";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/sonner';
+import { incrementShowViews } from '@/services/trending';
+import { ensureSetlistExists } from '@/services/setlistCreation';
+import ShowHeader from './ShowHeader';
+import VotingSection from './VotingSection';
+import Sidebar from './Sidebar';
+import { Show, SetlistSong } from './types';
 
 const ShowVoting = () => {
   const { showId } = useParams<{ showId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [show, setShow] = useState<Show | null>(null);
   const [setlistSongs, setSetlistSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [usedVotesCount, setUsedVotesCount] = useState(0);
-  const maxFreeVotes = 5;
+  const maxFreeVotes = 10;
 
   useEffect(() => {
-    if (!showId) {
-      setError("Show ID is required");
-      setLoading(false);
-      return;
+    if (showId) {
+      fetchShowData();
+      
+      // Get current user
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        setUser(user);
+      });
     }
-
-    fetchShowAndSetlist();
-    
-    // Increment view count
-    incrementShowViews(showId).catch(err => 
-      console.error("Failed to increment view count:", err)
-    );
   }, [showId]);
 
-  const fetchShowAndSetlist = async () => {
+  const fetchShowData = async () => {
     if (!showId) return;
-    
-    setLoading(true);
-    setError(null);
 
     try {
+      setLoading(true);
       console.log("Fetching show data for ID:", showId);
-      
-      // Fetch show data with proper joins
+
+      // Increment view count
+      await incrementShowViews(showId);
+
+      // Fetch show details with proper relationship names
       const { data: showData, error: showError } = await supabase
         .from('shows')
         .select(`
           *,
-          artists!shows_artist_id_fkey (
+          artists!fk_shows_artist_id (
             id,
             name,
             image_url
           ),
-          venues!shows_venue_id_fkey (
+          venues!fk_shows_venue_id (
             id,
             name,
             city,
@@ -71,19 +65,21 @@ const ShowVoting = () => {
 
       if (showError) {
         console.error("Error fetching show:", showError);
-        setError("Show not found or failed to load");
+        toast("Failed to load show details");
         return;
       }
 
       if (!showData) {
-        setError("Show not found");
+        console.error("No show data found");
+        toast("Show not found");
+        navigate('/');
         return;
       }
 
-      // Transform show data to match expected format
+      // Transform show data
       const transformedShow: Show = {
         id: showData.id,
-        name: showData.name || `${showData.artists?.name} Concert`,
+        name: showData.name,
         date: showData.date,
         start_time: showData.start_time,
         status: showData.status,
@@ -105,12 +101,13 @@ const ShowVoting = () => {
 
       setShow(transformedShow);
 
-      // Ensure setlist exists and get setlist ID
+      // Ensure setlist exists for this show (creates with 5 random songs if needed)
       console.log("Ensuring setlist exists for show:", showId);
       const setlistId = await ensureSetlistExists(showId);
       
       if (!setlistId) {
-        setError("Failed to create or find setlist for this show");
+        console.error("Failed to create or get setlist");
+        toast("Failed to load voting data");
         return;
       }
 
@@ -120,8 +117,12 @@ const ShowVoting = () => {
       const { data: setlistData, error: setlistError } = await supabase
         .from('setlist_songs')
         .select(`
-          *,
-          songs!setlist_songs_song_id_fkey (
+          id,
+          setlist_id,
+          song_id,
+          position,
+          votes,
+          songs!fk_setlist_songs_song_id (
             id,
             name,
             album,
@@ -129,11 +130,12 @@ const ShowVoting = () => {
           )
         `)
         .eq('setlist_id', setlistId)
-        .order('votes', { ascending: false });
+        .order('votes', { ascending: false })
+        .order('position', { ascending: true });
 
       if (setlistError) {
-        console.error("Error fetching setlist:", setlistError);
-        setError("Failed to load setlist songs");
+        console.error("Error fetching setlist songs:", setlistError);
+        toast("Failed to load setlist");
         return;
       }
 
@@ -142,128 +144,130 @@ const ShowVoting = () => {
           id: item.id,
           setlist_id: item.setlist_id,
           song_id: item.song_id,
-          votes: item.votes,
           position: item.position,
-          userVoted: false, // Will be updated when we check user votes
+          votes: item.votes,
           song: {
             id: item.songs?.id || '',
             name: item.songs?.name || 'Unknown Song',
-            artist_id: transformedShow.artist.id,
-            album: item.songs?.album || '',
+            album: item.songs?.album || 'Unknown Album',
             spotify_url: item.songs?.spotify_url || ''
           }
         }));
         
         setSetlistSongs(transformedSetlist);
       } else {
+        console.log("No setlist songs found, setlist may be empty");
         setSetlistSongs([]);
       }
 
       // Fetch user's vote count if logged in
       if (user) {
-        const { data: userVotes } = await supabase
+        const { data: voteCount } = await supabase
           .from('votes')
-          .select('id')
+          .select('id', { count: 'exact' })
           .eq('user_id', user.id);
         
-        setUsedVotesCount(userVotes?.length || 0);
+        setUsedVotesCount(voteCount?.length || 0);
       }
 
-    } catch (err) {
-      console.error("Error in fetchShowAndSetlist:", err);
-      setError("An unexpected error occurred while loading the show");
+    } catch (error) {
+      console.error("Error in fetchShowData:", error);
+      toast("Failed to load show data");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVote = async (setlistSongId: string) => {
+  const handleVote = async (setlistSongId: string): Promise<boolean> => {
     if (!user) {
-      toast.error("Please log in to vote");
-      return;
+      toast("Please log in to vote");
+      return false;
     }
 
     if (usedVotesCount >= maxFreeVotes) {
-      toast.error("You've reached your vote limit");
-      return;
+      toast("You've reached your vote limit");
+      return false;
     }
 
-    setSubmitting(setlistSongId);
-
     try {
-      // Optimistically update UI
-      setSetlistSongs(prev => prev.map(song =>
-        song.id === setlistSongId ? { ...song, votes: song.votes + 1, userVoted: true } : song
-      ));
-      setUsedVotesCount(prev => prev + 1);
+      setSubmitting(setlistSongId);
 
-      // Call vote function
-      const { error } = await supabase.rpc('vote_for_song', {
+      // Optimistically update UI
+      setSetlistSongs(prevSongs => 
+        prevSongs.map(song => 
+          song.id === setlistSongId 
+            ? { ...song, votes: song.votes + 1 } 
+            : song
+        ).sort((a, b) => b.votes - a.votes)
+      );
+
+      const { data, error } = await supabase.rpc('vote_for_song', {
         setlist_song_id: setlistSongId
       });
 
       if (error) {
-        console.error("Error voting:", error);
-        
         // Revert optimistic update
-        setSetlistSongs(prev => prev.map(song =>
-          song.id === setlistSongId ? { ...song, votes: song.votes - 1, userVoted: false } : song
-        ));
-        setUsedVotesCount(prev => prev - 1);
+        setSetlistSongs(prevSongs => 
+          prevSongs.map(song => 
+            song.id === setlistSongId 
+              ? { ...song, votes: Math.max(0, song.votes - 1) } 
+              : song
+          )
+        );
         
-        toast.error("Failed to vote. Please try again.");
-      } else {
-        toast.success("Vote recorded!");
+        if (error.message.includes("Already voted")) {
+          toast("You already voted for this song");
+        } else {
+          console.error("Vote error:", error);
+          toast("Failed to vote. Please try again.");
+        }
+        return false;
       }
-    } catch (err) {
-      console.error("Error voting:", err);
-      
-      // Revert optimistic update
-      setSetlistSongs(prev => prev.map(song =>
-        song.id === setlistSongId ? { ...song, votes: song.votes - 1, userVoted: false } : song
-      ));
-      setUsedVotesCount(prev => prev - 1);
-      
-      toast.error("An unexpected error occurred");
+
+      const voteResponse = data as any;
+      if (voteResponse && voteResponse.success) {
+        setUsedVotesCount(prev => prev + 1);
+        toast("Your vote has been counted!");
+        return true;
+      } else {
+        toast(voteResponse?.message || "Failed to vote");
+        return false;
+      }
+    } catch (error) {
+      console.error("Error voting:", error);
+      toast("Failed to vote. Please try again.");
+      return false;
     } finally {
       setSubmitting(null);
     }
   };
 
-  const handleSongAdded = () => {
-    // Refresh the setlist when a new song is added
-    fetchShowAndSetlist();
+  const handleSongAdded = async () => {
+    // Refresh setlist after song is added
+    await fetchShowData();
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
-        <AppHeader />
         <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
-          <div className="animate-pulse space-y-6">
-            <div className="h-64 bg-gray-800 rounded-lg" />
-            <div className="h-96 bg-gray-800 rounded-lg" />
+          <div className="flex items-center justify-center h-64">
+            <div className="text-white text-lg">Loading show...</div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || !show) {
+  if (!show) {
     return (
       <div className="min-h-screen bg-black">
-        <AppHeader />
         <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
           <div className="text-center py-16">
-            <h1 className="text-2xl font-bold text-white mb-4">
-              {error || "Show Not Found"}
-            </h1>
-            <p className="text-gray-400 mb-6">
-              {error || "The show you're looking for doesn't exist."}
-            </p>
+            <h1 className="text-2xl font-bold text-white mb-4">Show Not Found</h1>
             <button 
-              onClick={() => navigate('/')}
-              className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black px-6 py-2 rounded-lg font-medium"
+              onClick={() => navigate('/')} 
+              className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded"
             >
               Back to Home
             </button>
@@ -275,12 +279,12 @@ const ShowVoting = () => {
 
   return (
     <div className="min-h-screen bg-black">
-      <AppHeader />
-      
-      <ShowHeader show={show} />
+      <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
+        {/* Show Header */}
+        <ShowHeader show={show} />
 
-      <div className="container mx-auto max-w-7xl px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
           {/* Main Voting Section */}
           <div className="lg:col-span-2">
             <VotingSection
