@@ -3,13 +3,13 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Show } from "./types";
 import { SetlistSong } from "./types";
-import { VotingSection } from "./VotingSection";
+import VotingSection from "./VotingSection";
 import Sidebar from "./Sidebar";
 import ShowHeader from "./ShowHeader";
 import AppHeader from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 
-interface RouteParams extends Record<string, string> {
+interface RouteParams extends Record<string, string | undefined> {
   showId: string;
 }
 
@@ -27,17 +27,17 @@ const ShowVoting = () => {
       setError(null);
 
       try {
-        // Fetch show data
+        // Fetch show data with proper column hints
         const { data: showData, error: showError } = await supabase
           .from('shows')
           .select(`
             *,
-            artist:artists (
+            artists!shows_artist_id_fkey (
               id,
               name,
               image_url
             ),
-            venue:venues (
+            venues!shows_venue_id_fkey (
               id,
               name,
               city,
@@ -59,14 +59,41 @@ const ShowVoting = () => {
           return;
         }
 
-        setShow(showData);
+        // Transform the data to match expected format
+        const transformedShow = {
+          ...showData,
+          artist: showData.artists ? {
+            id: showData.artists.id,
+            name: showData.artists.name,
+            image_url: showData.artists.image_url
+          } : {
+            id: '',
+            name: 'Unknown Artist',
+            image_url: ''
+          },
+          venue: showData.venues ? {
+            id: showData.venues.id,
+            name: showData.venues.name,
+            city: showData.venues.city,
+            state: showData.venues.state,
+            country: showData.venues.country
+          } : {
+            id: '',
+            name: 'Unknown Venue',
+            city: '',
+            state: '',
+            country: ''
+          }
+        };
 
-        // Fetch setlist songs
+        setShow(transformedShow);
+
+        // Fetch setlist songs with proper column hints
         const { data: setlistData, error: setlistError } = await supabase
           .from('setlist_songs')
           .select(`
             *,
-            song:songs (
+            songs!setlist_songs_song_id_fkey (
               id,
               name,
               artist_id,
@@ -84,10 +111,23 @@ const ShowVoting = () => {
         }
 
         if (setlistData) {
-          // Add userVoted property
+          // Transform setlist songs data
           const updatedSetlistSongs = setlistData.map(song => ({
             ...song,
-            userVoted: false // Placeholder, implement actual logic later
+            userVoted: false, // Placeholder, implement actual logic later
+            song: song.songs ? {
+              id: song.songs.id,
+              name: song.songs.name,
+              artist_id: song.songs.artist_id,
+              album: song.songs.album,
+              spotify_url: song.songs.spotify_url
+            } : {
+              id: '',
+              name: 'Unknown Song',
+              artist_id: '',
+              album: '',
+              spotify_url: ''
+            }
           }));
           setSetlistSongs(updatedSetlistSongs);
         }
@@ -99,7 +139,9 @@ const ShowVoting = () => {
       }
     };
 
-    fetchShowAndSetlist();
+    if (showId) {
+      fetchShowAndSetlist();
+    }
   }, [showId]);
 
   const handleVote = async (setlistSongId: string) => {
@@ -111,9 +153,9 @@ const ShowVoting = () => {
       );
       setSetlistSongs(updatedSetlistSongs);
 
-      // Call Supabase function to handle the vote
-      const { error } = await supabase.functions.invoke('vote-for-song', {
-        body: { setlistSongId }
+      // Call Supabase RPC function to handle the vote
+      const { data, error } = await supabase.rpc('vote_for_song', {
+        setlist_song_id: setlistSongId
       });
 
       if (error) {

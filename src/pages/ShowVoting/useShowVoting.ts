@@ -23,13 +23,13 @@ export const useShowVoting = (showId: string | undefined) => {
     try {
       setLoading(true);
 
-      // Fetch show details
+      // Fetch show details with proper column hints
       const { data: show, error: showError } = await supabase
         .from('shows')
         .select(`
           *,
-          artist:artists(id, name, image_url),
-          venue:venues(id, name, city, state, country)
+          artists!shows_artist_id_fkey(id, name, image_url),
+          venues!shows_venue_id_fkey(id, name, city, state, country)
         `)
         .eq('id', showId)
         .single();
@@ -45,7 +45,24 @@ export const useShowVoting = (showId: string | undefined) => {
         return;
       }
 
-      setShowData(show);
+      // Transform the data to match expected format
+      const transformedShow = {
+        ...show,
+        artist: show.artists ? {
+          id: show.artists.id,
+          name: show.artists.name,
+          image_url: show.artists.image_url
+        } : null,
+        venue: show.venues ? {
+          id: show.venues.id,
+          name: show.venues.name,
+          city: show.venues.city,
+          state: show.venues.state,
+          country: show.venues.country
+        } : null
+      };
+
+      setShowData(transformedShow);
 
       // Ensure setlist exists (create if needed)
       const setlistIdResult = await ensureSetlistExists(showId);
@@ -57,7 +74,7 @@ export const useShowVoting = (showId: string | undefined) => {
 
       setSetlistId(setlistIdResult);
 
-      // Fetch setlist songs
+      // Fetch setlist songs with proper column hints
       await fetchSetlistSongs(setlistIdResult);
 
       // Increment view count
@@ -80,7 +97,7 @@ export const useShowVoting = (showId: string | undefined) => {
         .from('setlist_songs')
         .select(`
           *,
-          song:songs(id, name, artist_id, album, spotify_url)
+          songs!setlist_songs_song_id_fkey(id, name, artist_id, album, spotify_url)
         `)
         .eq('setlist_id', setlistId)
         .order('votes', { ascending: false });
@@ -91,7 +108,25 @@ export const useShowVoting = (showId: string | undefined) => {
         return;
       }
 
-      setSetlistSongs(songs || []);
+      // Transform the data to match expected format
+      const transformedSongs = (songs || []).map(song => ({
+        ...song,
+        song: song.songs ? {
+          id: song.songs.id,
+          name: song.songs.name,
+          artist_id: song.songs.artist_id,
+          album: song.songs.album,
+          spotify_url: song.songs.spotify_url
+        } : {
+          id: '',
+          name: 'Unknown Song',
+          artist_id: '',
+          album: '',
+          spotify_url: ''
+        }
+      }));
+
+      setSetlistSongs(transformedSongs);
     } catch (error) {
       console.error('Error fetching setlist songs:', error);
       toast.error('Failed to load setlist');

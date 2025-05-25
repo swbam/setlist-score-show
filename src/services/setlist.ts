@@ -107,11 +107,12 @@ export async function getSetlistWithSongs(setlistId: string): Promise<Setlist | 
       return null;
     }
     
+    // Use proper column hints to avoid ambiguous relationships
     const { data: songs, error: songsError } = await supabase
       .from('setlist_songs')
       .select(`
         *,
-        song:songs(*)
+        songs!setlist_songs_song_id_fkey(*)
       `)
       .eq('setlist_id', setlistId)
       .order('votes', { ascending: false })
@@ -122,9 +123,15 @@ export async function getSetlistWithSongs(setlistId: string): Promise<Setlist | 
       return setlist;
     }
     
+    // Transform the data to match expected format
+    const transformedSongs = (songs || []).map(song => ({
+      ...song,
+      song: song.songs || undefined
+    }));
+    
     return {
       ...setlist,
-      songs: songs
+      songs: transformedSongs
     };
   } catch (error) {
     console.error("Error in getSetlistWithSongs:", error);
@@ -257,26 +264,19 @@ export async function searchSongsByArtist(artistId: string, query: string) {
   }
 }
 
-// NEW FUNCTIONS BEING ADDED:
-
 // Get popular songs for an artist
 export async function getPopularSongsForArtist(artistId: string, limit: number = 10): Promise<Song[]> {
   try {
     console.log(`Getting popular songs for artist: ${artistId}`);
     
     // Check if we have songs for this artist
-    const { data: songCount, error: countError } = await supabase
+    const { count } = await supabase
       .from('songs')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('artist_id', artistId);
       
-    if (countError) {
-      console.error("Error checking song count:", countError);
-      return [];
-    }
-    
     // If we don't have any songs, fetch them first
-    if (!songCount || songCount.length === 0) {
+    if (!count || count === 0) {
       console.log("No songs found for artist, fetching from Spotify");
       await fetchArtistSongs(artistId);
     }

@@ -10,6 +10,8 @@ interface Song {
   name: string;
   album?: string;
   duration_ms?: number;
+  artist_id: string;
+  spotify_url: string;
 }
 
 interface SetlistSong {
@@ -50,6 +52,7 @@ export function useSetlistVoting(setlistId: string) {
       if (!setlistId) return;
       
       try {
+        // Fixed query with proper column hints to avoid ambiguous relationships
         const { data, error } = await supabase
           .from('setlist_songs')
           .select(`
@@ -57,11 +60,13 @@ export function useSetlistVoting(setlistId: string) {
             song_id,
             votes,
             position,
-            song:songs (
+            songs!setlist_songs_song_id_fkey (
               id,
               name,
               album,
-              duration_ms
+              duration_ms,
+              artist_id,
+              spotify_url
             )
           `)
           .eq('setlist_id', setlistId)
@@ -77,10 +82,12 @@ export function useSetlistVoting(setlistId: string) {
           votes: item.votes,
           position: item.position,
           song: {
-            id: item.song?.id || '',
-            name: item.song?.name || '',
-            album: item.song?.album,
-            duration_ms: item.song?.duration_ms
+            id: item.songs?.id || '',
+            name: item.songs?.name || '',
+            album: item.songs?.album || '',
+            duration_ms: item.songs?.duration_ms || 0,
+            artist_id: item.songs?.artist_id || '',
+            spotify_url: item.songs?.spotify_url || ''
           }
         }));
 
@@ -148,75 +155,60 @@ export function useSetlistVoting(setlistId: string) {
     }
 
     try {
-      // Optimistically update the UI
-      setSongs(currentSongs => 
-        currentSongs.map(song => 
-          song.id === setlistSongId 
-            ? { ...song, votes: song.votes + 1 } 
-            : song
-        ).sort((a, b) => b.votes - a.votes)
-      );
-      
-      setUserVotes(current => ({
-        ...current,
-        [setlistSongId]: true
-      }));
+      // Use the database function for voting
+      const { data, error } = await supabase.rpc('vote_for_song', {
+        setlist_song_id: setlistSongId
+      });
 
-      // Insert the vote record
-      const { error: insertError } = await supabase
-        .from('votes')
-        .insert({
-          user_id: user.id,
-          setlist_song_id: setlistSongId
-        });
+      if (error) {
+        console.error('Error voting:', error);
+        if (error.message.includes('Already voted')) {
+          toast("You already voted for this song");
+        } else {
+          toast("Failed to vote");
+        }
+        return false;
+      }
 
-      if (insertError) {
-        console.error('Error inserting vote:', insertError);
-        
-        // Revert the optimistic update
+      if (data && data.success) {
+        // Optimistically update the UI
         setSongs(currentSongs => 
           currentSongs.map(song => 
             song.id === setlistSongId 
-              ? { ...song, votes: song.votes - 1 } 
+              ? { ...song, votes: data.votes || song.votes + 1 } 
               : song
           ).sort((a, b) => b.votes - a.votes)
         );
         
-        setUserVotes(current => {
-          const updated = { ...current };
-          delete updated[setlistSongId];
-          return updated;
-        });
+        setUserVotes(current => ({
+          ...current,
+          [setlistSongId]: true
+        }));
 
-        toast("Failed to vote");
+        toast("Your vote has been counted!");
+        return true;
+      } else {
+        toast(data?.message || "Failed to vote");
         return false;
       }
-      
-      // Update the song's vote count
-      const currentVotes = songs.find(s => s.id === setlistSongId)?.votes || 0;
-      const { error: updateError } = await supabase
-        .from('setlist_songs')
-        .update({ votes: currentVotes + 1 })
-        .eq('id', setlistSongId);
-        
-      if (updateError) {
-        console.error('Error updating vote count:', updateError);
-      }
-
-      toast("Your vote has been counted!");
-      return true;
     } catch (error) {
       console.error('Error voting for song:', error);
       toast("Something went wrong while voting");
       return false;
     }
-  }, [user, userVotes, songs]);
+  }, [user, userVotes]);
 
   // Add a song to the setlist
   const addSong = useCallback(async (songId: string) => {
     if (!setlistId) return false;
     try {
       const success = await setlistService.addSongToSetlist(setlistId, songId);
+      if (success) {
+        // Refresh the setlist
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
       return success;
     } catch (error) {
       console.error('Error adding song to setlist:', error);
