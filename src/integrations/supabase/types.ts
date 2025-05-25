@@ -63,6 +63,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_played_setlist_songs_played_setlist_id"
+            columns: ["played_setlist_id"]
+            isOneToOne: false
+            referencedRelation: "played_setlists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_played_setlist_songs_song_id"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "played_setlist_songs_played_setlist_id_fkey"
             columns: ["played_setlist_id"]
             isOneToOne: false
@@ -102,6 +116,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_played_setlists_show_id"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "played_setlists_show_id_fkey"
             columns: ["show_id"]
             isOneToOne: true
@@ -133,6 +154,20 @@ export type Database = {
           votes?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_setlist_songs_setlist_id"
+            columns: ["setlist_id"]
+            isOneToOne: false
+            referencedRelation: "setlists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_setlist_songs_song_id"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "setlist_songs_setlist_id_fkey"
             columns: ["setlist_id"]
@@ -169,6 +204,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_setlists_show_id"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "setlists_show_id_fkey"
             columns: ["show_id"]
@@ -213,6 +255,20 @@ export type Database = {
           view_count?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_shows_artist_id"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shows_venue_id"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shows_artist_id_fkey"
             columns: ["artist_id"]
@@ -259,6 +315,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_songs_artist_id"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "songs_artist_id_fkey"
             columns: ["artist_id"]
             isOneToOne: false
@@ -287,6 +350,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_user_artists_artist_id"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_user_artists_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_artists_artist_id_fkey"
             columns: ["artist_id"]
@@ -383,6 +460,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_votes_setlist_song_id"
+            columns: ["setlist_song_id"]
+            isOneToOne: false
+            referencedRelation: "setlist_songs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_votes_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "votes_setlist_song_id_fkey"
             columns: ["setlist_song_id"]

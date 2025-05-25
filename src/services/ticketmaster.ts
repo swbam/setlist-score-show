@@ -8,22 +8,26 @@ const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
 export interface TicketmasterVenue {
   id: string;
   name: string;
-  city: {
+  city?: {
     name: string;
-  };
+  } | string;
   state?: {
     name: string;
-  };
-  country: {
+  } | string;
+  country?: {
     name: string;
-  };
+  } | string;
   address?: {
     line1: string;
-  };
+  } | string;
   location?: {
-    latitude: number;
-    longitude: number;
+    latitude: number | string;
+    longitude: number | string;
   };
+  // Additional fields we might encounter
+  url?: string;
+  locale?: string;
+  timezone?: string;
 }
 
 export interface TicketmasterEvent {
@@ -49,6 +53,94 @@ export interface TicketmasterEvent {
     }[];
   };
   url?: string;
+}
+
+// Helper function to safely extract venue data
+function extractVenueData(venue: any): {
+  id: string;
+  name: string;
+  city: string;
+  state: string | null;
+  country: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+} | null {
+  try {
+    // Validate required fields
+    if (!venue || !venue.id || !venue.name) {
+      console.error("Missing required venue fields:", venue);
+      return null;
+    }
+
+    // Extract city - handle both object and string formats
+    let city = '';
+    if (typeof venue.city === 'object' && venue.city?.name) {
+      city = venue.city.name;
+    } else if (typeof venue.city === 'string') {
+      city = venue.city;
+    } else {
+      console.error("No valid city found for venue:", venue);
+      return null;
+    }
+
+    // Extract state - handle both object and string formats
+    let state = null;
+    if (typeof venue.state === 'object' && venue.state?.name) {
+      state = venue.state.name;
+    } else if (typeof venue.state === 'string') {
+      state = venue.state;
+    }
+
+    // Extract country - handle both object and string formats
+    let country = '';
+    if (typeof venue.country === 'object' && venue.country?.name) {
+      country = venue.country.name;
+    } else if (typeof venue.country === 'string') {
+      country = venue.country;
+    } else {
+      // Default to empty string if no country specified
+      country = '';
+    }
+
+    // Extract address - handle both object and string formats
+    let address = null;
+    if (typeof venue.address === 'object' && venue.address?.line1) {
+      address = venue.address.line1;
+    } else if (typeof venue.address === 'string') {
+      address = venue.address;
+    }
+
+    // Extract coordinates
+    let latitude = null;
+    let longitude = null;
+    if (venue.location) {
+      if (venue.location.latitude) {
+        latitude = typeof venue.location.latitude === 'string' 
+          ? parseFloat(venue.location.latitude) 
+          : venue.location.latitude;
+      }
+      if (venue.location.longitude) {
+        longitude = typeof venue.location.longitude === 'string' 
+          ? parseFloat(venue.location.longitude) 
+          : venue.location.longitude;
+      }
+    }
+
+    return {
+      id: venue.id,
+      name: venue.name,
+      city,
+      state,
+      country,
+      address,
+      latitude,
+      longitude
+    };
+  } catch (error) {
+    console.error("Error extracting venue data:", error, venue);
+    return null;
+  }
 }
 
 // Search for events by keyword (artist name)
@@ -134,28 +226,18 @@ export async function getPopularEvents(limit: number = 10): Promise<Ticketmaster
   }
 }
 
-// Store venue in database
-export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<boolean> {
+// Store venue in database with improved error handling
+export async function storeVenueInDatabase(venue: any): Promise<boolean> {
   try {
-    console.log("Storing venue in database:", venue.name);
+    console.log("Processing venue for database storage:", venue?.name || venue?.id);
     
-    // Ensure required fields are present
-    if (!venue || !venue.id || !venue.name || !venue.city || !venue.city.name || !venue.country || !venue.country.name) {
-      console.error("Missing required venue data:", venue);
+    const venueData = extractVenueData(venue);
+    if (!venueData) {
+      console.error("Failed to extract venue data:", venue);
       return false;
     }
     
-    const venueData = {
-      id: venue.id,
-      name: venue.name,
-      city: venue.city.name || '',
-      state: venue.state?.name || null,
-      country: venue.country.name || '',
-      address: venue.address?.line1 || null,
-      latitude: venue.location?.latitude || null,
-      longitude: venue.location?.longitude || null
-    };
-    
+    console.log("Storing venue in database:", venueData.name);
     console.log("Venue data to store:", venueData);
     
     const { error } = await supabase
@@ -167,7 +249,7 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
       return false;
     }
     
-    console.log("Successfully stored venue:", venue.name);
+    console.log("Successfully stored venue:", venueData.name);
     return true;
   } catch (error) {
     console.error("Error storing venue in database:", error);
@@ -175,13 +257,15 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
   }
 }
 
-// Store show in database
+// Store show in database with improved validation and error handling
 export const storeShowInDatabase = async (
   event: TicketmasterEvent,
   artistId: string,
   venueId: string
 ): Promise<boolean> => {
   try {
+    console.log(`Storing show ${event.name} for artist ${artistId} at venue ${venueId}`);
+    
     // Check if artist exists in the database
     const { data: artistExists } = await supabase
       .from('artists')
@@ -259,7 +343,8 @@ export const storeShowInDatabase = async (
       start_time: event.dates?.start?.localTime || null,
       status: event.dates?.status?.code === 'cancelled' ? 'canceled' : 
              event.dates?.status?.code === 'postponed' ? 'postponed' : 'scheduled',
-      ticketmaster_url: event.url || null
+      ticketmaster_url: event.url || null,
+      view_count: 0
     };
     
     // Check if show already exists

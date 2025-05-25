@@ -12,7 +12,7 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
     console.log('Starting trending shows sync...');
     
     // Get popular events from Ticketmaster
-    const popularEvents = await ticketmasterService.getPopularEvents();
+    const popularEvents = await ticketmasterService.getPopularEvents(20);
     
     if (!popularEvents.length) {
       return { success: false, message: 'No popular events found' };
@@ -20,35 +20,44 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
 
     // Process and store shows
     let processed = 0;
-    for (const event of popularEvents.slice(0, 50)) { // Limit to 50 shows
+    let errors = 0;
+    
+    for (const event of popularEvents) {
       try {
+        console.log(`Processing event: ${event.name} (${event.id})`);
+        
         // Extract artist info
         const attractions = event._embedded?.attractions || [];
-        if (attractions.length === 0) continue;
+        if (attractions.length === 0) {
+          console.log(`Skipping event ${event.name} - no attractions found`);
+          continue;
+        }
 
         const attraction = attractions[0];
         
         // Find or create artist using the mapping service
         const spotifyId = await findSpotifyArtistForTicketmaster(attraction.id, attraction.name);
-        if (!spotifyId) continue;
+        if (!spotifyId) {
+          console.log(`Skipping event ${event.name} - could not find Spotify artist for ${attraction.name}`);
+          continue;
+        }
 
         // Extract venue info
         const venues = event._embedded?.venues || [];
-        if (venues.length === 0) continue;
+        if (venues.length === 0) {
+          console.log(`Skipping event ${event.name} - no venues found`);
+          continue;
+        }
 
         const venue = venues[0];
         
-        // Store venue if not exists
-        await supabase.from('venues').upsert({
-          id: venue.id,
-          name: venue.name,
-          city: venue.city?.name || '',
-          state: venue.state?.name || null,
-          country: venue.country?.name || '',
-          address: venue.address?.line1 || null,
-          latitude: venue.location?.latitude ? parseFloat(venue.location.latitude.toString()) : null,
-          longitude: venue.location?.longitude ? parseFloat(venue.location.longitude.toString()) : null
-        });
+        // Store venue if not exists - this now handles the improved venue data extraction
+        const venueStored = await ticketmasterService.storeVenueInDatabase(venue);
+        if (!venueStored) {
+          console.error(`Failed to store venue for event ${event.name}`);
+          errors++;
+          continue;
+        }
 
         // Validate date before storing show
         const showDate = event.dates?.start?.dateTime || event.dates?.start?.localDate;
@@ -57,44 +66,29 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
           continue;
         }
 
-        // Format date properly
-        let formattedDate: string;
-        try {
-          if (event.dates.start.dateTime) {
-            formattedDate = new Date(event.dates.start.dateTime).toISOString();
-          } else if (event.dates.start.localDate) {
-            formattedDate = new Date(event.dates.start.localDate + 'T00:00:00Z').toISOString();
-          } else {
-            throw new Error('No valid date format');
-          }
-        } catch (dateError) {
-          console.warn(`Skipping event ${event.name} - invalid date format:`, showDate);
+        // Store show - this now has improved error handling
+        const showStored = await ticketmasterService.storeShowInDatabase(event, spotifyId, venue.id);
+        if (!showStored) {
+          console.error(`Failed to store show ${event.name}`);
+          errors++;
           continue;
         }
 
-        // Store show
-        await supabase.from('shows').upsert({
-          id: event.id,
-          artist_id: spotifyId,
-          venue_id: venue.id,
-          name: event.name,
-          date: formattedDate,
-          start_time: event.dates?.start?.localTime || null,
-          status: event.dates?.status?.code === 'onsale' ? 'scheduled' : 'canceled',
-          ticketmaster_url: event.url,
-          view_count: 0
-        });
-
         processed++;
+        console.log(`Successfully processed event ${event.name} (${processed}/${popularEvents.length})`);
       } catch (error) {
         console.error(`Error processing event ${event.id}:`, error);
+        errors++;
       }
     }
 
+    const message = `Synced ${processed} trending shows with ${errors} errors`;
+    console.log(message);
+
     return { 
-      success: true, 
-      message: `Synced ${processed} trending shows`,
-      data: { processed } as TrendingSyncData
+      success: processed > 0, 
+      message,
+      data: { processed, errors } as TrendingSyncData
     };
   } catch (error) {
     console.error('Error syncing trending shows:', error);
