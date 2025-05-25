@@ -22,4 +22,5 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
 export interface SupabaseRPCFunctions {
   increment_show_views: (args: { show_id: string }) => void;
   create_setlist_with_songs: (args: { p_show_id: string }) => { setlist_id: string; songs_added: number }[];
+  vote_for_song: (args: { setlist_song_id: string }) => { success: boolean; votes?: number; message?: string };
 }

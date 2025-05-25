@@ -33,6 +33,25 @@ export interface TrendingArtist {
   trending_score: number;
 }
 
+// Increment show view count
+export async function incrementShowViews(showId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('increment_show_views', {
+      show_id: showId
+    });
+
+    if (error) {
+      console.error('Error incrementing show views:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in incrementShowViews:', error);
+    return false;
+  }
+}
+
 // Calculate trending shows based on views, votes, and recency
 export async function getTrendingShows(limit: number = 20): Promise<TrendingShow[]> {
   try {
@@ -88,17 +107,15 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
       .map(show => {
         const artist = show.artists as any;
         const venue = show.venues as any;
-        const setlists = show.setlists as any[];
+        const setlists = show.setlists as any[] || [];
         
         // Calculate total votes across all setlist songs
         let totalVotes = 0;
-        if (setlists && setlists.length > 0) {
-          setlists.forEach(setlist => {
-            if (setlist.setlist_songs) {
-              totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
-            }
-          });
-        }
+        setlists.forEach(setlist => {
+          if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
+            totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
+          }
+        });
         
         // Calculate days until show
         const daysUntilShow = Math.ceil((new Date(show.date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "./spotify";
 
@@ -120,6 +119,12 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     };
   }
 }
+
+// Export alias for backwards compatibility
+export const ensureSetlistExists = async (showId: string): Promise<string | null> => {
+  const result = await getOrCreateSetlistWithSongs(showId);
+  return result.success ? result.setlist_id : null;
+};
 
 // Add a song to an existing setlist
 export async function addSongToSetlist(setlistId: string, songId: string): Promise<boolean> {
