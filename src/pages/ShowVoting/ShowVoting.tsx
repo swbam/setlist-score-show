@@ -1,14 +1,15 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Show } from "./types";
 import { SetlistSong } from "./types";
 import { VotingSection } from "./VotingSection";
-import { Sidebar } from "./Sidebar";
-import { ShowHeader } from "./ShowHeader";
+import Sidebar from "./Sidebar";
+import ShowHeader from "./ShowHeader";
 import AppHeader from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 
-interface RouteParams {
+interface RouteParams extends Record<string, string> {
   showId: string;
 }
 
@@ -201,7 +202,11 @@ const ShowVoting = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <Sidebar show={show} />
+            <Sidebar 
+              show={show} 
+              totalVotes={setlistSongs.reduce((total, song) => total + song.votes, 0)}
+              totalSongs={setlistSongs.length}
+            />
           </div>
         </div>
       </div>

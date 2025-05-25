@@ -32,11 +32,11 @@ export const VotingSection = ({ setlistSongs, onVote, loading }: VotingSectionPr
       {setlistSongs.map((setlistSong, index) => (
         <SongCard
           key={setlistSong.id}
-          song={setlistSong.song}
-          votes={setlistSong.votes}
-          position={index + 1}
-          onVote={() => onVote(setlistSong.id)}
-          userVoted={setlistSong.userVoted}
+          song={setlistSong}
+          index={index}
+          handleVote={() => onVote(setlistSong.id)}
+          voteSubmitting={null}
+          isDisabled={false}
         />
       ))}
     </div>
