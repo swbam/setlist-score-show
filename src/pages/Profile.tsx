@@ -1,7 +1,7 @@
 
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
-import { MyArtistsDashboard } from "@/components/MyArtistsDashboard";
+import MyArtistsDashboard from "@/components/MyArtistsDashboard";
 import AppHeader from "@/components/AppHeader";
 
 const Profile = () => {
@@ -27,7 +27,7 @@ const Profile = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {user.display_name}!
+            Welcome back, {user.email}!
           </h1>
           <p className="text-gray-600">
             Manage your favorite artists and track upcoming shows
