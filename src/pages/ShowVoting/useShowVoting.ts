@@ -131,7 +131,8 @@ export const useShowVoting = (showId: string | undefined) => {
         return;
       }
 
-      if (data?.success) {
+      // Check if response indicates success
+      if (data && typeof data === 'object' && 'success' in data && data.success) {
         toast.success("Vote recorded!");
       }
     } catch (error) {

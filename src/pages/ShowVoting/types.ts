@@ -1,53 +1,37 @@
 
-// Fix the recursive type issue by separating song from SetlistSong
-export interface Song {
+export interface ShowData {
   id: string;
-  name: string;
-  album?: string;
-  duration_ms?: number;
-  popularity?: number;
-  spotify_url?: string;
-}
-
-export interface SetlistSong {
-  id: string;
-  song_id: string;
-  votes: number;
-  position: number;
-  song: Song;
-  userVoted?: boolean;
-}
-
-export interface Setlist {
-  id: string;
-  show_id: string;
-  created_at: string;
-  updated_at: string;
-  songs: SetlistSong[];
-}
-
-export interface Show {
-  id: string;
-  name?: string | null;
+  name?: string;
   date: string;
-  status: 'scheduled' | 'postponed' | 'canceled';
+  start_time?: string;
+  status: string;
+  ticketmaster_url?: string;
+  view_count: number;
   artist: {
     id: string;
     name: string;
     image_url?: string;
-    popularity?: number;
-    genres?: string[];
-    spotify_url?: string;
   };
-  venue?: {
-    id?: string;
+  venue: {
+    id: string;
     name: string;
     city: string;
     state?: string;
     country: string;
-    address?: string;
   };
-  ticketmaster_url?: string | null;
-  start_time?: string | null;
-  view_count: number;
+}
+
+export interface SetlistSong {
+  id: string;
+  setlist_id: string;
+  song_id: string;
+  position: number;
+  votes: number;
+  song: {
+    id: string;
+    name: string;
+    artist_id: string;
+    album: string;
+    spotify_url: string;
+  };
 }

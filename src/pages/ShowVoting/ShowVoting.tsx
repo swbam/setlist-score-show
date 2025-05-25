@@ -3,128 +3,44 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AppHeader from "@/components/AppHeader";
-import ShowHeader from "./ShowHeader";
-import VotingSection from "./VotingSection";
-import Sidebar from "./Sidebar";
+import { VotingSection } from "./VotingSection";
+import { ShowHeader } from "./ShowHeader";
+import { Sidebar } from "./Sidebar";
 import { ShowData, SetlistSong } from "./types";
+import { useShowVoting } from "./useShowVoting";
 import { useRealtimeVotes } from "@/hooks/useRealtimeVotes";
 
-const ShowVoting = () => {
-  const { showId } = useParams<{ showId: string }>();
-  const navigate = useNavigate();
-  
-  const [showData, setShowData] = useState<ShowData | null>(null);
-  const [setlistSongs, setSetlistSongs] = useState<SetlistSong[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [setlistId, setSetlistId] = useState<string>("");
-  
-  // Use real-time votes hook
+interface ShowVotingProps {
+  showId: string;
+}
+
+export const ShowVoting = ({ showId }: ShowVotingProps) => {
+  const {
+    showData,
+    setlistSongs,
+    setSetlistSongs,
+    loading,
+    setlistId,
+    handleVote,
+    refetch
+  } = useShowVoting(showId);
+
+  // Subscribe to real-time vote updates
   const voteUpdates = useRealtimeVotes(setlistId);
 
-  // Apply real-time vote updates to setlist songs
+  // Apply real-time updates to local state
   useEffect(() => {
     if (voteUpdates.length > 0) {
       setSetlistSongs(prev => 
         prev.map(song => {
           const update = voteUpdates.find(v => v.id === song.id);
           return update ? { ...song, votes: update.votes } : song;
-        })
+        }).sort((a, b) => b.votes - a.votes) // Re-sort by votes
       );
     }
-  }, [voteUpdates]);
+  }, [voteUpdates, setSetlistSongs]);
 
-  const fetchShowData = async () => {
-    if (!showId) return;
-
-    try {
-      setLoading(true);
-
-      // Fetch show details
-      const { data: show, error: showError } = await supabase
-        .from('shows')
-        .select(`
-          *,
-          artist:artists(id, name, image_url),
-          venue:venues(id, name, city, state, country)
-        `)
-        .eq('id', showId)
-        .single();
-
-      if (showError) {
-        console.error('Error fetching show:', showError);
-        toast.error('Failed to load show data');
-        return;
-      }
-
-      if (!show) {
-        toast.error('Show not found');
-        return;
-      }
-
-      setShowData(show);
-
-      // Fetch setlist ID
-      const { data: setlistData, error: setlistError } = await supabase
-        .from('setlists')
-        .select('id')
-        .eq('show_id', showId)
-        .single();
-
-      if (setlistError) {
-        console.error('Error fetching setlist ID:', setlistError);
-        toast.error('Failed to load setlist');
-        return;
-      }
-
-      if (!setlistData) {
-        toast.error('Setlist not found');
-        return;
-      }
-
-      setSetlistId(setlistData.id);
-
-      // Fetch setlist songs
-      await fetchSetlistSongs(setlistData.id);
-
-      // Increment view count
-      await supabase
-        .from('shows')
-        .update({ view_count: (show.view_count || 0) + 1 })
-        .eq('id', showId);
-
-    } catch (error) {
-      console.error('Error fetching show data:', error);
-      toast.error('Failed to load show data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSetlistSongs = async (setlistId: string) => {
-    try {
-      const { data: songs, error } = await supabase
-        .from('setlist_songs')
-        .select(`
-          *,
-          song:songs(id, name, artist_id, album, spotify_url)
-        `)
-        .eq('setlist_id', setlistId)
-        .order('votes', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching setlist songs:', error);
-        toast.error('Failed to load setlist');
-        return;
-      }
-
-      setSetlistSongs(songs || []);
-    } catch (error) {
-      console.error('Error fetching setlist songs:', error);
-      toast.error('Failed to load setlist');
-    }
-  };
-
-  const handleVote = async (setlistSongId: string) => {
+  const handleVoteWithOptimism = async (setlistSongId: string) => {
     try {
       // Optimistic update
       setSetlistSongs(prev => 
@@ -132,7 +48,7 @@ const ShowVoting = () => {
           song.id === setlistSongId 
             ? { ...song, votes: song.votes + 1 }
             : song
-        )
+        ).sort((a, b) => b.votes - a.votes)
       );
 
       const { data, error } = await supabase.rpc('vote_for_song', {
@@ -146,7 +62,7 @@ const ShowVoting = () => {
             song.id === setlistSongId 
               ? { ...song, votes: song.votes - 1 }
               : song
-          )
+          ).sort((a, b) => b.votes - a.votes)
         );
         
         if (error.message.includes('Already voted')) {
@@ -157,9 +73,9 @@ const ShowVoting = () => {
         return;
       }
 
-      if (data?.success) {
+      // Check if response indicates success
+      if (data && typeof data === 'object' && 'success' in data && data.success) {
         toast.success("Vote recorded!");
-        // Real-time update will handle the final vote count
       }
     } catch (error) {
       console.error('Error voting:', error);
@@ -169,26 +85,18 @@ const ShowVoting = () => {
           song.id === setlistSongId 
             ? { ...song, votes: song.votes - 1 }
             : song
-        )
+        ).sort((a, b) => b.votes - a.votes)
       );
       toast.error("Failed to vote. Please try again.");
     }
   };
 
-  useEffect(() => {
-    if (showId) {
-      fetchShowData();
-    }
-  }, [showId]);
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-black">
-        <AppHeader />
-        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
-          <div className="flex justify-center py-16">
-            <div className="w-12 h-12 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading show details...</p>
         </div>
       </div>
     );
@@ -196,43 +104,52 @@ const ShowVoting = () => {
 
   if (!showData) {
     return (
-      <div className="min-h-screen bg-black">
-        <AppHeader />
-        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
-          <div className="text-center py-16">
-            <h1 className="text-2xl font-bold text-white mb-4">Show Not Found</h1>
-            <button 
-              onClick={() => navigate('/')}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-lg"
-            >
-              Back to Home
-            </button>
-          </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Show Not Found</h2>
+          <p className="text-gray-600">The show you're looking for doesn't exist.</p>
         </div>
       </div>
     );
   }
 
+  const totalVotes = setlistSongs.reduce((sum, song) => sum + song.votes, 0);
+  const totalSongs = setlistSongs.length;
+
   return (
-    <div className="min-h-screen bg-black">
-      <AppHeader />
-      
-      <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
-        <ShowHeader showData={showData} />
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <ShowHeader 
+          show={showData}
+          artist={showData.artist}
+          venue={showData.venue}
+        />
         
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-8">
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Main voting section */}
           <div className="lg:col-span-3">
-            <VotingSection 
-              setlistSongs={setlistSongs}
-              onVote={handleVote}
-            />
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Fan Setlist</h2>
+                <p className="text-sm text-gray-500">
+                  {totalSongs} songs • {totalVotes} votes
+                </p>
+              </div>
+              
+              <VotingSection
+                setlistSongs={setlistSongs}
+                onVote={handleVoteWithOptimism}
+                loading={loading}
+              />
+            </div>
           </div>
           
+          {/* Sidebar */}
           <div className="lg:col-span-1">
             <Sidebar 
-              showData={showData}
-              totalVotes={setlistSongs.reduce((sum, song) => sum + song.votes, 0)}
-              totalSongs={setlistSongs.length}
+              show={showData}
+              totalVotes={totalVotes}
+              totalSongs={totalSongs}
             />
           </div>
         </div>
