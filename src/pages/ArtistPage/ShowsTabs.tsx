@@ -11,33 +11,29 @@ interface ShowsTabsProps {
 
 export function ShowsTabs({ artist, upcomingShows, pastShows }: ShowsTabsProps) {
   return (
-    <Tabs defaultValue="upcoming" className="space-y-8">
-      <TabsList className="bg-gray-900/60 border border-gray-800">
-        <TabsTrigger value="upcoming" className="data-[state=active]:bg-cyan-600">
-          Upcoming Shows
-        </TabsTrigger>
-        <TabsTrigger value="past" className="data-[state=active]:bg-cyan-600">
-          Past Shows
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-8">
+      <div className="border-b border-gray-800">
+        <div className="flex space-x-8">
+          <button className="pb-4 text-white font-medium border-b-2 border-yellow-metal-400">
+            Upcoming Shows
+          </button>
+          <button className="pb-4 text-gray-400 font-medium hover:text-white transition-colors">
+            Past Shows
+          </button>
+        </div>
+      </div>
       
-      {/* Upcoming Shows Tab */}
-      <TabsContent value="upcoming">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-semibold text-white">Vote on setlists for upcoming shows</h3>
+        </div>
+        
         <ShowsList 
           shows={upcomingShows} 
           title="Upcoming Shows"
           emptyMessage={`${artist.name} doesn't have any upcoming shows at the moment`} 
         />
-      </TabsContent>
-      
-      {/* Past Shows Tab */}
-      <TabsContent value="past">
-        <ShowsList 
-          shows={pastShows} 
-          title="Past Shows"
-          emptyMessage={`${artist.name} doesn't have any past shows in our database`} 
-        />
-      </TabsContent>
-    </Tabs>
+      </div>
+    </div>
   );
 }

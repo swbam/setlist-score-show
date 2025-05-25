@@ -2,7 +2,7 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, MapPin, Clock, ExternalLink } from "lucide-react";
+import { CalendarDays, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ensureSetlistExists } from "@/services/setlistCreation";
 
@@ -35,89 +35,77 @@ const ShowsList = ({ shows, title, emptyMessage }: ShowsListProps) => {
 
   if (shows.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-400">{emptyMessage}</p>
+      <div className="text-center py-12">
+        <p className="text-gray-400 text-lg">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
-      <div className="grid gap-4">
+    <div className="space-y-6">
+      <div className="space-y-4">
         {shows.map((show) => (
-          <Card key={show.id} className="bg-gray-900 border-gray-800 hover:border-cyan-600 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex-1">
-                  <h4 className="text-white font-semibold mb-2">
-                    {show.name || "Concert"}
-                  </h4>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center text-gray-400 text-sm">
-                      <CalendarDays className="h-4 w-4 mr-2" />
-                      <span>{new Date(show.date).toLocaleDateString()}</span>
-                      {show.start_time && (
-                        <>
-                          <Clock className="h-4 w-4 ml-4 mr-2" />
-                          <span>{show.start_time}</span>
-                        </>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center text-gray-400 text-sm">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      <span>
-                        {show.venue.name}, {show.venue.city}
-                        {show.venue.state && `, ${show.venue.state}`}
-                      </span>
-                    </div>
+          <div key={show.id} className="border border-gray-800 rounded-lg overflow-hidden bg-gray-900/40 hover:border-yellow-metal-600 transition-all duration-200">
+            <div className="p-6">
+              <div className="flex justify-between items-start gap-6">
+                {/* Date Column */}
+                <div className="flex flex-col items-center text-center min-w-[80px]">
+                  <div className="text-yellow-metal-400 text-sm font-medium uppercase tracking-wide">
+                    {new Date(show.date).toLocaleDateString('en', { month: 'short' })}
                   </div>
+                  <div className="text-3xl font-bold text-white">
+                    {new Date(show.date).getDate()}
+                  </div>
+                  {show.start_time && (
+                    <div className="text-gray-400 text-sm mt-1">
+                      {new Date(`2000-01-01T${show.start_time}`).toLocaleTimeString('en', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      })}
+                    </div>
+                  )}
                 </div>
-                
-                <div className="flex flex-col items-end space-y-2">
-                  <Badge 
-                    variant={show.status === 'scheduled' ? 'default' : 'destructive'}
-                    className={show.status === 'scheduled' ? 'bg-green-600/20 text-green-400' : ''}
-                  >
-                    {show.status}
-                  </Badge>
-                  
-                  <div className="flex space-x-2">
-                    {show.ticketmaster_url && (
+
+                {/* Show Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-white font-semibold text-lg mb-2">
+                        {show.name || "Concert"}
+                      </h4>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center text-gray-300">
+                          <span className="font-medium">{show.venue.name}</span>
+                        </div>
+                        <div className="flex items-center text-gray-400 text-sm">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          <span>
+                            {show.venue.city}
+                            {show.venue.state && `, ${show.venue.state}`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="flex items-center">
                       <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                        className="bg-yellow-metal-400 text-black hover:bg-yellow-metal-300 font-semibold"
                         asChild
+                        onClick={() => handleShowClick(show.id)}
                       >
-                        <a 
-                          href={show.ticketmaster_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="h-4 w-4 mr-1" />
-                          Tickets
-                        </a>
+                        <Link to={`/show/${show.id}`}>
+                          View Setlist
+                        </Link>
                       </Button>
-                    )}
-                    
-                    <Button 
-                      size="sm" 
-                      className="bg-cyan-600 hover:bg-cyan-700"
-                      asChild
-                      onClick={() => handleShowClick(show.id)}
-                    >
-                      <Link to={`/show/${show.id}`}>
-                        Vote on Setlist
-                      </Link>
-                    </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
     </div>

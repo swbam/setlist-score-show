@@ -1,6 +1,6 @@
 
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calendar, MapPin, Ticket } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { Show } from "./types";
 import { Button } from "@/components/ui/button";
@@ -25,96 +25,86 @@ interface ShowHeaderProps {
 
 const ShowHeader = ({ show }: ShowHeaderProps) => {
   return (
-    <div className="relative bg-gradient-to-b from-gray-900 to-black text-white">
+    <div className="relative min-h-[400px] bg-gradient-to-b from-black via-gray-900 to-black text-white">
       {/* Artist image overlay */}
       {show?.artist?.image_url && (
         <div className="absolute inset-0 opacity-30 bg-cover bg-center" 
              style={{ backgroundImage: `url(${show.artist.image_url})` }}>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/70 to-black"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/80 to-black"></div>
         </div>
       )}
       
       <div className="relative container mx-auto max-w-7xl px-4 pt-6 pb-16">
         {/* Navigation */}
-        <div className="flex justify-between items-center mb-10">
-          {/* Back to artist link - positioned at the top left */}
+        <div className="mb-10">
+          {/* Back to artist link */}
           {show?.artist?.id && (
-            <Link to={`/artist/${show.artist.id}`} className="inline-flex items-center text-gray-400 hover:text-white transition-colors text-sm font-medium">
+            <Link to={`/artist/${show.artist.id}`} className="inline-flex items-center text-gray-400 hover:text-yellow-metal-300 transition-colors text-sm font-medium">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to artist
             </Link>
           )}
-          
-          {/* Status badge - positioned at the top right */}
-          <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium inline-block
-              ${show?.status === 'canceled' ? 'bg-red-900/50 text-red-300 border border-red-900/40' : 
-                show?.status === 'postponed' ? 'bg-amber-900/50 text-amber-300 border border-amber-900/40' :
-                'bg-emerald-900/50 text-emerald-300 border border-emerald-900/40'}`}>
-              {show?.status === 'scheduled' ? 'Upcoming' : 
-               show?.status === 'canceled' ? 'Canceled' : 'Postponed'}
-            </span>
-          </div>
         </div>
         
-        {/* Central content - Artist name and show details */}
-        <div className="flex flex-col items-center text-center">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            {show?.artist?.name || "Loading..."}
-          </h1>
+        {/* Show Details */}
+        <div className="space-y-6">
+          {/* Show Title/Artist */}
+          <div>
+            <h1 className="text-5xl md:text-6xl font-bold mb-2">
+              {show?.artist?.name || "Loading..."}
+            </h1>
+            {show?.name && show.name !== show.artist?.name && (
+              <p className="text-xl md:text-2xl text-gray-300">
+                {show.name}
+              </p>
+            )}
+          </div>
           
-          {/* Only show the show name if it's different from the artist name */}
-          {show?.name && show.name !== show.artist?.name && (
-            <p className="text-xl md:text-2xl text-gray-200 mb-8">
-              {show.name}
-            </p>
-          )}
-          
-          {/* Show details in a horizontal layout */}
-          <div className="flex flex-wrap justify-center gap-12 mb-12">
-            {/* Date and time */}
+          {/* Show Info */}
+          <div className="flex flex-col md:flex-row md:items-center gap-6 text-lg">
+            {/* Date */}
             {show?.date && (
-              <div className="flex items-center">
-                <Calendar className="h-6 w-6 mr-3 text-cyan-400" />
-                <div className="text-left">
-                  <div className="font-medium text-lg">{formatShowDate(show.date)}</div>
+              <div className="flex items-center text-yellow-metal-300">
+                <Calendar className="h-6 w-6 mr-3" />
+                <div>
+                  <div className="font-medium">{formatShowDate(show.date)}</div>
                   {show.start_time && (
-                    <div className="text-gray-400">
-                      {format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}
+                    <div className="text-sm text-gray-400">
+                      at {format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}
                     </div>
                   )}
                 </div>
               </div>
             )}
             
-            {/* Venue info */}
+            {/* Venue */}
             {show?.venue && (
-              <div className="flex items-center">
-                <MapPin className="h-6 w-6 mr-3 text-cyan-400" />
-                <div className="text-left">
-                  <div className="font-medium text-lg">{show.venue.name}</div>
-                  <div className="text-gray-400">
+              <div className="flex items-center text-yellow-metal-300">
+                <MapPin className="h-6 w-6 mr-3" />
+                <div>
+                  <div className="font-medium">{show.venue.name}</div>
+                  <div className="text-sm text-gray-400">
                     {show.venue.city}
-                    {show.venue.state ? `, ${show.venue.state}` : ''}
+                    {show.venue.state && `, ${show.venue.state}`}
                   </div>
                 </div>
               </div>
             )}
           </div>
           
-          {/* Tickets button */}
+          {/* Get Tickets Button */}
           {show?.ticketmaster_url && (
-            <Button 
-              variant="default"
-              size="lg"
-              className="bg-white text-black hover:bg-gray-200 hover:text-black border-none"
-              asChild
-            >
-              <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center">
-                <Ticket className="h-5 w-5 mr-2" />
-                Get Tickets
-              </a>
-            </Button>
+            <div className="pt-4">
+              <Button 
+                size="lg"
+                className="bg-yellow-metal-400 text-black hover:bg-yellow-metal-300 font-semibold text-lg px-8"
+                asChild
+              >
+                <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer">
+                  Get Tickets
+                </a>
+              </Button>
+            </div>
           )}
         </div>
       </div>

@@ -45,10 +45,10 @@ const TrendingShows = () => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {shows.map((show) => (
         <Link key={show.id} to={`/show/${show.id}`}>
-          <Card className="bg-gray-900 border-gray-800 hover:border-cyan-600 transition-colors cursor-pointer">
+          <Card className="bg-gray-900 border-gray-800 hover:border-yellow-metal-600 transition-colors cursor-pointer">
             <CardContent className="p-6">
               <div className="flex items-center space-x-2 mb-3">
-                <Badge variant="secondary" className="bg-cyan-600/20 text-cyan-400">
+                <Badge variant="secondary" className="bg-yellow-metal-600/20 text-yellow-metal-400">
                   Trending
                 </Badge>
               </div>

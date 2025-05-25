@@ -21,7 +21,7 @@ const ArtistCard = ({ artist }: ArtistCardProps) => {
   
   return (
     <Card 
-      className={`bg-gray-900 border-gray-800 overflow-hidden hover:border-[#f7f7f7] transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
+      className={`bg-gray-900 border-gray-800 overflow-hidden hover:border-yellow-metal-600 transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
     >
       <Link to={`/artists/${artist.id}/${artistSlug}`} className="block h-full">
         <div className={`${isMobile ? 'h-32' : 'h-40'} bg-gray-800 relative`}>
@@ -39,7 +39,7 @@ const ArtistCard = ({ artist }: ArtistCardProps) => {
           )}
           
           {/* Source badge */}
-          <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded-full bg-black/70 text-white">
+          <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded-full bg-black/70 text-yellow-metal-300">
             {artist.source === 'database' ? 'Imported' : 'Ticketmaster'}
           </div>
         </div>
