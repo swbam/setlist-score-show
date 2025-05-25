@@ -10,6 +10,7 @@ export interface Artist {
   genres?: string[];
   popularity?: number;
   spotify_url?: string;
+  ticketmaster_id?: string;
   source?: 'database' | 'ticketmaster' | 'spotify';
 }
 
@@ -36,96 +37,134 @@ export const normalizeArtistId = (artist: Artist): string => {
   return artist.id;
 };
 
-// Comprehensive function to ensure artist data is consistently stored in database
+/**
+ * Find existing artist by name and Spotify ID
+ * This helps with deduplication when we have artists from different sources
+ */
+export const findExistingArtist = async (artistName: string, spotifyId?: string): Promise<Artist | null> => {
+  try {
+    // First try to find by Spotify ID if available
+    if (spotifyId) {
+      const { data: spotifyArtist } = await supabase
+        .from('artists')
+        .select('*')
+        .eq('id', spotifyId)
+        .maybeSingle();
+      
+      if (spotifyArtist) {
+        return { ...spotifyArtist, source: 'database' };
+      }
+    }
+    
+    // Then try to find by exact name match
+    const { data: nameMatches } = await supabase
+      .from('artists')
+      .select('*')
+      .ilike('name', artistName)
+      .limit(5);
+    
+    if (nameMatches && nameMatches.length > 0) {
+      // Return the first exact match or closest match
+      const exactMatch = nameMatches.find(a => a.name.toLowerCase() === artistName.toLowerCase());
+      return exactMatch ? { ...exactMatch, source: 'database' } : { ...nameMatches[0], source: 'database' };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error finding existing artist:', error);
+    return null;
+  }
+};
+
+/**
+ * Enhanced function to ensure artist data is consistently stored with proper ID mapping
+ */
 export const ensureArtistInDatabase = async (
   artist: Artist, 
-  fetchSpotifyData = false
+  fetchSpotifyData = true
 ): Promise<Artist> => {
   try {
-    // Skip if no valid ID
-    if (!artist.id) {
-      console.error("Invalid artist ID");
+    // Skip if no valid ID or name
+    if (!artist.id || !artist.name) {
+      console.error("Invalid artist - missing ID or name");
       return artist;
     }
     
-    // Normalize artist ID
-    const normalizedId = normalizeArtistId(artist);
+    // Check if this is a Ticketmaster artist that we need to map to Spotify
+    let spotifyArtist = null;
+    let finalArtistId = artist.id;
     
-    // Check if artist exists in database using the normalized ID
-    const { data: existingArtist } = await supabase
-      .from('artists')
-      .select('*')
-      .eq('id', normalizedId)
-      .maybeSingle();
+    // If this artist doesn't have a Spotify ID format, try to find it on Spotify
+    if (fetchSpotifyData && artist.id.length !== 22) {
+      console.log(`Looking up Spotify data for: ${artist.name}`);
+      const searchResults = await spotifyService.searchArtists(artist.name);
+      if (searchResults && searchResults.length > 0) {
+        // Find the best match (exact name match preferred)
+        spotifyArtist = searchResults.find(s => 
+          s.name.toLowerCase() === artist.name.toLowerCase()
+        ) || searchResults[0];
+        
+        if (spotifyArtist) {
+          finalArtistId = spotifyArtist.id;
+          console.log(`Found Spotify match: ${artist.name} -> ${finalArtistId}`);
+        }
+      }
+    }
+    
+    // Check if artist exists in database using the final ID
+    const existingArtist = await findExistingArtist(artist.name, finalArtistId);
     
     if (existingArtist) {
       console.log(`Artist ${artist.name} already exists in database`);
       
-      // If we have Spotify info but DB doesn't, or if fetchSpotifyData is true, update it
-      if ((artist.spotify_url && !existingArtist.spotify_url) || 
-          (fetchSpotifyData && !existingArtist.spotify_url)) {
-        
-        // Try to enrich with Spotify data if needed
-        let spotifyArtist = null;
-        if (fetchSpotifyData) {
-          // First try by ID in case it's already a Spotify ID
-          spotifyArtist = await spotifyService.getArtist(normalizedId);
-          
-          // If not found by ID, search by name
-          if (!spotifyArtist) {
-            const searchResults = await spotifyService.searchArtists(artist.name);
-            if (searchResults && searchResults.length > 0) {
-              spotifyArtist = searchResults[0];
-            }
-          }
+      // Update with any new information we have
+      const updateData: any = {
+        last_synced_at: new Date().toISOString()
+      };
+      
+      // Add Spotify data if we found it and don't already have it
+      if (spotifyArtist) {
+        if (!existingArtist.spotify_url) {
+          updateData.spotify_url = spotifyArtist.external_urls?.spotify;
         }
-        
-        // Update with enriched data
-        if (spotifyArtist) {
-          const { error } = await supabase
-            .from('artists')
-            .update({
-              spotify_url: spotifyArtist.external_urls?.spotify || artist.spotify_url || null,
-              image_url: spotifyArtist.images?.[0]?.url || existingArtist.image_url,
-              genres: spotifyArtist.genres || existingArtist.genres,
-              popularity: spotifyArtist.popularity || existingArtist.popularity,
-              last_synced_at: new Date().toISOString()
-            })
-            .eq('id', normalizedId);
-          
-          if (error) {
-            console.error(`Error updating Spotify data for artist ${artist.name}:`, error);
-          } else {
-            console.log(`Updated Spotify data for artist ${artist.name}`);
-            
-            // Import tracks if this is a Spotify artist
-            if (spotifyArtist.id && spotifyArtist.id.length > 0) {
-              spotifyService.importArtistCatalog(spotifyArtist.id).catch(console.error);
-            }
-          }
+        if (!existingArtist.image_url && spotifyArtist.images?.[0]?.url) {
+          updateData.image_url = spotifyArtist.images[0].url;
+        }
+        if (!existingArtist.genres && spotifyArtist.genres?.length > 0) {
+          updateData.genres = spotifyArtist.genres;
+        }
+        if (!existingArtist.popularity) {
+          updateData.popularity = spotifyArtist.popularity || 0;
         }
       }
       
-      // Return existing artist with any updated fields
+      // Add Ticketmaster ID if this came from Ticketmaster and we don't have it
+      if (artist.source === 'ticketmaster' && artist.id !== finalArtistId) {
+        updateData.ticketmaster_id = artist.id;
+      }
+      
+      // Update if we have new data
+      if (Object.keys(updateData).length > 1) { // More than just last_synced_at
+        const { error } = await supabase
+          .from('artists')
+          .update(updateData)
+          .eq('id', existingArtist.id);
+        
+        if (error) {
+          console.error(`Error updating artist ${artist.name}:`, error);
+        } else {
+          console.log(`Updated artist data for ${artist.name}`);
+        }
+      }
+      
       return {
         ...existingArtist,
+        ...updateData,
         source: 'database'
       };
     }
     
-    // Artist doesn't exist, try to enrich with Spotify data first
-    let spotifyArtist = null;
-    if (fetchSpotifyData) {
-      const searchResults = await spotifyService.searchArtists(artist.name);
-      if (searchResults && searchResults.length > 0) {
-        spotifyArtist = searchResults[0];
-      }
-    }
-    
-    // Use Spotify ID if available, otherwise use normalized ID
-    const finalArtistId = spotifyArtist?.id || normalizedId;
-    
-    // Prepare data for insert
+    // Artist doesn't exist, create new entry
     const artistData = {
       id: finalArtistId,
       name: artist.name,
@@ -133,6 +172,7 @@ export const ensureArtistInDatabase = async (
       genres: spotifyArtist?.genres || artist.genres || [],
       popularity: spotifyArtist?.popularity || artist.popularity || 0,
       spotify_url: spotifyArtist?.external_urls?.spotify || artist.spotify_url || null,
+      ticketmaster_id: artist.source === 'ticketmaster' ? artist.id : null,
       last_synced_at: new Date().toISOString()
     };
     
@@ -146,7 +186,7 @@ export const ensureArtistInDatabase = async (
       return artist;
     }
     
-    console.log(`Successfully stored artist ${artist.name} in database`);
+    console.log(`Successfully stored new artist ${artist.name} with ID ${finalArtistId}`);
     
     // If this is a Spotify artist, import their catalog
     if (spotifyArtist && spotifyArtist.id) {

@@ -8,15 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { signOut, getUserTopArtists } from "@/services/auth";
+import { signOut } from "@/services/auth";
 import AppHeader from "@/components/AppHeader";
-
-interface UserArtist {
-  id: string;
-  name: string;
-  image_url?: string;
-  genres?: string[];
-}
+import MyArtistsDashboard from "@/components/MyArtistsDashboard";
 
 interface UserVoteHistory {
   show_id: string;
@@ -31,7 +25,6 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   
-  const [followedArtists, setFollowedArtists] = useState<UserArtist[]>([]);
   const [recentVotes, setRecentVotes] = useState<UserVoteHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -43,7 +36,7 @@ const Profile = () => {
     }
   }, [user, loading, navigate]);
   
-  // Fetch user's followed artists and voting history
+  // Fetch user profile and voting history
   useEffect(() => {
     async function fetchUserData() {
       if (!user) return;
@@ -60,12 +53,6 @@ const Profile = () => {
           
         if (userData) {
           setUserProfile(userData);
-        }
-        
-        // Get user's followed artists
-        const userArtists = await getUserTopArtists(user.id);
-        if (userArtists && userArtists.length > 0) {
-          setFollowedArtists(userArtists);
         }
         
         // Get user's recent votes
@@ -143,7 +130,6 @@ const Profile = () => {
   }
   
   if (!user) {
-    // This shouldn't happen due to the redirect effect, but just in case
     return null;
   }
   
@@ -208,58 +194,9 @@ const Profile = () => {
             </TabsTrigger>
           </TabsList>
           
-          {/* My Artists Tab */}
+          {/* My Artists Tab - Now using the dedicated component */}
           <TabsContent value="artists">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">My Artists</h2>
-              <p className="text-gray-400">Artists you're following and your top listeners from Spotify</p>
-            </div>
-            
-            {followedArtists.length === 0 ? (
-              <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
-                <Music className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-xl font-medium text-white mb-2">No followed artists yet</h3>
-                <p className="text-gray-400 mb-6">
-                  Search for your favorite artists and follow them to see them here
-                </p>
-                <Link to="/">
-                  <Button className="bg-cyan-600 hover:bg-cyan-700">
-                    Explore Artists
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {followedArtists.map(artist => (
-                  <Link to={`/artist/${artist.id}`} key={artist.id}>
-                    <Card className="bg-gray-900 border-gray-800 overflow-hidden hover:border-cyan-500 transition-all duration-300">
-                      <div className="h-40 bg-gray-800 relative">
-                        {artist.image_url ? (
-                          <img
-                            src={artist.image_url}
-                            alt={artist.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                            <Music className="h-8 w-8 text-gray-600" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      <CardContent className="p-4">
-                        <h3 className="text-white font-medium truncate">{artist.name}</h3>
-                        {artist.genres && artist.genres.length > 0 && (
-                          <p className="text-sm text-gray-400 truncate">
-                            {artist.genres.slice(0, 2).join(", ")}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <MyArtistsDashboard />
           </TabsContent>
           
           {/* Vote History Tab */}
