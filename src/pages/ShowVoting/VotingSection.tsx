@@ -1,6 +1,6 @@
 
 import { SetlistSong } from "./types";
-import { SongCard } from "./SongCard";
+import SongCard from "./SongCard";
 
 interface VotingSectionProps {
   setlistSongs: SetlistSong[];
@@ -36,6 +36,7 @@ export const VotingSection = ({ setlistSongs, onVote, loading }: VotingSectionPr
           votes={setlistSong.votes}
           position={index + 1}
           onVote={() => onVote(setlistSong.id)}
+          userVoted={setlistSong.userVoted}
         />
       ))}
     </div>

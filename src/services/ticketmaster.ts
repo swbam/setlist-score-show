@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Ticketmaster API key
@@ -31,6 +32,7 @@ export interface TicketmasterEvent {
   dates: {
     start: {
       dateTime?: string;
+      localDate?: string;
       localTime?: string;
     };
     status?: {
@@ -223,13 +225,37 @@ export const storeShowInDatabase = async (
       return false;
     }
     
+    // Validate and format the date
+    const showDate = event.dates?.start?.dateTime || event.dates?.start?.localDate;
+    if (!showDate) {
+      console.error(`No valid date found for event ${event.name}. Event dates:`, event.dates);
+      return false;
+    }
+
+    // Convert date to ISO string for database storage
+    let formattedDate: string;
+    try {
+      if (event.dates.start.dateTime) {
+        // Full datetime
+        formattedDate = new Date(event.dates.start.dateTime).toISOString();
+      } else if (event.dates.start.localDate) {
+        // Date only - assume start of day
+        formattedDate = new Date(event.dates.start.localDate + 'T00:00:00Z').toISOString();
+      } else {
+        throw new Error('No valid date format found');
+      }
+    } catch (dateError) {
+      console.error(`Invalid date format for event ${event.name}:`, showDate, dateError);
+      return false;
+    }
+    
     // Format the show data
     const showData = {
       id: event.id,
       artist_id: artistId,
       venue_id: venueId,
       name: event.name || null,
-      date: event.dates?.start?.dateTime || null,
+      date: formattedDate,
       start_time: event.dates?.start?.localTime || null,
       status: event.dates?.status?.code === 'cancelled' ? 'canceled' : 
              event.dates?.status?.code === 'postponed' ? 'postponed' : 'scheduled',

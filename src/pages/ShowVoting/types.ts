@@ -27,11 +27,42 @@ export interface SetlistSong {
   song_id: string;
   position: number;
   votes: number;
+  userVoted?: boolean;
   song: {
     id: string;
     name: string;
     artist_id: string;
     album: string;
     spotify_url: string;
+  };
+}
+
+export interface Setlist {
+  id: string;
+  show_id: string;
+  created_at: string;
+  updated_at: string;
+  songs?: SetlistSong[];
+}
+
+export interface Show {
+  id: string;
+  name?: string;
+  date: string;
+  start_time?: string;
+  status: string;
+  ticketmaster_url?: string;
+  view_count: number;
+  artist: {
+    id: string;
+    name: string;
+    image_url?: string;
+  };
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    state?: string;
+    country: string;
   };
 }

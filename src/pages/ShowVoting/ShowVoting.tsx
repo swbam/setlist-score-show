@@ -1,20 +1,18 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AppHeader from "@/components/AppHeader";
 import { VotingSection } from "./VotingSection";
-import { ShowHeader } from "./ShowHeader";
-import { Sidebar } from "./Sidebar";
+import ShowHeader from "./ShowHeader";
+import Sidebar from "./Sidebar";
 import { ShowData, SetlistSong } from "./types";
 import { useShowVoting } from "./useShowVoting";
 import { useRealtimeVotes } from "@/hooks/useRealtimeVotes";
 
-interface ShowVotingProps {
-  showId: string;
-}
-
-export const ShowVoting = ({ showId }: ShowVotingProps) => {
+const ShowVoting = () => {
+  const { showId } = useParams<{ showId: string }>();
   const {
     showData,
     setlistSongs,

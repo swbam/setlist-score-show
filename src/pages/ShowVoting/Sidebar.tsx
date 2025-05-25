@@ -3,18 +3,33 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Ticket } from "lucide-react";
 import VotingStats from "@/components/VotingStats";
-import { Setlist, Show } from "./types";
+import { Show } from "./types";
 
 interface SidebarProps {
-  setlist: Setlist | null;
   show: Show | null;
+  totalVotes: number;
+  totalSongs: number;
 }
 
-const Sidebar = ({ setlist, show }: SidebarProps) => {
+const Sidebar = ({ show, totalVotes, totalSongs }: SidebarProps) => {
   return (
     <div className="space-y-6">
-      {/* Real voting stats */}
-      {setlist && <VotingStats setlistId={setlist.id} />}
+      {/* Voting stats */}
+      <Card className="bg-gray-900/40 border-gray-800/50">
+        <CardContent className="p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Voting Stats</h3>
+          <div className="space-y-3 text-sm text-gray-300">
+            <div className="flex justify-between">
+              <span>Total Songs:</span>
+              <span className="text-cyan-400">{totalSongs}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total Votes:</span>
+              <span className="text-cyan-400">{totalVotes}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       
       {/* How It Works */}
       <Card className="bg-gray-900/40 border-gray-800/50">

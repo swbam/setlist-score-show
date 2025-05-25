@@ -50,16 +50,35 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
           longitude: venue.location?.longitude ? parseFloat(venue.location.longitude.toString()) : null
         });
 
-        // Store show
+        // Validate date before storing show
         const showDate = event.dates?.start?.dateTime || event.dates?.start?.localDate;
-        if (!showDate) continue;
+        if (!showDate) {
+          console.warn(`Skipping event ${event.name} - no valid date`);
+          continue;
+        }
 
+        // Format date properly
+        let formattedDate: string;
+        try {
+          if (event.dates.start.dateTime) {
+            formattedDate = new Date(event.dates.start.dateTime).toISOString();
+          } else if (event.dates.start.localDate) {
+            formattedDate = new Date(event.dates.start.localDate + 'T00:00:00Z').toISOString();
+          } else {
+            throw new Error('No valid date format');
+          }
+        } catch (dateError) {
+          console.warn(`Skipping event ${event.name} - invalid date format:`, showDate);
+          continue;
+        }
+
+        // Store show
         await supabase.from('shows').upsert({
           id: event.id,
           artist_id: spotifyId,
           venue_id: venue.id,
           name: event.name,
-          date: new Date(showDate).toISOString(),
+          date: formattedDate,
           start_time: event.dates?.start?.localTime || null,
           status: event.dates?.status?.code === 'onsale' ? 'scheduled' : 'canceled',
           ticketmaster_url: event.url,
