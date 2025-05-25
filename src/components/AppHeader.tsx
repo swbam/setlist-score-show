@@ -63,7 +63,7 @@ const AppHeader = () => {
       >
         <div className="w-full max-w-full px-4 lg:px-8">
           <div className="flex items-center justify-between">
-            {/* Logo - removed music icon */}
+            {/* Logo */}
             <div
               className="flex items-center cursor-pointer"
               onClick={handleLogoClick}

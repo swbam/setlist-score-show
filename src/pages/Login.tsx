@@ -119,8 +119,8 @@ const Login = () => {
             {/* Email/Password Auth */}
             <Tabs defaultValue="signin" className="w-full">
               <TabsList className="grid grid-cols-2 mb-6 bg-gray-800">
-                <TabsTrigger value="signin" className="data-[state=active]:bg-cyan-600">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" className="data-[state=active]:bg-cyan-600">Sign Up</TabsTrigger>
+                <TabsTrigger value="signin" className="data-[state=active]:bg-yellow-metal-600">Sign In</TabsTrigger>
+                <TabsTrigger value="signup" className="data-[state=active]:bg-yellow-metal-600">Sign Up</TabsTrigger>
               </TabsList>
               
               {/* Sign In Form */}
@@ -151,7 +151,7 @@ const Login = () => {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-cyan-600 hover:bg-cyan-700" 
+                    className="w-full bg-yellow-metal-600 hover:bg-yellow-metal-700 text-white" 
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -220,7 +220,7 @@ const Login = () => {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-cyan-600 hover:bg-cyan-700" 
+                    className="w-full bg-yellow-metal-600 hover:bg-yellow-metal-700 text-white" 
                     disabled={isLoading}
                   >
                     {isLoading ? (

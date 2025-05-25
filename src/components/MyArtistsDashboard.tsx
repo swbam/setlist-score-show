@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Music, Calendar, TrendingUp } from "lucide-react";
+import { Music, Calendar, TrendingUp, Plus, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -144,9 +145,18 @@ const MyArtistsDashboard = () => {
   if (loading) {
     return (
       <div className="space-y-6">
+        {/* Dashboard Header */}
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-white">My Artists</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-white flex items-center">
+              <Star className="h-6 w-6 mr-2 text-yellow-metal-400" />
+              My Artists
+            </h2>
+            <p className="text-gray-400">Your followed artists and upcoming shows</p>
+          </div>
         </div>
+        
+        {/* Loading State */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
           {[...Array(10)].map((_, i) => (
             <Card key={i} className="bg-gray-900 border-gray-800 animate-pulse">
@@ -165,8 +175,15 @@ const MyArtistsDashboard = () => {
   if (topArtists.length === 0) {
     return (
       <div className="space-y-6">
+        {/* Dashboard Header */}
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-white">My Artists</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-white flex items-center">
+              <Star className="h-6 w-6 mr-2 text-yellow-metal-400" />
+              My Artists
+            </h2>
+            <p className="text-gray-400">Your followed artists and upcoming shows</p>
+          </div>
           <Button 
             onClick={importFromSpotify}
             disabled={importing}
@@ -186,22 +203,45 @@ const MyArtistsDashboard = () => {
           </Button>
         </div>
         
-        <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
-          <Music className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-white mb-2">No artists yet</h3>
-          <p className="text-gray-400 mb-6">
-            Import your top artists from Spotify or search for artists to follow
+        {/* Empty State */}
+        <div className="text-center py-16 bg-gradient-to-br from-gray-900/50 to-gray-800/30 rounded-xl border border-gray-800">
+          <div className="relative mb-6">
+            <div className="h-24 w-24 bg-yellow-metal-900/30 rounded-full flex items-center justify-center mx-auto border border-yellow-metal-700/50">
+              <Music className="h-10 w-10 text-yellow-metal-400" />
+            </div>
+            <div className="absolute -top-2 -right-2 h-8 w-8 bg-yellow-metal-600 rounded-full flex items-center justify-center">
+              <Plus className="h-4 w-4 text-white" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-medium text-white mb-2">Start Building Your Music Collection</h3>
+          <p className="text-gray-400 mb-8 max-w-md mx-auto">
+            Import your favorite artists from Spotify or browse our catalog to start following artists and voting on setlists
           </p>
-          <div className="flex gap-4 justify-center">
+          
+          <div className="flex gap-4 justify-center flex-col sm:flex-row">
             <Button 
               onClick={importFromSpotify}
               disabled={importing}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
-              {importing ? "Importing..." : "Import from Spotify"}
+              {importing ? (
+                <>
+                  <TrendingUp className="h-4 w-4 mr-2 animate-spin" />
+                  Importing from Spotify...
+                </>
+              ) : (
+                <>
+                  <Music className="h-4 w-4 mr-2" />
+                  Import from Spotify
+                </>
+              )}
             </Button>
-            <Button variant="outline" asChild>
-              <Link to="/">Browse Artists</Link>
+            <Button variant="outline" className="border-yellow-metal-600 text-yellow-metal-400 hover:bg-yellow-metal-900/30" asChild>
+              <Link to="/artists">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Browse Artists
+              </Link>
             </Button>
           </div>
         </div>
@@ -211,32 +251,37 @@ const MyArtistsDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Dashboard Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white">My Artists</h2>
+          <h2 className="text-2xl font-bold text-white flex items-center">
+            <Star className="h-6 w-6 mr-2 text-yellow-metal-400" />
+            My Artists
+          </h2>
           <p className="text-gray-400">Your followed artists and upcoming shows</p>
         </div>
         <Button 
           onClick={importFromSpotify}
           disabled={importing}
           variant="outline"
-          className="border-gray-700"
+          className="border-yellow-metal-600 text-yellow-metal-400 hover:bg-yellow-metal-900/30"
         >
           <TrendingUp className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
 
+      {/* Artists Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
         {topArtists.map((artist) => (
-          <Card key={artist.id} className="bg-gray-900 border-gray-800 overflow-hidden hover:border-cyan-500 transition-all duration-300 group">
+          <Card key={artist.id} className="bg-gray-900 border-gray-800 overflow-hidden hover:border-yellow-metal-500 transition-all duration-300 group">
             <Link to={`/artists/${artist.id}/${artist.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-')}`} className="block h-full">
               <div className="h-40 bg-gray-800 relative">
                 {artist.image_url ? (
                   <img
                     src={artist.image_url}
                     alt={artist.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
                 ) : (
@@ -246,21 +291,28 @@ const MyArtistsDashboard = () => {
                 )}
                 
                 {artist.upcoming_shows_count && artist.upcoming_shows_count > 0 && (
-                  <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded-full bg-cyan-600 text-white">
+                  <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded-full bg-yellow-metal-600 text-white">
                     {artist.upcoming_shows_count} shows
                   </div>
                 )}
+                
+                {/* Rank Badge */}
+                <div className="absolute top-2 left-2 px-2 py-1 text-xs font-bold rounded-full bg-yellow-metal-400 text-black">
+                  #{artist.rank}
+                </div>
               </div>
               
               <CardContent className="p-4">
-                <h3 className="text-white font-medium truncate">{artist.name}</h3>
+                <h3 className="text-white font-medium truncate group-hover:text-yellow-metal-400 transition-colors">
+                  {artist.name}
+                </h3>
                 {artist.genres && artist.genres.length > 0 && (
                   <p className="text-sm text-gray-400 truncate">
                     {artist.genres.slice(0, 2).join(", ")}
                   </p>
                 )}
                 {artist.upcoming_shows_count !== undefined && (
-                  <div className="flex items-center text-xs text-cyan-400 mt-1">
+                  <div className="flex items-center text-xs text-yellow-metal-400 mt-1">
                     <Calendar className="h-3 w-3 mr-1" />
                     {artist.upcoming_shows_count} upcoming shows
                   </div>
