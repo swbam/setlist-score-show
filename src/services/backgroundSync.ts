@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
 import * as setlistfmService from "@/services/setlistfm";
+import { findSpotifyArtistForTicketmaster } from "@/services/artistMapping";
 
 /**
  * Background synchronization service for TheSet
@@ -39,8 +40,8 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
 
         const attraction = attractions[0];
         
-        // Find or create artist
-        const spotifyId = await spotifyService.findOrCreateArtist(attraction.name);
+        // Find or create artist using the mapping service
+        const spotifyId = await findSpotifyArtistForTicketmaster(attraction.id, attraction.name);
         if (!spotifyId) continue;
 
         // Extract venue info
@@ -53,16 +54,16 @@ export const syncTrendingShows = async (): Promise<SyncResult> => {
         await supabase.from('venues').upsert({
           id: venue.id,
           name: venue.name,
-          city: venue.city.name,
-          state: venue.state?.stateCode,
-          country: venue.country.countryCode,
-          address: venue.address?.line1,
-          latitude: parseFloat(venue.location?.latitude) || null,
-          longitude: parseFloat(venue.location?.longitude) || null
+          city: venue.city?.name || '',
+          state: venue.state?.name || null,
+          country: venue.country?.name || '',
+          address: venue.address?.line1 || null,
+          latitude: venue.location?.latitude ? parseFloat(venue.location.latitude.toString()) : null,
+          longitude: venue.location?.longitude ? parseFloat(venue.location.longitude.toString()) : null
         });
 
         // Store show
-        const showDate = event.dates?.start?.localDate;
+        const showDate = event.dates?.start?.dateTime || event.dates?.start?.localDate;
         if (!showDate) continue;
 
         await supabase.from('shows').upsert({
@@ -182,15 +183,15 @@ export const importRecentSetlists = async (): Promise<SyncResult> => {
     for (const show of recentShows) {
       try {
         // Search for setlist on setlist.fm
-        const setlistData = await setlistfmService.searchSetlist(
+        const setlistData = await setlistfmService.searchSetlists(
           show.artist.name,
-          show.date,
-          show.venue.name
+          show.date.split('T')[0].replace(/-/g, '-')
         );
 
-        if (setlistData) {
-          // Import the setlist
-          await setlistfmService.importPlayedSetlist(show.id, setlistData);
+        if (setlistData && setlistData.length > 0) {
+          // Import the first matching setlist
+          const setlist = setlistData[0];
+          await setlistfmService.storePlayedSetlist(show.id, setlist.id, setlist.eventDate);
           processed++;
         }
         
@@ -286,7 +287,7 @@ export const runFullSync = async (): Promise<SyncResult[]> => {
 /**
  * Manual sync trigger for development/testing
  */
-export const triggerManualSync = async (syncType: 'trending' | 'catalogs' | 'setlists' | 'stats' | 'full') => {
+export const triggerManualSync = async (syncType: 'trending' | 'catalogs' | 'setlists' | 'stats' | 'full'): Promise<SyncResult | SyncResult[]> => {
   switch (syncType) {
     case 'trending':
       return await syncTrendingShows();

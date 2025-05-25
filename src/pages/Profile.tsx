@@ -122,7 +122,12 @@ const Profile = () => {
     setSyncing(true);
     try {
       const result = await triggerManualSync('catalogs');
-      if (result.success) {
+      // Handle both single result and array of results
+      const success = Array.isArray(result) 
+        ? result.every(r => r.success)
+        : result.success;
+      
+      if (success) {
         toast.success("Data refreshed successfully!");
       } else {
         toast.error("Failed to refresh data");
