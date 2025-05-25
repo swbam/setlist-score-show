@@ -18,6 +18,7 @@ export type Database = {
           name: string
           popularity: number | null
           spotify_url: string | null
+          ticketmaster_id: string | null
         }
         Insert: {
           genres?: string[] | null
@@ -27,6 +28,7 @@ export type Database = {
           name: string
           popularity?: number | null
           spotify_url?: string | null
+          ticketmaster_id?: string | null
         }
         Update: {
           genres?: string[] | null
@@ -36,6 +38,7 @@ export type Database = {
           name?: string
           popularity?: number | null
           spotify_url?: string | null
+          ticketmaster_id?: string | null
         }
         Relationships: []
       }

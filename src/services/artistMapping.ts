@@ -37,7 +37,7 @@ export const findSpotifyArtistForTicketmaster = async (
     
     if (spotifyResults.length > 0) {
       // Find the best match
-      const exactMatch = spotifyResults.find(artist => 
+      const exactMatch = spotifyResults.find((artist: any) => 
         artist.name.toLowerCase() === artistName.toLowerCase()
       );
       

@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Music, LogOut, UserCircle } from "lucide-react";
+import { User, Music, LogOut, UserCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { signOut } from "@/services/auth";
 import AppHeader from "@/components/AppHeader";
 import MyArtistsDashboard from "@/components/MyArtistsDashboard";
+import { triggerManualSync } from "@/services/backgroundSync";
 
 interface UserVoteHistory {
   show_id: string;
@@ -28,6 +29,7 @@ const Profile = () => {
   const [recentVotes, setRecentVotes] = useState<UserVoteHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
   
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -115,6 +117,23 @@ const Profile = () => {
       console.error("Error signing out:", error);
     }
   };
+
+  const handleRefreshData = async () => {
+    setSyncing(true);
+    try {
+      const result = await triggerManualSync('catalogs');
+      if (result.success) {
+        toast.success("Data refreshed successfully!");
+      } else {
+        toast.error("Failed to refresh data");
+      }
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+      toast.error("Failed to refresh data");
+    } finally {
+      setSyncing(false);
+    }
+  };
   
   if (loading) {
     return (
@@ -168,6 +187,16 @@ const Profile = () => {
                   <User className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="border-cyan-700 text-cyan-400"
+                  onClick={handleRefreshData}
+                  disabled={syncing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Refresh Data'}
+                </Button>
                 
                 <Button 
                   variant="outline" 
@@ -194,7 +223,7 @@ const Profile = () => {
             </TabsTrigger>
           </TabsList>
           
-          {/* My Artists Tab - Now using the dedicated component */}
+          {/* My Artists Tab - Now using the improved component */}
           <TabsContent value="artists">
             <MyArtistsDashboard />
           </TabsContent>
