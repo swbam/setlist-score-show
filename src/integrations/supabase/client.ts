@@ -18,6 +18,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   }
 });
 
+// Create a typed client with additional RPC functions
+export const typedSupabase = supabase as typeof supabase & {
+  rpc: {
+    increment_show_views: (args: { show_id: string }) => Promise<{ data: any; error: any }>;
+    create_setlist_with_songs: (args: { p_show_id: string }) => Promise<{ data: any; error: any }>;
+    vote_for_song: (args: { setlist_song_id: string }) => Promise<{ data: any; error: any }>;
+    get_or_create_setlist: (args: { show_id: string }) => Promise<{ data: any; error: any }>;
+    match_song_similarity: (args: { p_artist_id: string; p_song_name: string; p_similarity_threshold: number }) => Promise<{ data: any; error: any }>;
+  };
+};
+
 // Define additional RPC functions that aren't in the generated types
 export interface SupabaseRPCFunctions {
   increment_show_views: (args: { show_id: string }) => void;

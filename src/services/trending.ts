@@ -1,5 +1,5 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { typedSupabase } from "@/integrations/supabase/client";
 
 export interface TrendingShow {
   id: string;
@@ -36,7 +36,7 @@ export interface TrendingArtist {
 // Increment show view count
 export async function incrementShowViews(showId: string): Promise<boolean> {
   try {
-    const { error } = await supabase.rpc('increment_show_views', {
+    const { error } = await typedSupabase.rpc('increment_show_views', {
       show_id: showId
     });
 
@@ -61,7 +61,7 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
     const futureDate = new Date();
     futureDate.setDate(today.getDate() + 90); // Next 90 days
     
-    const { data: showsData, error } = await supabase
+    const { data: showsData, error } = await typedSupabase
       .from('shows')
       .select(`
         id,
@@ -166,7 +166,7 @@ export async function getTrendingArtists(limit: number = 20): Promise<TrendingAr
     const futureDate = new Date();
     futureDate.setDate(today.getDate() + 90);
     
-    const { data: artistsData, error } = await supabase
+    const { data: artistsData, error } = await typedSupabase
       .from('artists')
       .select(`
         id,
