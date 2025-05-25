@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
@@ -8,6 +7,7 @@ import AppHeader from "@/components/AppHeader";
 import TrendingShows from "@/components/TrendingShows";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import { useMobile } from "@/context/MobileContext";
+import SEO from "@/components/SEO";
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -24,6 +24,10 @@ const Index = () => {
 
   return (
     <div className="min-h-screen w-full bg-black">
+      <SEO 
+        title="TheSet - Vote on Concert Setlists"
+        description="Join thousands of music fans voting on setlists for upcoming concerts. Predict what songs will be played and compare with actual performed setlists."
+      />
       <AppHeader />
       
       {/* Hero Section */}

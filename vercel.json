@@ -1,0 +1,21 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-trends",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-setlists",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-shows",
+      "schedule": "0 */6 * * *"
+    }
+  ],
+  "functions": {
+    "api/cron/*.js": {
+      "maxDuration": 60
+    }
+  }
+}

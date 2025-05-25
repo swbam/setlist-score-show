@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS public.user_artists (
     UNIQUE(user_id, artist_id)
 );
 
+-- Create artist_mappings table for mapping between Ticketmaster and Spotify IDs
+CREATE TABLE IF NOT EXISTS public.artist_mappings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    artist_name TEXT NOT NULL,
+    spotify_id TEXT REFERENCES public.artists(id),
+    ticketmaster_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+    UNIQUE(spotify_id, ticketmaster_id)
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_shows_artist_id ON public.shows(artist_id);
 CREATE INDEX IF NOT EXISTS idx_shows_venue_id ON public.shows(venue_id);
@@ -126,6 +136,8 @@ CREATE INDEX IF NOT EXISTS idx_votes_user_id ON public.votes(user_id);
 CREATE INDEX IF NOT EXISTS idx_votes_setlist_song_id ON public.votes(setlist_song_id);
 CREATE INDEX IF NOT EXISTS idx_user_artists_user_id ON public.user_artists(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_artists_artist_id ON public.user_artists(artist_id);
+CREATE INDEX IF NOT EXISTS idx_artist_mappings_spotify_id ON public.artist_mappings(spotify_id);
+CREATE INDEX IF NOT EXISTS idx_artist_mappings_ticketmaster_id ON public.artist_mappings(ticketmaster_id);
 
 -- Create RLS policies
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -139,6 +151,7 @@ ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.played_setlists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.played_setlist_songs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_artists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.artist_mappings ENABLE ROW LEVEL SECURITY;
 
 -- Users table policies
 CREATE POLICY "Users can view their own profile" ON public.users
@@ -228,6 +241,13 @@ CREATE POLICY "Users can update their own artists" ON public.user_artists
 
 CREATE POLICY "Users can delete their own artists" ON public.user_artists
     FOR DELETE USING (auth.uid() = user_id);
+
+-- Artist mappings table policies (public read, system write)
+CREATE POLICY "Anyone can view artist mappings" ON public.artist_mappings
+    FOR SELECT USING (true);
+
+CREATE POLICY "System can manage artist mappings" ON public.artist_mappings
+    FOR ALL USING (true);
 
 -- Create functions
 CREATE OR REPLACE FUNCTION public.get_or_create_setlist(show_id TEXT)
