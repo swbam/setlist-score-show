@@ -1,9 +1,9 @@
-
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as setlistService from "@/services/setlist";
+import * as votingService from "@/services/voting";
 import { Show, Setlist, SetlistSong } from "./types";
 
 export function useShowVoting(user: any) {
@@ -14,11 +14,24 @@ export function useShowVoting(user: any) {
   const [votingError, setVotingError] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
   const [voteSubmitting, setVoteSubmitting] = useState<string | null>(null);
+  const [voteLimits, setVoteLimits] = useState<votingService.VoteLimits | null>(null);
   
-  // Check remaining votes allowed
+  // Calculate voting stats
   const usedVotesCount = Object.keys(userVotes).length;
-  const maxFreeVotes = 3;
-  const votesRemaining = user ? 'Unlimited' : maxFreeVotes - usedVotesCount;
+  const maxFreeVotes = voteLimits?.maxVotesPerShow || 3;
+  const votesRemaining = voteLimits?.isUnlimited 
+    ? 'unlimited' 
+    : Math.max(0, maxFreeVotes - usedVotesCount);
+
+  // Fetch user vote limits
+  useEffect(() => {
+    async function fetchVoteLimits() {
+      const limits = await votingService.getUserVoteLimits(user?.id || null);
+      setVoteLimits(limits);
+    }
+    
+    fetchVoteLimits();
+  }, [user]);
 
   // Fetch show data and create/get setlist
   useEffect(() => {
@@ -79,41 +92,20 @@ export function useShowVoting(user: any) {
               if (setlistWithSongs.songs) {
                 // Check user votes if logged in
                 if (user) {
-                  const { data: votesData } = await supabase
-                    .from('votes')
-                    .select('setlist_song_id')
-                    .eq('user_id', user.id);
-                    
-                  if (votesData) {
-                    const votesMap: Record<string, boolean> = {};
-                    votesData.forEach(vote => {
-                      votesMap[vote.setlist_song_id] = true;
-                    });
-                    setUserVotes(votesMap);
-                    
-                    // Mark songs user has voted for and ensure song property is present
-                    const updatedSongs = setlistWithSongs.songs.map(song => ({
-                      ...song,
-                      song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' },
-                      userVoted: votesMap[song.id] || false
-                    })) as SetlistSong[];
-                    
-                    setSetlist({
-                      ...setlistWithSongs,
-                      songs: updatedSongs
-                    } as Setlist);
-                  } else {
-                    // Ensure song property is present
-                    const updatedSongs = setlistWithSongs.songs.map(song => ({
-                      ...song,
-                      song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' }
-                    })) as SetlistSong[];
-                    
-                    setSetlist({
-                      ...setlistWithSongs,
-                      songs: updatedSongs
-                    } as Setlist);
-                  }
+                  const userVotesMap = await votingService.getUserVotesForSetlist(user.id, setlistId);
+                  setUserVotes(userVotesMap);
+                  
+                  // Mark songs user has voted for and ensure song property is present
+                  const updatedSongs = setlistWithSongs.songs.map(song => ({
+                    ...song,
+                    song: song.song || { id: '', artist_id: '', name: '', album: '', duration_ms: 0, popularity: 0, spotify_url: '' },
+                    userVoted: userVotesMap[song.id] || false
+                  })) as SetlistSong[];
+                  
+                  setSetlist({
+                    ...setlistWithSongs,
+                    songs: updatedSongs
+                  } as Setlist);
                 } else {
                   // Ensure song property is present
                   const updatedSongs = setlistWithSongs.songs.map(song => ({
@@ -239,7 +231,7 @@ export function useShowVoting(user: any) {
   }, [setlist, userVotes]);
 
   // Handle voting for a song
-  const handleVote = async (songId: string) => {
+  const handleVote = async (setlistSongId: string) => {
     if (!user) {
       setVotingError("Please sign in to vote");
       toast.error("Sign in to vote on setlists", {
@@ -251,20 +243,42 @@ export function useShowVoting(user: any) {
       return;
     }
     
-    if (userVotes[songId]) {
-      toast.error("You've already voted for this song");
+    if (!setlist) {
+      toast.error("Setlist not loaded");
+      return;
+    }
+    
+    // Check vote status first
+    const voteStatus = await votingService.checkVoteStatus(user.id, setlist.id, setlistSongId);
+    
+    if (!voteStatus.canVote) {
+      if (voteStatus.hasVoted) {
+        toast.error("You've already voted for this song");
+      } else {
+        toast.error("You've reached your vote limit for this show", {
+          description: `You can vote for ${voteLimits?.maxVotesPerShow} songs per show`,
+        });
+      }
       return;
     }
     
     // Track submitting state for this song
-    setVoteSubmitting(songId);
+    setVoteSubmitting(setlistSongId);
+    
+    // Find the current song to update optimistically
+    const currentSong = setlist.songs.find(s => s.id === setlistSongId);
+    if (!currentSong) {
+      toast.error("Song not found");
+      setVoteSubmitting(null);
+      return;
+    }
     
     // Optimistically update UI
     setSetlist(prev => {
       if (!prev || !prev.songs) return prev;
       
       const updatedSongs = prev.songs.map(song => 
-        song.id === songId
+        song.id === setlistSongId
           ? { ...song, votes: song.votes + 1, userVoted: true }
           : song
       ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
@@ -275,29 +289,23 @@ export function useShowVoting(user: any) {
       };
     });
     
-    setUserVotes(prev => ({ ...prev, [songId]: true }));
+    setUserVotes(prev => ({ ...prev, [setlistSongId]: true }));
     
     try {
-      console.log("Voting for song:", songId);
+      console.log("Voting for song:", setlistSongId);
       
-      // Record both setlist_id and setlist_song_id
-      const { error } = await supabase
-        .from('votes')
-        .insert({
-          user_id: user.id,
-          setlist_song_id: songId,
-          setlist_id: setlist?.id
-        });
-        
-      if (error) {
-        console.error("Vote failed:", error);
+      // Use the voting service to submit the vote
+      const result = await votingService.submitVote(user.id, setlistSongId, setlist.id);
+      
+      if (!result.success) {
+        console.error("Vote failed:", result.error);
         
         // Revert optimistic update
         setSetlist(prev => {
           if (!prev || !prev.songs) return prev;
           
           const updatedSongs = prev.songs.map(song => 
-            song.id === songId
+            song.id === setlistSongId
               ? { ...song, votes: song.votes - 1, userVoted: false }
               : song
           ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
@@ -310,23 +318,13 @@ export function useShowVoting(user: any) {
         
         setUserVotes(prev => {
           const newState = { ...prev };
-          delete newState[songId];
+          delete newState[setlistSongId];
           return newState;
         });
         
-        toast.error("Failed to vote for song");
-        return;
-      }
-      
-      // Update the song's vote count in the setlist_songs table
-      const { error: updateError } = await supabase
-        .from('setlist_songs')
-        .update({ votes: setlist?.songs.find(s => s.id === songId)?.votes + 1 })
-        .eq('id', songId);
-        
-      if (updateError) {
-        console.error("Failed to update vote count:", updateError);
-        // The vote was recorded, so we won't revert UI changes
+        toast.error(result.error || "Failed to vote for song");
+      } else {
+        toast.success("Vote submitted successfully!");
       }
     } catch (error) {
       console.error("Error voting:", error);
@@ -336,7 +334,7 @@ export function useShowVoting(user: any) {
         if (!prev || !prev.songs) return prev;
         
         const updatedSongs = prev.songs.map(song => 
-          song.id === songId
+          song.id === setlistSongId
             ? { ...song, votes: song.votes - 1, userVoted: false }
             : song
         ).sort((a, b) => b.votes - a.votes); // Re-sort by votes
@@ -349,7 +347,7 @@ export function useShowVoting(user: any) {
       
       setUserVotes(prev => {
         const newState = { ...prev };
-        delete newState[songId];
+        delete newState[setlistSongId];
         return newState;
       });
       

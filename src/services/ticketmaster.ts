@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import * as artistMapping from "./artistMapping";
 
 // Ticketmaster API key
 const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
@@ -180,35 +181,51 @@ export const storeShowInDatabase = async (
   venueId: string
 ): Promise<boolean> => {
   try {
+    // First, try to find the correct artist ID (Spotify ID) using our mapping
+    let finalArtistId = artistId;
+    const artistName = event._embedded?.attractions?.[0]?.name;
+    
+    if (artistName) {
+      // Get or create artist mapping
+      const mapping = await artistMapping.getOrCreateArtistMapping(
+        artistName,
+        undefined, // We don't have Spotify ID yet
+        artistId   // This is Ticketmaster ID
+      );
+      
+      if (mapping && mapping.spotify_id) {
+        finalArtistId = mapping.spotify_id;
+        console.log(`Mapped Ticketmaster artist ${artistId} to Spotify artist ${finalArtistId}`);
+      } else {
+        console.log(`No Spotify mapping found for Ticketmaster artist ${artistId}, attempting direct lookup`);
+        
+        // Try to find artist by exact name match in our database
+        const { data: artistByName } = await supabase
+          .from('artists')
+          .select('id')
+          .ilike('name', artistName)
+          .maybeSingle();
+          
+        if (artistByName) {
+          finalArtistId = artistByName.id;
+          console.log(`Found artist by name: ${finalArtistId}`);
+        } else {
+          console.warn(`Could not find Spotify artist for "${artistName}". Event will not be stored.`);
+          return false;
+        }
+      }
+    }
+    
     // Check if artist exists in the database
     const { data: artistExists } = await supabase
       .from('artists')
       .select('id')
-      .eq('id', artistId)
+      .eq('id', finalArtistId)
       .maybeSingle();
     
-    // If artist doesn't exist with that ID, try to find them by name
     if (!artistExists) {
-      console.warn(`Artist with ID ${artistId} not found in database.`);
-      // This could happen if we're using a Ticketmaster ID but the artist was stored with Spotify ID
-      // Try to find by name using the event information
-      if (event._embedded?.attractions?.[0]?.name) {
-        const { data: artistByName } = await supabase
-          .from('artists')
-          .select('id')
-          .ilike('name', event._embedded.attractions[0].name)
-          .maybeSingle();
-        
-        if (artistByName) {
-          artistId = artistByName.id;
-          console.log(`Found artist by name instead: ${artistId}`);
-        } else {
-          console.error(`Could not find artist ${event._embedded.attractions[0].name} in database`);
-          return false;
-        }
-      } else {
-        return false;
-      }
+      console.error(`Artist with ID ${finalArtistId} not found in database. Store artist first.`);
+      return false;
     }
     
     // Check if venue exists
@@ -226,7 +243,7 @@ export const storeShowInDatabase = async (
     // Format the show data
     const showData = {
       id: event.id,
-      artist_id: artistId,
+      artist_id: finalArtistId,  // Now using the mapped Spotify ID
       venue_id: venueId,
       name: event.name || null,
       date: event.dates?.start?.dateTime || null,

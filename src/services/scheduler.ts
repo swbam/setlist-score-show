@@ -1,8 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Background update scheduler for artist data, shows, and trends
+ * Background update scheduler for artist data, shows, trends, and setlist imports
  * 
  * This service coordinates background updates at appropriate intervals
  */
@@ -12,6 +11,7 @@ const updateCache = {
   artists: new Map<string, number>(), // artistId -> timestamp
   shows: new Map<string, number>(),   // showId -> timestamp
   trends: 0,                         // timestamp of last trend calculation
+  setlistImport: 0,                  // timestamp of last setlist import run
 };
 
 // Update interval constants (in milliseconds)
@@ -20,6 +20,7 @@ const UPDATE_INTERVALS = {
   SHOWS: 6 * 60 * 60 * 1000,        // 6 hours for show status
   TRENDS: 60 * 60 * 1000,           // 1 hour for trends
   USER_DATA: 30 * 60 * 1000,        // 30 minutes for user data
+  SETLIST_IMPORT: 24 * 60 * 60 * 1000, // 24 hours for setlist imports
 };
 
 // Flags to prevent multiple concurrent updates of the same type
@@ -27,6 +28,7 @@ const isUpdating = {
   artists: false,
   shows: false,
   trends: false,
+  setlistImport: false,
 };
 
 /**
@@ -46,7 +48,8 @@ async function getServices() {
   const artistUtils = await import("@/utils/artistUtils");
   const catalogService = await import("@/services/catalog");
   const ticketmasterService = await import("@/services/ticketmaster");
-  return { artistUtils, catalogService, ticketmasterService };
+  const setlistImportService = await import("@/services/setlistImport");
+  return { artistUtils, catalogService, ticketmasterService, setlistImportService };
 }
 
 /**
@@ -187,6 +190,42 @@ export async function updateTrends(): Promise<boolean> {
 }
 
 /**
+ * Import setlists for recent shows from setlist.fm
+ */
+export async function importRecentSetlists(): Promise<boolean> {
+  // Check if import was run recently
+  if (isUpdating.setlistImport || !needsUpdate(updateCache.setlistImport, UPDATE_INTERVALS.SETLIST_IMPORT)) {
+    console.log('Setlist import was run recently, skipping');
+    return false;
+  }
+  
+  isUpdating.setlistImport = true;
+  
+  try {
+    console.log('Background update: Importing recent setlists from setlist.fm');
+    
+    const { setlistImportService } = await getServices();
+    
+    // Import setlists for shows from the last 7 days
+    const result = await setlistImportService.importRecentShowSetlists(7);
+    
+    console.log(`Processed ${result.showsProcessed} shows, imported ${result.setlistsImported} setlists`);
+    
+    if (result.errors.length > 0) {
+      console.warn('Setlist import errors:', result.errors);
+    }
+    
+    updateCache.setlistImport = Date.now();
+    return true;
+  } catch (error) {
+    console.error('Error importing setlists:', error);
+    return false;
+  } finally {
+    isUpdating.setlistImport = false;
+  }
+}
+
+/**
  * Initialize periodic background updates
  * This will be called from main App component
  */
@@ -196,10 +235,20 @@ export function initBackgroundUpdates(): void {
     updateTrends().catch(console.error);
   }, 5000); // Wait 5 seconds after app load
   
+  // Initial setlist import (wait 30 seconds to avoid startup congestion)
+  setTimeout(() => {
+    importRecentSetlists().catch(console.error);
+  }, 30000);
+  
   // Periodic trend updates
   setInterval(() => {
     updateTrends().catch(console.error);
   }, UPDATE_INTERVALS.TRENDS);
+  
+  // Periodic setlist imports (daily)
+  setInterval(() => {
+    importRecentSetlists().catch(console.error);
+  }, UPDATE_INTERVALS.SETLIST_IMPORT);
   
   console.log('Background update scheduler initialized');
 }

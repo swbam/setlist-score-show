@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, Check, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, X, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import * as setlistImportService from "@/services/setlistImport";
 import AppHeader from "@/components/AppHeader";
 
 interface Show {
@@ -54,6 +55,7 @@ interface ComparisonData {
 const SetlistComparison = () => {
   const { showId } = useParams<{ showId: string }>();
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [comparison, setComparison] = useState<ComparisonData>({
     show: null,
     votedSetlist: [],
@@ -71,114 +73,120 @@ const SetlistComparison = () => {
       .replace(/^-+|-+$/g, '');
   };
 
-  useEffect(() => {
-    async function fetchComparisonData() {
-      if (!showId) return;
-      
-      try {
-        setLoading(true);
-        
-        // Get show data
-        const { data: showData, error: showError } = await supabase
-          .from('shows')
-          .select(`
-            *,
-            artist:artists(name),
-            venue:venues(name, city, state, country)
-          `)
-          .eq('id', showId)
-          .single();
-          
-        if (showError) {
-          console.error("Error fetching show:", showError);
-          toast.error("Failed to load show details");
-          return;
-        }
-        
-        // Get voted setlist
-        const { data: setlistData, error: setlistError } = await supabase
-          .from('setlists')
-          .select('id')
-          .eq('show_id', showId)
-          .single();
-          
-        if (setlistError && setlistError.code !== 'PGRST116') { // Not found error
-          console.error("Error fetching setlist:", setlistError);
-        }
-        
-        let votedSongs: SetlistSong[] = [];
-        
-        if (setlistData) {
-          // Get voted songs
-          const { data: votedSongsData } = await supabase
-            .from('setlist_songs')
-            .select(`
-              id,
-              position,
-              song:songs(id, name, album)
-            `)
-            .eq('setlist_id', setlistData.id)
-            .order('position');
-            
-          if (votedSongsData) {
-            votedSongs = votedSongsData;
-          }
-        }
-        
-        // Get played setlist
-        const { data: playedSetlistData, error: playedSetlistError } = await supabase
-          .from('played_setlists')
-          .select('id')
-          .eq('show_id', showId)
-          .single();
-          
-        if (playedSetlistError && playedSetlistError.code !== 'PGRST116') {
-          console.error("Error fetching played setlist:", playedSetlistError);
-        }
-        
-        let playedSongs: PlayedSetlistSong[] = [];
-        
-        if (playedSetlistData) {
-          // Get played songs
-          const { data: playedSongsData } = await supabase
-            .from('played_setlist_songs')
-            .select(`
-              id,
-              position,
-              song:songs(id, name, album)
-            `)
-            .eq('played_setlist_id', playedSetlistData.id)
-            .order('position');
-            
-          if (playedSongsData) {
-            playedSongs = playedSongsData;
-          }
-        }
-        
-        // Calculate match percentage
-        let matchPercentage = 0;
-        if (votedSongs.length && playedSongs.length) {
-          const votedSongIds = new Set(votedSongs.map(s => s.song.id));
-          const matches = playedSongs.filter(s => votedSongIds.has(s.song.id)).length;
-          matchPercentage = Math.round((matches / playedSongs.length) * 100);
-        }
-        
-        setComparison({
-          show: showData,
-          votedSetlist: votedSongs,
-          playedSetlist: playedSongs,
-          matchPercentage
-        });
-      } catch (error) {
-        console.error("Error fetching comparison data:", error);
-        toast.error("An error occurred");
-      } finally {
-        setLoading(false);
-      }
-    }
+  const fetchComparisonData = async () => {
+    if (!showId) return;
     
+    try {
+      setLoading(true);
+      
+      // Get show data
+      const { data: showData, error: showError } = await supabase
+        .from('shows')
+        .select(`
+          *,
+          artist:artists(name),
+          venue:venues(name, city, state, country)
+        `)
+        .eq('id', showId)
+        .single();
+        
+      if (showError) {
+        console.error("Error fetching show:", showError);
+        toast.error("Failed to load show details");
+        return;
+      }
+      
+      // Get voted setlist
+      const { data: setlistData, error: setlistError } = await supabase
+        .from('setlists')
+        .select('id')
+        .eq('show_id', showId)
+        .single();
+        
+      if (setlistError && setlistError.code !== 'PGRST116') { // Not found error
+        console.error("Error fetching setlist:", setlistError);
+      }
+      
+      let votedSongs: SetlistSong[] = [];
+      
+      if (setlistData) {
+        // Get voted songs
+        const { data: votedSongsData } = await supabase
+          .from('setlist_songs')
+          .select(`
+            id,
+            position,
+            song:songs(id, name, album)
+          `)
+          .eq('setlist_id', setlistData.id)
+          .order('position');
+          
+        if (votedSongsData) {
+          votedSongs = votedSongsData;
+        }
+      }
+      
+      // Get played setlist using our service
+      const { playedSetlist, songs: playedSongs } = await setlistImportService.getPlayedSetlistForShow(showId);
+      
+      // Calculate match percentage
+      let matchPercentage = 0;
+      if (votedSongs.length && playedSongs.length) {
+        const votedSongIds = new Set(votedSongs.map(s => s.song.id));
+        const matches = playedSongs.filter(s => s.song && votedSongIds.has(s.song.id)).length;
+        matchPercentage = Math.round((matches / playedSongs.length) * 100);
+      }
+      
+      setComparison({
+        show: showData,
+        votedSetlist: votedSongs,
+        playedSetlist: playedSongs.map(ps => ({
+          id: ps.song?.id || '',
+          position: ps.position,
+          song: ps.song || { id: '', name: 'Unknown Song', album: 'Unknown Album' }
+        })),
+        matchPercentage
+      });
+    } catch (error) {
+      console.error("Error fetching comparison data:", error);
+      toast.error("An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchComparisonData();
   }, [showId]);
+
+  // Handle importing setlist from setlist.fm
+  const handleImportSetlist = async () => {
+    if (!showId) return;
+    
+    setImporting(true);
+    try {
+      const result = await setlistImportService.importPlayedSetlistForShow(showId);
+      
+      if (result.success) {
+        if (result.songsImported && result.songsImported > 0) {
+          toast.success(`Successfully imported ${result.songsImported} songs from setlist.fm`);
+          // Refresh the comparison data
+          await fetchComparisonData();
+        } else if (result.error === "Setlist already imported") {
+          toast.info("Setlist has already been imported");
+        } else {
+          toast.error(result.error || "No songs found in the setlist");
+        }
+      } else {
+        toast.error(result.error || "Failed to import setlist");
+      }
+    } catch (error) {
+      console.error("Error importing setlist:", error);
+      toast.error("An error occurred while importing");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   // Check if song from voted setlist was played
   const wasPlayed = (songId: string) => {
@@ -191,6 +199,9 @@ const SetlistComparison = () => {
   };
 
   const { show, votedSetlist, playedSetlist, matchPercentage } = comparison;
+  
+  // Check if show date has passed
+  const showDatePassed = show ? new Date(show.date) < new Date() : false;
   
   return (
     <div className="min-h-screen bg-black">
@@ -325,17 +336,37 @@ const SetlistComparison = () => {
               
               {/* Played Setlist */}
               <Card className="bg-gray-900 border-gray-800">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl font-bold text-white">
                     Actual Setlist
                   </CardTitle>
+                  {showDatePassed && playedSetlist.length === 0 && (
+                    <Button
+                      size="sm"
+                      onClick={handleImportSetlist}
+                      disabled={importing}
+                      className="bg-cyan-600 hover:bg-cyan-700"
+                    >
+                      {importing ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Import from setlist.fm
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {playedSetlist.length > 0 ? (
                     <ul className="space-y-4">
                       {playedSetlist.map((song, index) => (
                         <li
-                          key={song.id}
+                          key={`played-${index}`}
                           className={`flex items-center justify-between p-3 rounded-md ${
                             wasPredicted(song.song.id) 
                               ? 'bg-green-900/20 border border-green-900'
@@ -361,7 +392,14 @@ const SetlistComparison = () => {
                     </ul>
                   ) : (
                     <div className="text-center py-8 text-gray-400">
-                      No setlist data available yet
+                      {showDatePassed ? (
+                        <>
+                          <p>No setlist data available yet</p>
+                          <p className="text-sm mt-2">Click "Import from setlist.fm" to fetch the actual setlist</p>
+                        </>
+                      ) : (
+                        <p>Show hasn't occurred yet</p>
+                      )}
                     </div>
                   )}
                 </CardContent>

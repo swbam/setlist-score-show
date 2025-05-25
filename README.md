@@ -1,73 +1,107 @@
-# Welcome to your Lovable project
+# TheSet - Concert Setlist Voting Platform
 
-## Project info
+TheSet is a web application that allows music fans to vote on setlists for upcoming concerts and compare fan-created setlists with actual performed setlists.
 
-**URL**: https://lovable.dev/projects/980ce36c-8b47-4256-8080-409176c62b21
+## Features
 
-## How can I edit this code?
+- 🎵 **Spotify Integration**: Login with Spotify to access personalized artist dashboard
+- 🎫 **Ticketmaster Integration**: Real-time concert and venue information
+- 🗳️ **Live Voting**: Vote on songs you want to hear at upcoming shows
+- 📊 **Setlist Comparison**: Compare fan predictions with actual performed setlists
+- 🔄 **Real-time Updates**: Live voting updates via Supabase Realtime
+- 📱 **Mobile Responsive**: Works seamlessly across all devices
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React with TypeScript and Vite
+- **Styling**: Tailwind CSS with ShadCN UI components
+- **Database**: Supabase PostgreSQL
+- **Authentication**: Supabase Auth with Spotify OAuth
+- **State Management**: React Query
+- **Real-time**: Supabase Realtime
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/980ce36c-8b47-4256-8080-409176c62b21) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ or Bun
+- A Supabase account and project
+- Spotify Developer account (for API credentials)
+- Ticketmaster Developer account (for API credentials)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Environment Setup
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+1. Copy the example environment file:
+```bash
+cp .env.example .env
 ```
 
-**Edit a file directly in GitHub**
+2. Update `.env` with your credentials:
+```
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Installation
 
-**Use GitHub Codespaces**
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/setlist-score-show-1.git
+cd setlist-score-show-1
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+2. Install dependencies:
+```bash
+npm install
+# or
+bun install
+```
 
-## What technologies are used for this project?
+3. Set up your Supabase database with the required tables (see Database Schema section)
 
-This project is built with:
+4. Run the development server:
+```bash
+npm run dev
+# or
+bun dev
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The app will be available at `http://localhost:5173`
 
-## How can I deploy this project?
+## Database Schema
 
-Simply open [Lovable](https://lovable.dev/projects/980ce36c-8b47-4256-8080-409176c62b21) and click on Share -> Publish.
+The application requires the following tables in your Supabase database:
 
-## Can I connect a custom domain to my Lovable project?
+- `users` - User profiles
+- `artists` - Artist information from Spotify
+- `venues` - Venue information from Ticketmaster
+- `shows` - Concert/show information
+- `songs` - Song catalog for artists
+- `setlists` - Fan-created setlists
+- `setlist_songs` - Songs in setlists with vote counts
+- `votes` - Individual user votes
+- `played_setlists` - Actual performed setlists
+- `played_setlist_songs` - Songs in performed setlists
+- `user_artists` - User's followed artists
 
-Yes, you can!
+## API Integrations
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Spotify API
+- Used for artist data and song catalogs
+- Requires Client ID and Client Secret
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### Ticketmaster API
+- Used for concert and venue information
+- Requires API Key
+
+### Setlist.fm API
+- Used for actual performed setlists
+- Requires API Key
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License.

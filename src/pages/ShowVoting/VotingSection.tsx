@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,32 +18,36 @@ import SongCard from "./SongCard";
 import { Setlist, SetlistSong, Show } from "./types";
 
 interface VotingSectionProps {
-  show: Show | null;
-  artist: any; // Accept any artist format
   setlist: Setlist | null;
-  onRefresh: () => Promise<void>;
+  show: Show | null;
+  loading: boolean;
+  votingError: string | null;
   voteSubmitting: string | null;
   handleVote: (songId: string) => void;
-  votesRemaining: number | 'Unlimited';
+  handleSongAdded: () => void;
   usedVotesCount: number;
   maxFreeVotes: number;
+  votesRemaining: number | 'unlimited';
+  user: any;
 }
 
-export function VotingSection({ 
-  show, 
-  artist, 
+const VotingSection = ({ 
   setlist, 
-  onRefresh,
+  show,
+  loading,
+  votingError,
   voteSubmitting,
   handleVote,
-  votesRemaining,
+  handleSongAdded,
   usedVotesCount,
-  maxFreeVotes
-}: VotingSectionProps) {
+  maxFreeVotes,
+  votesRemaining,
+  user
+}: VotingSectionProps) => {
   const [selectedSongId, setSelectedSongId] = useState("");
   const [songs, setSongs] = useState<SetlistSong[]>([]);
   const [availableSongs, setAvailableSongs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [addingLoading, setAddingLoading] = useState(false);
   const [loadingSongs, setLoadingSongs] = useState(false);
   
   // Load setlist songs on setlist change
@@ -56,24 +59,24 @@ export function VotingSection({
   
   // Load ALL available songs for the artist
   useEffect(() => {
-    if (artist && artist.id) {
+    if (show?.artist && show.artist.id) {
       fetchAllArtistSongs();
     }
-  }, [artist, songs]);
+  }, [show?.artist, songs]);
   
   // Fetch ALL available songs for the artist from the database
   const fetchAllArtistSongs = async () => {
-    if (!artist?.id) return;
+    if (!show?.artist?.id) return;
     
     try {
       setLoadingSongs(true);
-      console.log("Fetching all songs for artist:", artist.id);
+      console.log("Fetching all songs for artist:", show.artist.id);
       
       // Use catalog service to get all songs
-      const allSongs = await catalogService.getArtistSongCatalog(artist.id);
+      const allSongs = await catalogService.getArtistSongCatalog(show.artist.id);
       
       if (allSongs && allSongs.length > 0) {
-        console.log(`Fetched ${allSongs.length} songs for artist ${artist.name}`);
+        console.log(`Fetched ${allSongs.length} songs for artist ${show.artist.name}`);
         
         // Filter out songs that are already in the setlist
         const existingSongIds = songs.map(song => song.song_id);
@@ -85,11 +88,11 @@ export function VotingSection({
         console.log("No songs found for artist, initiating catalog sync");
         
         // If no songs found, try to sync the catalog
-        const synced = await catalogService.syncArtistCatalog(artist.id, true);
+        const synced = await catalogService.syncArtistCatalog(show.artist.id, true);
         
         if (synced) {
           // Try to fetch songs again after sync
-          const syncedSongs = await catalogService.getArtistSongCatalog(artist.id);
+          const syncedSongs = await catalogService.getArtistSongCatalog(show.artist.id);
           
           if (syncedSongs && syncedSongs.length > 0) {
             // Filter out existing songs
@@ -113,26 +116,20 @@ export function VotingSection({
       setLoadingSongs(false);
     }
   };
-  
-  // Refresh setlist data
-  const refreshSetlist = useCallback(async () => {
-    setLoading(true);
-    await onRefresh();
-    await fetchAllArtistSongs(); // Refresh available songs to exclude newly added ones
-    setLoading(false);
-  }, [onRefresh]);
 
   // Function to add a song to the setlist
   const addSong = async () => {
     if (!setlist || !selectedSongId) return false;
     
     try {
-      setLoading(true);
+      setAddingLoading(true);
       const success = await setlistService.addSongToSetlist(setlist.id, selectedSongId);
       if (success) {
-        await refreshSetlist();
+        handleSongAdded();
         toast.success("Song added to setlist");
         setSelectedSongId(""); // Reset selection
+        // Refresh available songs to exclude newly added ones
+        await fetchAllArtistSongs();
       } else {
         toast.error("Failed to add song. It might already be in the setlist.");
       }
@@ -142,17 +139,65 @@ export function VotingSection({
       toast.error("Failed to add song");
       return false;
     } finally {
-      setLoading(false);
+      setAddingLoading(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="lg:col-span-2 space-y-4">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-800 rounded w-2/3 mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 bg-gray-800 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="lg:col-span-2 space-y-8">
       {/* Setlist Voting Header */}
       <div>
         <h2 className="text-2xl font-bold text-white mb-2">What do you want to hear?</h2>
         <p className="text-gray-400">Vote for songs you want to hear at this show</p>
       </div>
+
+      {/* Voting Stats */}
+      {user && (
+        <Card className="bg-yellow-metal-950/50 border-yellow-metal-800">
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <span className="text-white">
+                  Votes used: <span className="font-bold text-yellow-metal-300">{usedVotesCount}</span>
+                  {votesRemaining !== 'unlimited' && (
+                    <span className="text-gray-400">/{maxFreeVotes}</span>
+                  )}
+                </span>
+                <span className="text-gray-400">•</span>
+                <span className="text-white">
+                  Remaining: <span className="font-bold text-yellow-metal-300">
+                    {votesRemaining === 'unlimited' ? 'Unlimited' : votesRemaining}
+                  </span>
+                </span>
+              </div>
+              {!user && (
+                <Button 
+                  variant="link" 
+                  className="text-yellow-metal-300"
+                  onClick={() => window.location.href = "/login"}
+                >
+                  Sign in for more votes
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Current Setlist */}
       <div className="space-y-4">
@@ -174,89 +219,81 @@ export function VotingSection({
                 index={index}
                 handleVote={handleVote}
                 voteSubmitting={voteSubmitting}
-                isDisabled={votesRemaining === 0}
+                isDisabled={!user || (votesRemaining !== 'unlimited' && votesRemaining === 0)}
               />
             ))}
           </div>
         )}
       </div>
       
-      {/* Voting Stats */}
-      {votesRemaining !== 'Unlimited' && (
-        <Card className="bg-gray-900/40 border-gray-800/50">
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center">
-              <span className="text-white">Votes used: {usedVotesCount}/{maxFreeVotes}</span>
-              <span className="text-white">Remaining: {votesRemaining}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
       {/* Add Song Section - Dropdown with ALL artist songs */}
-      <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-        <h3 className="text-lg font-medium text-white mb-4">Add a song to this setlist:</h3>
-        
-        <div className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="song-select" className="text-gray-300">Select a song</Label>
-            <Select 
-              value={selectedSongId} 
-              onValueChange={setSelectedSongId}
-              disabled={loadingSongs}
-            >
-              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-                <SelectValue placeholder={loadingSongs ? "Loading songs..." : "Select a song"} />
-              </SelectTrigger>
-              <SelectContent 
-                className="bg-gray-800 border-gray-700 text-white"
-                position="popper"
-                sideOffset={5}
-                align="start"
-                side="bottom"
-              >
-                <div className="max-h-[300px] overflow-y-auto">
-                  {availableSongs.map((song) => (
-                    <SelectItem key={song.id} value={song.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{song.name}</span>
-                        {song.album && <span className="text-xs text-gray-400">{song.album}</span>}
-                      </div>
-                    </SelectItem>
-                  ))}
-                  {availableSongs.length === 0 && !loadingSongs && (
-                    <div className="p-4 text-center text-gray-400">
-                      <Music className="h-6 w-6 mx-auto mb-2" />
-                      <p>No songs available for this artist</p>
-                      <p className="text-xs mt-1">Try refreshing to import songs from Spotify</p>
-                    </div>
-                  )}
-                  {loadingSongs && (
-                    <div className="p-4 text-center text-gray-400">
-                      <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                      <p>Loading songs...</p>
-                    </div>
-                  )}
-                </div>
-              </SelectContent>
-            </Select>
-          </div>
+      {show?.artist && (
+        <div className="mt-8 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
+          <h3 className="text-lg font-medium text-white mb-4">Add a song to this setlist:</h3>
           
-          <Button
-            type="button"
-            onClick={addSong}
-            disabled={!selectedSongId || loading}
-            className="w-full"
-          >
-            {loading ? (
-              <div className="h-4 w-4 border-2 border-t-transparent rounded-full animate-spin mr-2" />
-            ) : (
-              <PlusCircle className="h-4 w-4 mr-2" />
-            )}
-            Add to Setlist
-          </Button>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="song-select" className="text-gray-300">Select a song</Label>
+              <Select 
+                value={selectedSongId} 
+                onValueChange={setSelectedSongId}
+                disabled={loadingSongs}
+              >
+                <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder={loadingSongs ? "Loading songs..." : "Select a song"} />
+                </SelectTrigger>
+                <SelectContent 
+                  className="bg-gray-800 border-gray-700 text-white"
+                  position="popper"
+                  sideOffset={5}
+                  align="start"
+                  side="bottom"
+                >
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {availableSongs.map((song) => (
+                      <SelectItem key={song.id} value={song.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{song.name}</span>
+                          {song.album && <span className="text-xs text-gray-400">{song.album}</span>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {availableSongs.length === 0 && !loadingSongs && (
+                      <div className="p-4 text-center text-gray-400">
+                        <Music className="h-6 w-6 mx-auto mb-2" />
+                        <p>No songs available for this artist</p>
+                        <p className="text-xs mt-1">Try refreshing to import songs from Spotify</p>
+                      </div>
+                    )}
+                    {loadingSongs && (
+                      <div className="p-4 text-center text-gray-400">
+                        <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <p>Loading songs...</p>
+                      </div>
+                    )}
+                  </div>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button
+              type="button"
+              onClick={addSong}
+              disabled={!selectedSongId || addingLoading}
+              className="w-full"
+            >
+              {addingLoading ? (
+                <div className="h-4 w-4 border-2 border-t-transparent rounded-full animate-spin mr-2" />
+              ) : (
+                <PlusCircle className="h-4 w-4 mr-2" />
+              )}
+              Add to Setlist
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
-}
+};
+
+export default VotingSection;
