@@ -1,259 +1,222 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
-const TICKETMASTER_BASE_URL = "https://app.ticketmaster.com/discovery/v2";
+const TICKETMASTER_API_BASE = "https://app.ticketmaster.com/discovery/v2";
 
-// Export the TicketmasterEvent interface
+// Ticketmaster API Types
 export interface TicketmasterEvent {
   id: string;
   name: string;
+  type: string;
+  url?: string;
   dates: {
     start: {
       localDate: string;
       localTime?: string;
       dateTime?: string;
     };
-    status?: {
+    status: {
       code: string;
     };
   };
-  url?: string;
   _embedded?: {
-    venues?: Array<{
+    venues?: TicketmasterVenue[];
+    attractions?: TicketmasterAttraction[];
+  };
+  priceRanges?: Array<{
+    type: string;
+    currency: string;
+    min: number;
+    max: number;
+  }>;
+  images?: Array<{
+    url: string;
+    width: number;
+    height: number;
+  }>;
+}
+
+export interface TicketmasterVenue {
+  id: string;
+  name: string;
+  type: string;
+  url?: string;
+  address?: {
+    line1?: string;
+    line2?: string;
+  };
+  city: {
+    name: string;
+  };
+  state?: {
+    name: string;
+    stateCode: string;
+  };
+  country: {
+    name: string;
+    countryCode: string;
+  };
+  location?: {
+    longitude: string;
+    latitude: string;
+  };
+}
+
+export interface TicketmasterAttraction {
+  id: string;
+  name: string;
+  type: string;
+  url?: string;
+  images?: Array<{
+    url: string;
+    width: number;
+    height: number;
+  }>;
+  classifications?: Array<{
+    primary: boolean;
+    segment: {
       id: string;
       name: string;
-      city: any;
-      state: any;
-      country: any;
-      address?: {
-        line1?: string;
-      };
-      location?: {
-        latitude?: string;
-        longitude?: string;
-      };
-    }>;
-    attractions?: Array<{
+    };
+    genre: {
       id: string;
       name: string;
+    };
+    subGenre: {
+      id: string;
+      name: string;
+    };
+  }>;
+  externalLinks?: {
+    spotify?: Array<{
+      url: string;
     }>;
   };
 }
 
-// Helper function to safely extract city name
-function extractCityName(city: any): string {
-  if (typeof city === 'string') {
-    return city;
-  }
-  if (city && typeof city === 'object' && city.name) {
-    return city.name;
-  }
-  return '';
+export interface TicketmasterResponse {
+  _embedded?: {
+    events: TicketmasterEvent[];
+  };
+  page: {
+    size: number;
+    totalElements: number;
+    totalPages: number;
+    number: number;
+  };
 }
 
-// Helper function to safely extract state name
-function extractStateName(state: any): string | null {
-  if (typeof state === 'string') {
-    return state;
-  }
-  if (state && typeof state === 'object' && state.name) {
-    return state.name;
-  }
-  return null;
-}
-
-// Helper function to safely extract country name
-function extractCountryName(country: any): string {
-  if (typeof country === 'string') {
-    return country;
-  }
-  if (country && typeof country === 'object' && country.name) {
-    return country.name;
-  }
-  return '';
-}
-
-// Store venue in database with improved data extraction
-export async function storeVenueInDatabase(venue: any): Promise<boolean> {
+// Search for events by artist name
+export async function searchEvents(artistName: string, limit: number = 20): Promise<TicketmasterEvent[]> {
   try {
-    console.log("Storing venue:", venue.id, venue.name);
+    console.log("Searching Ticketmaster for events by artist:", artistName);
     
-    // Validate required venue data
-    if (!venue.id || !venue.name) {
-      console.error("Missing required venue data:", venue);
-      return false;
-    }
-
-    // Extract location data safely
-    const city = extractCityName(venue.city);
-    const state = extractStateName(venue.state);
-    const country = extractCountryName(venue.country);
+    const url = `${TICKETMASTER_API_BASE}/events.json?keyword=${encodeURIComponent(artistName)}&apikey=${TICKETMASTER_API_KEY}&size=${limit}&sort=date,asc`;
     
-    if (!city) {
-      console.error("Missing required venue city data:", venue);
-      return false;
-    }
-
-    const venueData = {
-      id: venue.id,
-      name: venue.name,
-      city: city,
-      state: state,
-      country: country || 'US', // Default to US if no country provided
-      address: venue.address?.line1 || null,
-      latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
-      longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null
-    };
-
-    const { error } = await supabase
-      .from('venues')
-      .upsert(venueData, { onConflict: 'id' });
-
-    if (error) {
-      console.error("Error storing venue:", error);
-      return false;
-    }
-
-    console.log("Successfully stored venue:", venue.id);
-    return true;
-  } catch (error) {
-    console.error("Error in storeVenueInDatabase:", error);
-    return false;
-  }
-}
-
-// Store show in database with improved error handling
-export async function storeShowInDatabase(event: any, artistId: string, venueId: string): Promise<boolean> {
-  try {
-    console.log("Storing show:", event.id, event.name);
+    const response = await fetch(url);
     
-    // Validate required data
-    if (!event.id || !artistId || !venueId) {
-      console.error("Missing required show data:", { eventId: event.id, artistId, venueId });
-      return false;
-    }
-
-    // Validate date
-    const showDate = event.dates?.start?.dateTime || event.dates?.start?.localDate;
-    if (!showDate) {
-      console.error("Missing show date:", event);
-      return false;
-    }
-
-    const showData = {
-      id: event.id,
-      artist_id: artistId,
-      venue_id: venueId,
-      name: event.name || null,
-      date: showDate,
-      start_time: event.dates?.start?.localTime || null,
-      status: event.dates?.status?.code === 'cancelled' ? 'canceled' : 
-             event.dates?.status?.code === 'postponed' ? 'postponed' : 'scheduled',
-      ticketmaster_url: event.url || null,
-      view_count: 0
-    };
-
-    const { error } = await supabase
-      .from('shows')
-      .upsert(showData, { onConflict: 'id' });
-
-    if (error) {
-      console.error("Error storing show:", error);
-      return false;
-    }
-
-    console.log("Successfully stored show:", event.id);
-    return true;
-  } catch (error) {
-    console.error("Error in storeShowInDatabase:", error);
-    return false;
-  }
-}
-
-// Get artist events from Ticketmaster
-export async function getArtistEvents(artistName: string): Promise<any[]> {
-  try {
-    console.log("Fetching events for artist:", artistName);
-    
-    const response = await fetch(
-      `${TICKETMASTER_BASE_URL}/events.json?keyword=${encodeURIComponent(artistName)}&apikey=${TICKETMASTER_API_KEY}&size=50&sort=date,asc`
-    );
-
     if (!response.ok) {
       throw new Error(`Ticketmaster API error: ${response.status}`);
     }
-
-    const data = await response.json();
     
-    if (!data._embedded?.events) {
-      console.log("No events found for artist:", artistName);
-      return [];
+    const data: TicketmasterResponse = await response.json();
+    
+    if (data._embedded?.events) {
+      console.log(`Found ${data._embedded.events.length} events for ${artistName}`);
+      return data._embedded.events;
     }
-
-    console.log(`Found ${data._embedded.events.length} events for ${artistName}`);
-    return data._embedded.events;
+    
+    return [];
   } catch (error) {
-    console.error("Error fetching artist events:", error);
+    console.error("Error searching Ticketmaster events:", error);
     return [];
   }
 }
 
 // Get popular events
-export async function getPopularEvents(limit: number = 20): Promise<any[]> {
+export async function getPopularEvents(limit: number = 50): Promise<TicketmasterEvent[]> {
   try {
-    console.log("Fetching popular events");
+    console.log("Fetching popular events from Ticketmaster");
     
-    const response = await fetch(
-      `${TICKETMASTER_BASE_URL}/events.json?apikey=${TICKETMASTER_API_KEY}&size=${limit}&sort=relevance,desc&classificationName=music`
-    );
-
+    const url = `${TICKETMASTER_API_BASE}/events.json?apikey=${TICKETMASTER_API_KEY}&size=${limit}&sort=relevance,desc&classificationName=music`;
+    
+    const response = await fetch(url);
+    
     if (!response.ok) {
       throw new Error(`Ticketmaster API error: ${response.status}`);
     }
-
-    const data = await response.json();
     
-    if (!data._embedded?.events) {
-      console.log("No popular events found");
-      return [];
+    const data: TicketmasterResponse = await response.json();
+    
+    if (data._embedded?.events) {
+      console.log(`Found ${data._embedded.events.length} popular events`);
+      return data._embedded.events;
     }
-
-    console.log(`Found ${data._embedded.events.length} popular events`);
-    return data._embedded.events;
+    
+    return [];
   } catch (error) {
     console.error("Error fetching popular events:", error);
     return [];
   }
 }
 
-// Search events
-export async function searchEvents(query: string, location?: string): Promise<any[]> {
+// Store venue in database
+export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<boolean> {
   try {
-    console.log("Searching events:", query, location);
+    const venueData = {
+      id: venue.id,
+      name: venue.name,
+      city: venue.city.name,
+      state: venue.state?.name || null,
+      country: venue.country.name,
+      address: venue.address?.line1 || null,
+      latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
+      longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null
+    };
     
-    let url = `${TICKETMASTER_BASE_URL}/events.json?keyword=${encodeURIComponent(query)}&apikey=${TICKETMASTER_API_KEY}&size=50&sort=relevance,desc`;
+    const { error } = await supabase
+      .from('venues')
+      .upsert(venueData);
     
-    if (location) {
-      url += `&city=${encodeURIComponent(location)}`;
+    if (error) {
+      console.error("Error storing venue:", error);
+      return false;
     }
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Ticketmaster API error: ${response.status}`);
-    }
-
-    const data = await response.json();
     
-    if (!data._embedded?.events) {
-      console.log("No events found for search:", query);
-      return [];
-    }
-
-    console.log(`Found ${data._embedded.events.length} events for search: ${query}`);
-    return data._embedded.events;
+    return true;
   } catch (error) {
-    console.error("Error searching events:", error);
-    return [];
+    console.error("Error storing venue in database:", error);
+    return false;
+  }
+}
+
+// Store show in database
+export async function storeShowInDatabase(event: TicketmasterEvent, artistId: string, venueId: string): Promise<boolean> {
+  try {
+    const showData = {
+      id: event.id,
+      artist_id: artistId,
+      venue_id: venueId,
+      name: event.name,
+      date: new Date(event.dates.start.localDate + (event.dates.start.localTime ? `T${event.dates.start.localTime}` : 'T00:00:00')).toISOString(),
+      start_time: event.dates.start.localTime || null,
+      status: event.dates.status.code === 'onsale' ? 'scheduled' : 'postponed',
+      ticketmaster_url: event.url || null
+    };
+    
+    const { error } = await supabase
+      .from('shows')
+      .upsert(showData);
+    
+    if (error) {
+      console.error("Error storing show:", error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error storing show in database:", error);
+    return false;
   }
 }

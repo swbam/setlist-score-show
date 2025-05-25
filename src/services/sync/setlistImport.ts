@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import * as setlistfmService from "@/services/setlistfm";
 
 export interface SetlistFmSong {
   name: string;
@@ -21,7 +22,7 @@ export async function importActualSetlist(showId: string): Promise<boolean> {
   try {
     console.log(`Importing actual setlist for show: ${showId}`);
     
-    // Get show details
+    // Get show details with proper column hints
     const { data: show, error: showError } = await supabase
       .from('shows')
       .select(`
@@ -40,7 +41,7 @@ export async function importActualSetlist(showId: string): Promise<boolean> {
       return false;
     }
 
-    const artistName = show.artists?.name || 'Unknown Artist';
+    const artistName = (show.artists as any)?.name || 'Unknown Artist';
     console.log(`Found show for artist: ${artistName}`);
 
     // Check if we already have a played setlist for this show
@@ -55,13 +56,97 @@ export async function importActualSetlist(showId: string): Promise<boolean> {
       return true;
     }
 
-    // TODO: Implement actual setlist.fm API call here
-    // For now, return true as placeholder
-    console.log(`Setlist import placeholder for show: ${showId}`);
+    // Format date for setlist.fm API (DD-MM-YYYY)
+    const showDate = new Date(show.date);
+    const formattedDate = `${showDate.getDate().toString().padStart(2, '0')}-${(showDate.getMonth() + 1).toString().padStart(2, '0')}-${showDate.getFullYear()}`;
+
+    // Search for setlists on setlist.fm
+    const setlists = await setlistfmService.searchSetlists(artistName, formattedDate);
+    
+    if (setlists.length === 0) {
+      console.log(`No setlists found for ${artistName} on ${formattedDate}`);
+      return false;
+    }
+
+    const setlist = setlists[0];
+    
+    // Store the played setlist
+    const playedSetlistId = await setlistfmService.storePlayedSetlist(
+      showId,
+      setlist.id,
+      setlist.eventDate
+    );
+    
+    if (!playedSetlistId) {
+      console.error("Failed to store played setlist");
+      return false;
+    }
+
+    // Get all songs from the setlist
+    const songs = setlistfmService.flattenSetlistSongs(setlist);
+    
+    // Match and store each song
+    let position = 1;
+    for (const song of songs) {
+      const songId = await setlistfmService.matchSongToDatabase(
+        (show.artists as any)?.id,
+        song.name
+      );
+      
+      if (songId) {
+        await setlistfmService.storePlayedSetlistSongs(
+          playedSetlistId,
+          songId,
+          position
+        );
+        position++;
+      }
+    }
+
+    console.log(`Successfully imported setlist for show: ${showId}`);
     return true;
   } catch (error) {
     console.error("Error importing actual setlist:", error);
     return false;
+  }
+}
+
+// Import recent setlists for shows that occurred in the last 7 days
+export async function importRecentSetlists(): Promise<number> {
+  try {
+    console.log("Importing recent setlists...");
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const { data: recentShows, error } = await supabase
+      .from('shows')
+      .select('id, date')
+      .gte('date', sevenDaysAgo.toISOString())
+      .lt('date', new Date().toISOString());
+    
+    if (error) {
+      console.error("Error fetching recent shows:", error);
+      return 0;
+    }
+    
+    let importedCount = 0;
+    
+    for (const show of recentShows || []) {
+      const success = await importActualSetlist(show.id);
+      if (success) {
+        importedCount++;
+      }
+      
+      // Add delay to respect API rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    console.log(`Imported ${importedCount} setlists from ${recentShows?.length || 0} recent shows`);
+    return importedCount;
+  } catch (error) {
+    console.error("Error importing recent setlists:", error);
+    return 0;
   }
 }
 

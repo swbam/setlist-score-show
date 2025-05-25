@@ -8,6 +8,10 @@ export interface TrendingShow {
   start_time?: string;
   ticketmaster_url?: string;
   view_count: number;
+  votes: number;
+  artist_name: string;
+  venue_name: string;
+  venue_city: string;
   artist: {
     id: string;
     name: string;
@@ -67,17 +71,21 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
       start_time: show.start_time,
       ticketmaster_url: show.ticketmaster_url,
       view_count: show.view_count,
+      votes: 0, // Will be calculated separately
+      artist_name: (show.artists as any)?.name || 'Unknown Artist',
+      venue_name: (show.venues as any)?.name || 'Unknown Venue',
+      venue_city: (show.venues as any)?.city || '',
       artist: {
-        id: show.artists?.id || '',
-        name: show.artists?.name || 'Unknown Artist',
-        image_url: show.artists?.image_url
+        id: (show.artists as any)?.id || '',
+        name: (show.artists as any)?.name || 'Unknown Artist',
+        image_url: (show.artists as any)?.image_url
       },
       venue: {
-        id: show.venues?.id || '',
-        name: show.venues?.name || 'Unknown Venue',
-        city: show.venues?.city || '',
-        state: show.venues?.state,
-        country: show.venues?.country || ''
+        id: (show.venues as any)?.id || '',
+        name: (show.venues as any)?.name || 'Unknown Venue',
+        city: (show.venues as any)?.city || '',
+        state: (show.venues as any)?.state,
+        country: (show.venues as any)?.country || ''
       }
     }));
 
@@ -136,17 +144,21 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
       start_time: show.start_time,
       ticketmaster_url: show.ticketmaster_url,
       view_count: show.view_count,
+      votes: 0,
+      artist_name: (show.artists as any)?.name || 'Unknown Artist',
+      venue_name: (show.venues as any)?.name || 'Unknown Venue', 
+      venue_city: (show.venues as any)?.city || '',
       artist: {
-        id: show.artists?.id || '',
-        name: show.artists?.name || 'Unknown Artist',
-        image_url: show.artists?.image_url
+        id: (show.artists as any)?.id || '',
+        name: (show.artists as any)?.name || 'Unknown Artist',
+        image_url: (show.artists as any)?.image_url
       },
       venue: {
-        id: show.venues?.id || '',
-        name: show.venues?.name || 'Unknown Venue',
-        city: show.venues?.city || '',
-        state: show.venues?.state,
-        country: show.venues?.country || ''
+        id: (show.venues as any)?.id || '',
+        name: (show.venues as any)?.name || 'Unknown Venue',
+        city: (show.venues as any)?.city || '',
+        state: (show.venues as any)?.state,
+        country: (show.venues as any)?.country || ''
       }
     }));
 
@@ -164,7 +176,7 @@ export async function incrementShowViews(showId: string): Promise<boolean> {
     const { error } = await supabase
       .from('shows')
       .update({ 
-        view_count: supabase.sql`view_count + 1` 
+        view_count: (await supabase.from('shows').select('view_count').eq('id', showId).single()).data?.view_count + 1 || 1
       })
       .eq('id', showId);
 

@@ -11,6 +11,7 @@ export interface Artist {
   genres?: string[];
   spotify_url?: string;
   last_synced_at?: string;
+  source?: 'database' | 'ticketmaster' | 'spotify';
 }
 
 export interface ArtistWithShows extends Artist {
@@ -37,7 +38,7 @@ export async function getArtistById(artistId: string): Promise<Artist | null> {
       return null;
     }
 
-    return data;
+    return { ...data, source: 'database' };
   } catch (error) {
     console.error("Error getting artist by ID:", error);
     return null;
@@ -58,11 +59,98 @@ export async function searchArtists(query: string, limit: number = 10): Promise<
       return [];
     }
 
-    return data || [];
+    return (data || []).map(artist => ({ ...artist, source: 'database' as const }));
   } catch (error) {
     console.error("Error searching artists:", error);
     return [];
   }
+}
+
+// Fetch artists from database
+export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Artist[]> {
+  try {
+    const { data, error } = await supabase
+      .from('artists')
+      .select('*')
+      .order('popularity', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("Error fetching artists from database:", error);
+      return [];
+    }
+
+    return (data || []).map(artist => ({ ...artist, source: 'database' as const }));
+  } catch (error) {
+    console.error("Error fetching artists from database:", error);
+    return [];
+  }
+}
+
+// Search artists from database
+export async function searchArtistsFromDatabase(query: string, limit: number = 20): Promise<Artist[]> {
+  return await searchArtists(query, limit);
+}
+
+// Extract unique artists from Ticketmaster events
+export async function extractUniqueArtistsFromEvents(events: any[]): Promise<Artist[]> {
+  const artistMap = new Map<string, Artist>();
+  
+  for (const event of events) {
+    if (event._embedded?.attractions) {
+      for (const attraction of event._embedded.attractions) {
+        if (!artistMap.has(attraction.id)) {
+          artistMap.set(attraction.id, {
+            id: attraction.id,
+            name: attraction.name,
+            image_url: attraction.images?.[0]?.url,
+            source: 'ticketmaster'
+          });
+        }
+      }
+    }
+  }
+  
+  return Array.from(artistMap.values());
+}
+
+// Merge artists from different sources
+export function mergeArtists(ticketmasterArtists: Artist[], databaseArtists: Artist[]): Artist[] {
+  const artistMap = new Map<string, Artist>();
+  
+  // Add database artists first (they have more complete data)
+  databaseArtists.forEach(artist => {
+    artistMap.set(artist.name.toLowerCase(), artist);
+  });
+  
+  // Add Ticketmaster artists if not already present
+  ticketmasterArtists.forEach(artist => {
+    const key = artist.name.toLowerCase();
+    if (!artistMap.has(key)) {
+      artistMap.set(key, artist);
+    }
+  });
+  
+  return Array.from(artistMap.values());
+}
+
+// Sort search results by relevance
+export function sortSearchResults(artists: Artist[], query: string): Artist[] {
+  return artists.sort((a, b) => {
+    const aExact = a.name.toLowerCase() === query.toLowerCase();
+    const bExact = b.name.toLowerCase() === query.toLowerCase();
+    
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+    
+    const aStarts = a.name.toLowerCase().startsWith(query.toLowerCase());
+    const bStarts = b.name.toLowerCase().startsWith(query.toLowerCase());
+    
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+    
+    return (b.popularity || 0) - (a.popularity || 0);
+  });
 }
 
 // Get artist's upcoming shows
@@ -100,6 +188,37 @@ export async function getArtistUpcomingShows(artistId: string): Promise<any[]> {
   }
 }
 
+// Ensure artist exists in database (create if needed)
+export async function ensureArtistInDatabase(artistData: {
+  id: string;
+  name: string;
+  image_url?: string;
+  ticketmaster_id?: string;
+  spotify_id?: string;
+}): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('artists')
+      .upsert({
+        id: artistData.id,
+        name: artistData.name,
+        image_url: artistData.image_url,
+        ticketmaster_id: artistData.ticketmaster_id,
+        last_synced_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error("Error ensuring artist in database:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error ensuring artist in database:", error);
+    return false;
+  }
+}
+
 // Get or create artist from multiple sources
 export async function getOrCreateArtist(artistId: string, artistName?: string): Promise<Artist | null> {
   try {
@@ -128,82 +247,19 @@ export async function getOrCreateArtist(artistId: string, artistName?: string): 
 
     // If Spotify fails and we have a name, create a basic entry
     if (artistName) {
-      const { data, error } = await supabase
-        .from('artists')
-        .insert({
-          id: artistId,
-          name: artistName,
-          last_synced_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+      const success = await ensureArtistInDatabase({
+        id: artistId,
+        name: artistName
+      });
 
-      if (!error && data) {
-        return data;
+      if (success) {
+        return await getArtistById(artistId);
       }
     }
 
     return null;
   } catch (error) {
     console.error("Error getting or creating artist:", error);
-    return null;
-  }
-}
-
-// Import artist from Ticketmaster event
-export async function importArtistFromTicketmaster(event: ticketmasterService.TicketmasterEvent): Promise<string | null> {
-  try {
-    // Extract artist info from Ticketmaster event
-    const attractions = event._embedded?.attractions || [];
-    if (attractions.length === 0) {
-      console.warn("No attractions found in Ticketmaster event");
-      return null;
-    }
-
-    const attraction = attractions[0];
-    const artistId = attraction.id;
-    const artistName = attraction.name;
-
-    // Check if artist already exists
-    let artist = await getArtistById(artistId);
-    if (artist) {
-      return artistId;
-    }
-
-    // Try to find matching Spotify artist
-    const spotifyArtists = await spotifyService.searchArtists(artistName);
-    let spotifyArtist = null;
-
-    if (spotifyArtists.length > 0) {
-      // Use the first match - could be improved with better matching logic
-      spotifyArtist = spotifyArtists[0];
-    }
-
-    // Create artist entry
-    const artistData = {
-      id: artistId,
-      ticketmaster_id: artistId,
-      name: artistName,
-      image_url: null,
-      popularity: 0,
-      genres: [],
-      spotify_url: spotifyArtist?.external_urls?.spotify || null,
-      last_synced_at: new Date().toISOString()
-    };
-
-    const { error } = await supabase
-      .from('artists')
-      .insert(artistData);
-
-    if (error) {
-      console.error("Error storing Ticketmaster artist:", error);
-      return null;
-    }
-
-    console.log(`Successfully imported artist from Ticketmaster: ${artistName}`);
-    return artistId;
-  } catch (error) {
-    console.error("Error importing artist from Ticketmaster:", error);
     return null;
   }
 }
