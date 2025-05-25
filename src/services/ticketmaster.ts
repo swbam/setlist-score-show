@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
@@ -193,12 +194,17 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
     // Ensure venue has a name, use a fallback if missing
     const venueName = venue.name || 'Unknown Venue';
     
+    // Safely extract string values from Ticketmaster venue object
+    const cityName = typeof venue.city === 'string' ? venue.city : venue.city?.name || 'Unknown City';
+    const stateName = typeof venue.state === 'string' ? venue.state : venue.state?.name || null;
+    const countryName = typeof venue.country === 'string' ? venue.country : venue.country?.name || 'Unknown Country';
+    
     const venueData = {
       id: venue.id,
       name: venueName,
-      city: venue.city?.name || venue.city || 'Unknown City',
-      state: venue.state?.name || venue.state || null,
-      country: venue.country?.name || venue.country || 'Unknown Country',
+      city: cityName,
+      state: stateName,
+      country: countryName,
       address: venue.address?.line1 || null,
       latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
       longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null

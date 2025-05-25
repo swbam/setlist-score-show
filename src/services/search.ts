@@ -5,6 +5,9 @@ import * as ticketmasterService from "@/services/ticketmaster";
 
 export interface SearchOptions {
   query: string;
+  location?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
   limit?: number;
   sortBy?: 'relevance' | 'date' | 'popularity';
 }
@@ -31,9 +34,9 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
     console.log(`Searching for: ${query}`);
 
     // Search artists from Spotify
-    const artists = await spotifyService.searchArtists(query, Math.min(limit, 10));
+    const artists = await spotifyService.searchArtists(query);
     
-    for (const artist of artists) {
+    for (const artist of artists.slice(0, Math.min(limit, 10))) {
       results.push({
         id: artist.id,
         type: 'artist',
@@ -44,9 +47,9 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
     }
 
     // Search shows from Ticketmaster
-    const events = await ticketmasterService.searchEvents(query, Math.min(limit, 10));
+    const events = await ticketmasterService.searchEvents(query);
     
-    for (const event of events) {
+    for (const event of events.slice(0, Math.min(limit, 10))) {
       if (event._embedded?.venues?.[0]) {
         const venue = event._embedded.venues[0];
         results.push({
@@ -103,9 +106,9 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
     // If we need more results, search Spotify
     if (results.length < limit) {
       const remainingLimit = limit - results.length;
-      const spotifyArtists = await spotifyService.searchArtists(query, remainingLimit);
+      const spotifyArtists = await spotifyService.searchArtists(query);
       
-      for (const artist of spotifyArtists) {
+      for (const artist of spotifyArtists.slice(0, remainingLimit)) {
         // Avoid duplicates
         if (!results.find(r => r.id === artist.id)) {
           results.push({
@@ -131,10 +134,10 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
   try {
     console.log(`Searching shows for: ${query}`);
     
-    const events = await ticketmasterService.searchEvents(query, limit);
+    const events = await ticketmasterService.searchEvents(query);
     const results: SearchResult[] = [];
     
-    for (const event of events) {
+    for (const event of events.slice(0, limit)) {
       if (event._embedded?.venues?.[0]) {
         const venue = event._embedded.venues[0];
         results.push({

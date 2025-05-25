@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Search, MapPin, Calendar, Music, Mic, X } from "lucide-react";
@@ -26,8 +27,8 @@ const AdvancedSearch = () => {
   const [locationQuery, setLocationQuery] = useState(queryParams.get("location") || "");
   const [dateFrom, setDateFrom] = useState<Date | undefined>(queryParams.get("from") ? new Date(queryParams.get("from") || "") : undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(queryParams.get("to") ? new Date(queryParams.get("to") || "") : undefined);
-  const [sortBy, setSortBy] = useState<"relevance" | "date" | "name">(
-    queryParams.get("sort") as "relevance" | "date" | "name" || "relevance"
+  const [sortBy, setSortBy] = useState<"relevance" | "date" | "popularity">(
+    queryParams.get("sort") as "relevance" | "date" | "popularity" || "relevance"
   );
   const [activeTab, setActiveTab] = useState(queryParams.get("tab") || "all");
   
@@ -203,7 +204,7 @@ const AdvancedSearch = () => {
           <div className="mt-4 flex justify-between items-center">
             <RadioGroup 
               value={sortBy} 
-              onValueChange={(value) => setSortBy(value as "relevance" | "date" | "name")}
+              onValueChange={(value) => setSortBy(value as "relevance" | "date" | "popularity")}
               className="flex gap-4"
             >
               <div className="flex items-center space-x-2">
@@ -215,8 +216,8 @@ const AdvancedSearch = () => {
                 <Label htmlFor="sort-date" className="text-slate-400">Date</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="name" id="sort-name" />
-                <Label htmlFor="sort-name" className="text-slate-400">Name</Label>
+                <RadioGroupItem value="popularity" id="sort-popularity" />
+                <Label htmlFor="sort-popularity" className="text-slate-400">Popularity</Label>
               </div>
             </RadioGroup>
             
