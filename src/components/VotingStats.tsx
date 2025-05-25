@@ -33,7 +33,7 @@ export default function VotingStats({ setlistId }: VotingStatsProps) {
         .select(`
           id,
           votes,
-          song:songs(id, name)
+          songs!setlist_songs_song_id_fkey(id, name)
         `)
         .eq('setlist_id', setlistId)
         .order('votes', { ascending: false });
@@ -44,15 +44,15 @@ export default function VotingStats({ setlistId }: VotingStatsProps) {
       }
       
       // Process data for chart with proper type safety
-      const chartData: VoteData[] = data.map((item: any) => ({
-        songName: item.song?.name || 'Unknown Song',
+      const chartData: VoteData[] = (data || []).map((item: any) => ({
+        songName: item.songs?.name || 'Unknown Song',
         votes: item.votes,
         // Generate color based on votes (more votes = more intense color)
         color: `rgba(34, 211, 238, ${Math.min(0.3 + item.votes * 0.1, 1)})`
       }));
       
       // Calculate total votes
-      const total = data.reduce((sum: number, item: any) => sum + item.votes, 0);
+      const total = (data || []).reduce((sum: number, item: any) => sum + item.votes, 0);
       
       setVoteData(chartData);
       setTotalVotes(total);

@@ -113,7 +113,7 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
     console.log(`Searching shows for: ${query}`);
     const results: SearchResult[] = [];
 
-    // First search in database
+    // First search in database with explicit relationship names
     const { data: dbShows, error: dbError } = await supabase
       .from('shows')
       .select(`

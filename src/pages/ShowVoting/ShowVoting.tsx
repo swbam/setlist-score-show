@@ -88,6 +88,7 @@ const ShowVoting = () => {
         start_time: showData.start_time,
         status: showData.status,
         ticketmaster_url: showData.ticketmaster_url,
+        view_count: showData.view_count,
         artist: {
           id: showData.artists?.id || '',
           name: showData.artists?.name || 'Unknown Artist',
@@ -115,7 +116,7 @@ const ShowVoting = () => {
 
       console.log("Fetching setlist songs for setlist ID:", setlistId);
       
-      // Fetch setlist songs
+      // Fetch setlist songs with explicit relationship name
       const { data: setlistData, error: setlistError } = await supabase
         .from('setlist_songs')
         .select(`
@@ -136,7 +137,7 @@ const ShowVoting = () => {
         return;
       }
 
-      if (setlistData) {
+      if (setlistData && setlistData.length > 0) {
         const transformedSetlist: SetlistSong[] = setlistData.map(item => ({
           id: item.id,
           setlist_id: item.setlist_id,
@@ -154,6 +155,8 @@ const ShowVoting = () => {
         }));
         
         setSetlistSongs(transformedSetlist);
+      } else {
+        setSetlistSongs([]);
       }
 
       // Fetch user's vote count if logged in
@@ -281,23 +284,20 @@ const ShowVoting = () => {
           {/* Main Voting Section */}
           <div className="lg:col-span-2">
             <VotingSection
-              setlist={setlistSongs}
-              show={show}
-              loading={false}
-              votingError={null}
-              voteSubmitting={submitting}
-              handleVote={handleVote}
-              handleSongAdded={handleSongAdded}
-              usedVotesCount={usedVotesCount}
-              maxFreeVotes={maxFreeVotes}
-              votesRemaining={maxFreeVotes - usedVotesCount}
-              user={user}
+              songs={setlistSongs}
+              onVote={handleVote}
+              submitting={submitting}
+              onAddSong={handleSongAdded}
             />
           </div>
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <Sidebar setlist={setlistSongs} show={show} />
+            <Sidebar 
+              show={show} 
+              totalVotes={setlistSongs.reduce((sum, song) => sum + song.votes, 0)}
+              totalSongs={setlistSongs.length}
+            />
           </div>
         </div>
       </div>
