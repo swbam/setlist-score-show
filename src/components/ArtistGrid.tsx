@@ -50,7 +50,7 @@ const ArtistGrid = ({
         </p>
         {searchQuery && (
           <Button 
-            className="bg-[#f7f7f7] hover:bg-gray-200 text-black"
+            className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black"
             onClick={handleReset}
           >
             Show All Artists

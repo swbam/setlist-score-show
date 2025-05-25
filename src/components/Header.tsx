@@ -44,7 +44,7 @@ const Header = () => {
             Date
           </Button>
           <Link to="/login">
-            <Button className="bg-white hover:bg-gray-100 text-black">
+            <Button className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black">
               Log In
             </Button>
           </Link>

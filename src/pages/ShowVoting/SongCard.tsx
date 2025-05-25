@@ -16,7 +16,7 @@ const SongCard = ({ song, index, handleVote, voteSubmitting, isDisabled }: SongC
   return (
     <Card 
       className={`bg-gray-900/40 border-gray-800/50 transition-all duration-200 ${
-        song.userVoted ? 'border-l-4 border-l-cyan-500' : ''
+        song.userVoted ? 'border-l-4 border-l-yellow-metal-500' : ''
       }`}
     >
       <CardContent className="flex items-center justify-between p-4">
@@ -45,14 +45,14 @@ const SongCard = ({ song, index, handleVote, voteSubmitting, isDisabled }: SongC
             disabled={song.userVoted || isDisabled || voteSubmitting === song.id}
             className={`
               ${voteSubmitting === song.id ? 'animate-pulse' : ''}
-              ${song.userVoted ? 'bg-cyan-800/30 text-cyan-400 cursor-not-allowed' : ''}
+              ${song.userVoted ? 'bg-yellow-metal-800/30 text-yellow-metal-400 cursor-not-allowed' : ''}
               ${isDisabled && !song.userVoted ? 'opacity-50 cursor-not-allowed' : ''}
             `}
           >
             {voteSubmitting === song.id ? (
               <div className="h-4 w-4 border-2 border-t-transparent rounded-full animate-spin mr-2" />
             ) : song.userVoted ? (
-              <ThumbsUp className="h-4 w-4 mr-2 text-cyan-400" />
+              <ThumbsUp className="h-4 w-4 mr-2 text-yellow-metal-400" />
             ) : (
               <ThumbsUp className="h-4 w-4 mr-2" />
             )}
