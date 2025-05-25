@@ -62,8 +62,8 @@ const useShowVoting = (user: any) => {
           .from('shows')
           .select(`
             *,
-            artist:artists!shows_artist_id_fkey(id, name, image_url),
-            venue:venues!shows_venue_id_fkey(id, name, city, state, country)
+            artists!shows_artist_id_fkey(id, name, image_url),
+            venues!shows_venue_id_fkey(id, name, city, state, country)
           `)
           .eq('id', showId)
           .single();
@@ -87,16 +87,16 @@ const useShowVoting = (user: any) => {
           start_time: showData.start_time,
           status: showData.status,
           artist: {
-            id: showData.artist?.id || '',
-            name: showData.artist?.name || 'Unknown Artist',
-            image_url: showData.artist?.image_url
+            id: showData.artists?.id || '',
+            name: showData.artists?.name || 'Unknown Artist',
+            image_url: showData.artists?.image_url
           },
           venue: {
-            id: showData.venue?.id || '',
-            name: showData.venue?.name || 'Unknown Venue',
-            city: showData.venue?.city || '',
-            state: showData.venue?.state,
-            country: showData.venue?.country || ''
+            id: showData.venues?.id || '',
+            name: showData.venues?.name || 'Unknown Venue',
+            city: showData.venues?.city || '',
+            state: showData.venues?.state,
+            country: showData.venues?.country || ''
           }
         };
 
@@ -110,12 +110,12 @@ const useShowVoting = (user: any) => {
           return;
         }
 
-        // Fetch setlist songs
+        // Fetch setlist songs - fix the UUID validation issue
         const { data: setlistData, error: setlistError } = await supabase
           .from('setlist_songs')
           .select(`
             *,
-            song:songs!setlist_songs_song_id_fkey(id, name, album, spotify_url)
+            songs!setlist_songs_song_id_fkey(id, name, album, spotify_url)
           `)
           .eq('setlist_id', setlistId)
           .order('votes', { ascending: false });
@@ -133,10 +133,10 @@ const useShowVoting = (user: any) => {
             votes: item.votes,
             position: item.position,
             song: {
-              id: item.song?.id || '',
-              name: item.song?.name || 'Unknown Song',
-              album: item.song?.album || '',
-              spotify_url: item.song?.spotify_url
+              id: item.songs?.id || '',
+              name: item.songs?.name || 'Unknown Song',
+              album: item.songs?.album || '',
+              spotify_url: item.songs?.spotify_url
             }
           }));
           

@@ -37,7 +37,7 @@ export const createSetlistForShow = async (showId: string): Promise<SetlistCreat
       .select(`
         id,
         artist_id,
-        artist:artists(id, name)
+        artists!shows_artist_id_fkey(id, name)
       `)
       .eq('id', showId)
       .single();

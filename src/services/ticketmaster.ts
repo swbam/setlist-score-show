@@ -190,12 +190,15 @@ export async function getArtistEvents(artistName: string): Promise<TicketmasterE
 // Store venue in database
 export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<boolean> {
   try {
+    // Ensure venue has a name, use a fallback if missing
+    const venueName = venue.name || 'Unknown Venue';
+    
     const venueData = {
       id: venue.id,
-      name: venue.name,
-      city: venue.city.name,
-      state: venue.state?.name || null,
-      country: venue.country.name,
+      name: venueName,
+      city: venue.city?.name || venue.city || 'Unknown City',
+      state: venue.state?.name || venue.state || null,
+      country: venue.country?.name || venue.country || 'Unknown Country',
       address: venue.address?.line1 || null,
       latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
       longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null
@@ -220,6 +223,18 @@ export async function storeVenueInDatabase(venue: TicketmasterVenue): Promise<bo
 // Store show in database
 export async function storeShowInDatabase(event: TicketmasterEvent, artistId: string, venueId: string): Promise<boolean> {
   try {
+    // Ensure venue exists before creating show
+    const { data: venueExists } = await supabase
+      .from('venues')
+      .select('id')
+      .eq('id', venueId)
+      .single();
+    
+    if (!venueExists) {
+      console.error(`Venue ${venueId} does not exist, cannot create show`);
+      return false;
+    }
+    
     const showData = {
       id: event.id,
       artist_id: artistId,

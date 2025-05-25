@@ -1,6 +1,6 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShowsList } from "./ShowsList";
+import ShowsList from "./ShowsList";
 import { SpotifyArtist } from "@/services/spotify";
 
 interface ShowsTabsProps {
@@ -25,8 +25,7 @@ export function ShowsTabs({ artist, upcomingShows, pastShows }: ShowsTabsProps) 
       <TabsContent value="upcoming">
         <ShowsList 
           shows={upcomingShows} 
-          type="upcoming" 
-          artistName={artist.name}
+          title="Upcoming Shows"
           emptyMessage={`${artist.name} doesn't have any upcoming shows at the moment`} 
         />
       </TabsContent>
@@ -35,8 +34,7 @@ export function ShowsTabs({ artist, upcomingShows, pastShows }: ShowsTabsProps) 
       <TabsContent value="past">
         <ShowsList 
           shows={pastShows} 
-          type="past" 
-          artistName={artist.name}
+          title="Past Shows"
           emptyMessage={`${artist.name} doesn't have any past shows in our database`} 
         />
       </TabsContent>
