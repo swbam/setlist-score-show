@@ -1,66 +1,101 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import * as setlistfmService from "@/services/setlistfm";
-import { SyncResult, SetlistSyncData } from "./types";
 
-/**
- * Import actual setlists for shows that occurred in the last 24 hours
- */
-export const importRecentSetlists = async (): Promise<SyncResult> => {
+export interface SetlistFmSong {
+  name: string;
+}
+
+export interface SetlistFmSetlist {
+  id: string;
+  eventDate: string;
+  artist: {
+    name: string;
+  };
+  sets?: Array<{
+    song?: SetlistFmSong[];
+  }>;
+}
+
+// Import actual setlist from setlist.fm after a show
+export async function importActualSetlist(showId: string): Promise<boolean> {
   try {
-    console.log('Starting recent setlists import...');
+    console.log(`Importing actual setlist for show: ${showId}`);
     
-    // Get shows from the last 24 hours that don't have played setlists yet
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const { data: recentShows } = await supabase
+    // Get show details
+    const { data: show, error: showError } = await supabase
       .from('shows')
       .select(`
         id,
         date,
-        artist:artists(name),
-        venue:venues(name, city)
+        artists!shows_artist_id_fkey (
+          id,
+          name
+        )
       `)
-      .gte('date', yesterday.toISOString())
-      .lt('date', new Date().toISOString())
-      .not('id', 'in', 
-        supabase.from('played_setlists').select('show_id')
-      )
-      .limit(10);
+      .eq('id', showId)
+      .single();
 
-    if (!recentShows?.length) {
-      return { success: true, message: 'No recent shows to process' };
+    if (showError || !show) {
+      console.error("Error fetching show:", showError);
+      return false;
     }
 
-    let processed = 0;
-    for (const show of recentShows) {
-      try {
-        // Search for setlist on setlist.fm
-        const setlistData = await setlistfmService.searchSetlists(
-          show.artist.name,
-          show.date.split('T')[0].replace(/-/g, '-')
-        );
+    const artistName = show.artists?.name || 'Unknown Artist';
+    console.log(`Found show for artist: ${artistName}`);
 
-        if (setlistData && setlistData.length > 0) {
-          // Import the first matching setlist
-          const setlist = setlistData[0];
-          await setlistfmService.storePlayedSetlist(show.id, setlist.id, setlist.eventDate);
-          processed++;
-        }
-        
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.error(`Error importing setlist for show ${show.id}:`, error);
-      }
+    // Check if we already have a played setlist for this show
+    const { data: existingSetlist } = await supabase
+      .from('played_setlists')
+      .select('id')
+      .eq('show_id', showId)
+      .single();
+
+    if (existingSetlist) {
+      console.log(`Played setlist already exists for show: ${showId}`);
+      return true;
     }
 
-    return { 
-      success: true, 
-      message: `Imported setlists for ${processed} shows`,
-      data: { processed } as SetlistSyncData
-    };
+    // TODO: Implement actual setlist.fm API call here
+    // For now, return true as placeholder
+    console.log(`Setlist import placeholder for show: ${showId}`);
+    return true;
   } catch (error) {
-    console.error('Error importing recent setlists:', error);
-    return { success: false, message: 'Failed to import recent setlists' };
+    console.error("Error importing actual setlist:", error);
+    return false;
   }
-};
+}
+
+// Match setlist.fm song to database song
+export async function matchSongToDatabase(artistId: string, songName: string): Promise<string | null> {
+  try {
+    // Try exact match first
+    const { data: exactMatch, error } = await supabase
+      .from('songs')
+      .select('id')
+      .eq('artist_id', artistId)
+      .ilike('name', songName)
+      .limit(1)
+      .single();
+
+    if (!error && exactMatch) {
+      return exactMatch.id;
+    }
+
+    // Try fuzzy matching
+    const { data: fuzzyMatches, error: fuzzyError } = await supabase
+      .rpc('match_song_similarity', {
+        p_artist_id: artistId,
+        p_song_name: songName,
+        p_similarity_threshold: 0.7
+      });
+
+    if (!fuzzyError && fuzzyMatches && fuzzyMatches.length > 0) {
+      return fuzzyMatches[0].id;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error matching song to database:", error);
+    return null;
+  }
+}

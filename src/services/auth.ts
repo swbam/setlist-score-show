@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "@/components/ui/sonner";
 import * as spotifyService from "./spotify";
-import * as userService from "./user";
 
 interface SpotifyTokenResponse {
   access_token: string;
@@ -34,9 +33,14 @@ export const cleanupAuthState = () => {
 // Sign up with email/password
 export async function signUp(email: string, password: string, displayName: string) {
   try {
-    // Clean up existing auth state
+    // Clean up existing auth state first
     cleanupAuthState();
     
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return null;
+    }
+
     // Attempt to sign up
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -49,121 +53,138 @@ export async function signUp(email: string, password: string, displayName: strin
       }
     });
     
-    if (error) throw error;
+    if (error) {
+      console.error("Sign up error:", error);
+      if (error.message.includes('already registered')) {
+        toast.error("An account with this email already exists. Please sign in instead.");
+      } else {
+        toast.error(error.message);
+      }
+      return null;
+    }
     
     // If successful and have a user, store profile
     if (data?.user) {
-      const userData = {
-        id: data.user.id,
-        email: data.user.email,
-        display_name: displayName || data.user.email?.split('@')[0] || 'User',
-        avatar_url: data.user.user_metadata?.avatar_url || null,
-        spotify_id: data.user.app_metadata?.provider === 'spotify' ? data.user.user_metadata?.sub : null,
-      };
-      
-      await supabase
-        .from('users')
-        .upsert(userData);
+      await storeUserProfile(data.user, displayName);
+      toast.success("Account created successfully! Please check your email for verification.");
     }
     
     return data;
   } catch (error) {
     console.error("Error signing up:", error);
-    throw error;
+    toast.error("An unexpected error occurred. Please try again.");
+    return null;
   }
 }
 
 // Sign in with email/password
 export async function signInWithEmail(email: string, password: string) {
   try {
+    cleanupAuthState();
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Sign in error:", error);
+      if (error.message.includes('Invalid login credentials')) {
+        toast.error("Invalid email or password. Please check your credentials and try again.");
+      } else {
+        toast.error(error.message);
+      }
+      return null;
+    }
+
+    if (data?.user) {
+      // Update user profile in case data has changed
+      await storeUserProfile(data.user);
+      toast.success("Successfully signed in!");
+    }
+
     return data.session;
   } catch (error) {
     console.error("Error signing in:", error);
-    throw error;
-  }
-}
-
-// Sign up with email/password
-export async function signUpWithEmail(email: string, password: string) {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      }
-    });
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error("Error signing up:", error);
-    throw error;
+    toast.error("An unexpected error occurred. Please try again.");
+    return null;
   }
 }
 
 // Sign in with Spotify OAuth
 export async function signInWithSpotify() {
   try {
+    cleanupAuthState();
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'spotify',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'user-read-email user-top-read',
+        scopes: 'user-read-email user-top-read user-follow-read',
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Spotify OAuth error:", error);
+      toast.error("Failed to connect with Spotify. Please try again.");
+      return null;
+    }
+
     return data;
   } catch (error) {
     console.error("Error signing in with Spotify:", error);
-    throw error;
+    toast.error("An unexpected error occurred. Please try again.");
+    return null;
   }
 }
 
 // Sign out
 export async function signOut() {
   try {
-    // Clean up auth state
+    // Clean up auth state first
     cleanupAuthState();
     
     // Attempt global sign out
     const { error } = await supabase.auth.signOut({ scope: 'global' });
-    if (error) throw error;
+    if (error) {
+      console.error("Sign out error:", error);
+    }
+
+    // Force page reload for clean state
+    window.location.href = '/';
   } catch (error) {
     console.error("Error signing out:", error);
-    throw error;
+    // Force reload even if signOut fails
+    window.location.href = '/';
   }
 }
 
 // Store user profile in database
-export async function storeUserProfile(user: User) {
+export async function storeUserProfile(user: User, displayName?: string) {
   try {
     if (!user) return false;
     
     const userData = {
       id: user.id,
       email: user.email,
-      display_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      display_name: displayName || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
       avatar_url: user.user_metadata?.avatar_url || null,
-      spotify_id: user.app_metadata?.provider === 'spotify' ? user.user_metadata?.sub : null,
+      spotify_id: user.app_metadata?.provider === 'spotify' ? user.user_metadata?.provider_id : null,
     };
     
     const { error } = await supabase
       .from('users')
-      .upsert(userData);
+      .upsert(userData, { 
+        onConflict: 'id',
+        ignoreDuplicates: false 
+      });
       
     if (error) {
       console.error("Error storing user profile:", error);
       return false;
     }
     
+    console.log("Successfully stored user profile:", userData.display_name);
     return true;
   } catch (error) {
     console.error("Error storing user profile:", error);
@@ -210,13 +231,13 @@ async function getSpotifyUserToken(): Promise<string | null> {
   }
 }
 
-// Fetch user's top artists from Spotify
+// Fetch user's top artists from Spotify and store them
 export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium_term'): Promise<boolean> {
   try {
     const accessToken = await getSpotifyUserToken();
     
     if (!accessToken) {
-      console.log("No Spotify access token available");
+      console.log("No Spotify access token available for user");
       return false;
     }
     
@@ -228,7 +249,7 @@ export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium
     });
     
     if (!response.ok) {
-      console.error("Error fetching top artists from Spotify:", response.status);
+      console.error("Error fetching top artists from Spotify:", response.status, response.statusText);
       return false;
     }
     
@@ -236,13 +257,13 @@ export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium
     const artists = data.items || [];
     
     if (artists.length === 0) {
-      console.log("No top artists found");
+      console.log("No top artists found for user");
       return false;
     }
     
-    console.log(`Found ${artists.length} top artists`);
+    console.log(`Found ${artists.length} top artists for user`);
     
-    // Get user ID
+    // Get current user ID
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
     if (userError || !userData?.user) {
@@ -252,7 +273,7 @@ export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium
     
     const userId = userData.user.id;
     
-    // Store artists in database
+    // Process and store artists
     let storedCount = 0;
     
     for (let i = 0; i < artists.length; i++) {
@@ -266,41 +287,42 @@ export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium
         external_urls: artist.external_urls
       };
       
-      // Store artist
+      // Store artist in database
       const artistStored = await spotifyService.storeArtistInDatabase(artistData);
       
       if (artistStored) {
-        // Store relationship to user with rank
+        // Store user-artist relationship
         const { error: relationError } = await supabase
           .from('user_artists')
           .upsert({
             user_id: userId,
             artist_id: artist.id,
             rank: i + 1
+          }, {
+            onConflict: 'user_id,artist_id'
           });
           
         if (!relationError) {
           storedCount++;
           
-          // Import artist's top tracks (for the first 10 artists only to avoid rate limits)
+          // Import top tracks for the first 10 artists
           if (i < 10) {
             try {
-              const tracks = await spotifyService.getArtistTopTracks(artist.id);
-              if (tracks.length > 0) {
-                await spotifyService.storeTracksInDatabase(artist.id, tracks);
-              }
+              await spotifyService.importArtistCatalog(artist.id);
             } catch (trackError) {
               console.error(`Error importing tracks for ${artist.name}:`, trackError);
             }
           }
+        } else {
+          console.error(`Error storing user-artist relationship for ${artist.name}:`, relationError);
         }
       }
     }
     
-    console.log(`Successfully imported ${storedCount} of ${artists.length} artists`);
+    console.log(`Successfully imported ${storedCount} of ${artists.length} artists for user`);
     return storedCount > 0;
   } catch (error) {
-    console.error("Error fetching user's top artists:", error);
+    console.error("Error fetching user's top artists from Spotify:", error);
     return false;
   }
 }
@@ -322,7 +344,8 @@ export async function getUserTopArtists(userId?: string): Promise<any[]> {
     const { data, error } = await supabase
       .from('user_artists')
       .select(`
-        artists (
+        rank,
+        artists!user_artists_artist_id_fkey (
           id,
           name,
           image_url,
@@ -338,8 +361,10 @@ export async function getUserTopArtists(userId?: string): Promise<any[]> {
       return [];
     }
     
-    // Extract artists from joined query
-    return data.map(item => item.artists);
+    // Extract artists from joined query and ensure type safety
+    return (data || [])
+      .map(item => item.artists)
+      .filter(artist => artist !== null);
   } catch (error) {
     console.error("Error fetching user top artists:", error);
     return [];
