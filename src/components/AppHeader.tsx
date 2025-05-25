@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, Search, User, LogOut, Music, Home } from "lucide-react";
+import { Menu, X, Search, User, LogOut, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -62,14 +63,11 @@ const AppHeader = () => {
       >
         <div className="w-full max-w-full px-4 lg:px-8">
           <div className="flex items-center justify-between">
-            {/* Logo */}
+            {/* Logo - removed music icon */}
             <div
               className="flex items-center cursor-pointer"
               onClick={handleLogoClick}
             >
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full p-2 mr-2">
-                <Music className="h-5 w-5 text-white" />
-              </div>
               <span className="text-white text-xl font-bold">TheSet</span>
             </div>
 
@@ -124,7 +122,7 @@ const AppHeader = () => {
                             alt={userProfile.display_name}
                           />
                         ) : (
-                          <AvatarFallback className="bg-cyan-700 text-white">
+                          <AvatarFallback className="bg-yellow-metal-700 text-white">
                             {userProfile?.display_name
                               ? userProfile.display_name.charAt(0).toUpperCase()
                               : "U"}
@@ -162,7 +160,7 @@ const AppHeader = () => {
               ) : (
                 <Button
                   onClick={() => navigate("/login")}
-                  className="bg-cyan-600 hover:bg-cyan-700"
+                  className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black"
                 >
                   Login
                 </Button>
@@ -188,9 +186,6 @@ const AppHeader = () => {
           <div className="flex flex-col h-full p-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center">
-                <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full p-2 mr-2">
-                  <Music className="h-5 w-5 text-white" />
-                </div>
                 <span className="text-white text-xl font-bold">TheSet</span>
               </div>
               <Button
@@ -217,7 +212,7 @@ const AppHeader = () => {
                 className="flex items-center py-3 px-4 text-lg text-white hover:bg-gray-800 rounded-lg"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Music className="mr-3 h-5 w-5" />
+                <Search className="mr-3 h-5 w-5" />
                 Artists
               </Link>
               <Link
@@ -252,7 +247,7 @@ const AppHeader = () => {
                           alt={userProfile?.display_name || "User"}
                         />
                       ) : (
-                        <AvatarFallback className="bg-cyan-700 text-white">
+                        <AvatarFallback className="bg-yellow-metal-700 text-white">
                           {userProfile?.display_name
                             ? userProfile.display_name.charAt(0).toUpperCase()
                             : "U"}
@@ -282,7 +277,7 @@ const AppHeader = () => {
                       navigate("/login");
                       setMobileMenuOpen(false);
                     }}
-                    className="bg-cyan-600 hover:bg-cyan-700 w-full"
+                    className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black w-full"
                   >
                     Login
                   </Button>
