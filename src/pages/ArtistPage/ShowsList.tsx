@@ -1,118 +1,127 @@
 
 import { Link } from "react-router-dom";
-import { format } from "date-fns";
-import { Calendar, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Show } from "@/types";
+import { Badge } from "@/components/ui/badge";
+import { CalendarDays, MapPin, Clock, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ensureSetlistExists } from "@/services/setlistCreation";
 
-// Helper function to create URL-friendly slug
-export const createSlug = (name: string | null | undefined) => {
-  if (!name) return 'untitled';
-  
-  return name.toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-};
-
-interface ShowsListProps {
-  shows: any[];
-  emptyMessage: string;
-  type: 'upcoming' | 'past';
-  artistName: string;
+interface Show {
+  id: string;
+  name: string;
+  date: string;
+  start_time?: string | null;
+  status: string;
+  ticketmaster_url?: string | null;
+  venue: {
+    name: string;
+    city: string;
+    state?: string | null;
+    country: string;
+  };
 }
 
-export function ShowsList({ shows, emptyMessage, type, artistName }: ShowsListProps) {
+interface ShowsListProps {
+  shows: Show[];
+  title: string;
+  emptyMessage: string;
+}
+
+const ShowsList = ({ shows, title, emptyMessage }: ShowsListProps) => {
+  const handleShowClick = async (showId: string) => {
+    // Ensure setlist exists for this show before navigating
+    await ensureSetlistExists(showId);
+  };
+
   if (shows.length === 0) {
     return (
-      <div className="text-center py-16 bg-gray-900/50 rounded-lg border border-gray-800">
-        <Calendar className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-        <h3 className="text-xl font-medium text-white mb-2">No {type} shows</h3>
-        <p className="text-gray-400 mb-6">
-          {emptyMessage}
-        </p>
+      <div className="text-center py-8">
+        <p className="text-gray-400">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {shows.map((show) => {
-        const showSlug = createSlug(show.name || artistName);
-        
-        return (
-          <Card 
-            key={show.id}
-            className="bg-gray-900/50 border-gray-800 hover:border-cyan-600/50 transition-all duration-300"
-          >
-            <CardContent className="p-0">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6">
-                <div className="flex-grow space-y-2">
-                  {type === 'upcoming' && (
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                        show.status === 'canceled' ? 'bg-red-900/50 text-red-300' :
-                        show.status === 'postponed' ? 'bg-yellow-900/50 text-yellow-300' :
-                        'bg-green-900/50 text-green-300'
-                      }`}>
-                        {show.status === 'canceled' ? 'Canceled' :
-                          show.status === 'postponed' ? 'Postponed' :
-                          'Upcoming'}
-                      </span>
-                      <h3 className="text-lg font-semibold text-white">
-                        {show.name}
-                      </h3>
-                    </div>
-                  )}
+      <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
+      <div className="grid gap-4">
+        {shows.map((show) => (
+          <Card key={show.id} className="bg-gray-900 border-gray-800 hover:border-cyan-600 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <h4 className="text-white font-semibold mb-2">
+                    {show.name || "Concert"}
+                  </h4>
                   
-                  {type === 'past' && (
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {show.name}
-                    </h3>
-                  )}
-                  
-                  <div className="flex flex-col space-y-2 text-gray-400">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-2 text-cyan-500" />
-                      <span>{format(new Date(show.date), 'EEEE, MMMM d, yyyy')}</span>
-                      {show.start_time && type === 'upcoming' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center text-gray-400 text-sm">
+                      <CalendarDays className="h-4 w-4 mr-2" />
+                      <span>{new Date(show.date).toLocaleDateString()}</span>
+                      {show.start_time && (
                         <>
-                          <span className="mx-2">•</span>
-                          <span>{format(new Date(`2000-01-01T${show.start_time}`), 'h:mm a')}</span>
+                          <Clock className="h-4 w-4 ml-4 mr-2" />
+                          <span>{show.start_time}</span>
                         </>
                       )}
                     </div>
                     
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-2 text-cyan-500" />
+                    <div className="flex items-center text-gray-400 text-sm">
+                      <MapPin className="h-4 w-4 mr-2" />
                       <span>
-                        {show.venue?.name}, {show.venue?.city}
-                        {show.venue?.state ? `, ${show.venue.state}` : ''}, {show.venue?.country}
+                        {show.venue.name}, {show.venue.city}
+                        {show.venue.state && `, ${show.venue.state}`}
                       </span>
                     </div>
                   </div>
                 </div>
                 
-                <div className="mt-4 md:mt-0 flex space-x-3">
-                  {type === 'past' && (
-                    <Link to={`/comparison/${show.id}/${showSlug}`}>
-                      <Button variant="outline" className="border-cyan-600 text-cyan-500">
-                        View Comparison
+                <div className="flex flex-col items-end space-y-2">
+                  <Badge 
+                    variant={show.status === 'scheduled' ? 'default' : 'destructive'}
+                    className={show.status === 'scheduled' ? 'bg-green-600/20 text-green-400' : ''}
+                  >
+                    {show.status}
+                  </Badge>
+                  
+                  <div className="flex space-x-2">
+                    {show.ticketmaster_url && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                        asChild
+                      >
+                        <a 
+                          href={show.ticketmaster_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Tickets
+                        </a>
                       </Button>
-                    </Link>
-                  )}
-                  <Link to={`/events/${show.id}/${showSlug}`}>
-                    <Button className="bg-cyan-600 hover:bg-cyan-700">
-                      {type === 'upcoming' ? 'Vote on Setlist' : 'View Setlist'}
+                    )}
+                    
+                    <Button 
+                      size="sm" 
+                      className="bg-cyan-600 hover:bg-cyan-700"
+                      asChild
+                      onClick={() => handleShowClick(show.id)}
+                    >
+                      <Link to={`/show/${show.id}`}>
+                        Vote on Setlist
+                      </Link>
                     </Button>
-                  </Link>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
-}
+};
+
+export default ShowsList;

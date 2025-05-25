@@ -1,196 +1,243 @@
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { ShowData, SetlistSong } from './types';
-import { ensureSetlistExists } from '@/services/setlistCreation';
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { ensureSetlistExists } from "@/services/setlistCreation";
+import { toast } from "@/components/ui/sonner";
 
-export const useShowVoting = (showId: string | undefined) => {
-  const [showData, setShowData] = useState<ShowData | null>(null);
-  const [setlistSongs, setSetlistSongs] = useState<SetlistSong[]>([]);
+interface Show {
+  id: string;
+  name: string;
+  date: string;
+  start_time?: string | null;
+  status: string;
+  artist: {
+    id: string;
+    name: string;
+    image_url?: string;
+  };
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    state?: string | null;
+    country: string;
+  };
+}
+
+interface SetlistSong {
+  id: string;
+  song_id: string;
+  votes: number;
+  position: number;
+  song: {
+    id: string;
+    name: string;
+    album: string;
+    spotify_url?: string;
+  };
+}
+
+const useShowVoting = (user: any) => {
+  const { showId } = useParams<{ showId: string }>();
+  const [show, setShow] = useState<Show | null>(null);
+  const [setlist, setSetlist] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
-  const [setlistId, setSetlistId] = useState<string>("");
+  const [votingError, setVotingError] = useState<string | null>(null);
+  const [voteSubmitting, setVoteSubmitting] = useState<string | null>(null);
+  const [usedVotesCount, setUsedVotesCount] = useState(0);
+  const maxFreeVotes = 5;
+  const votesRemaining = maxFreeVotes - usedVotesCount;
 
   useEffect(() => {
-    if (showId) {
-      fetchShowData();
-    }
-  }, [showId]);
-
-  const fetchShowData = async () => {
-    if (!showId) return;
-
-    try {
-      setLoading(true);
-
-      // Fetch show details with proper column hints
-      const { data: show, error: showError } = await supabase
-        .from('shows')
-        .select(`
-          *,
-          artists!shows_artist_id_fkey(id, name, image_url),
-          venues!shows_venue_id_fkey(id, name, city, state, country)
-        `)
-        .eq('id', showId)
-        .single();
-
-      if (showError) {
-        console.error('Error fetching show:', showError);
-        toast.error('Failed to load show data');
-        return;
-      }
-
-      if (!show) {
-        toast.error('Show not found');
-        return;
-      }
-
-      // Transform the data to match expected format
-      const transformedShow = {
-        ...show,
-        artist: show.artists ? {
-          id: show.artists.id,
-          name: show.artists.name,
-          image_url: show.artists.image_url
-        } : null,
-        venue: show.venues ? {
-          id: show.venues.id,
-          name: show.venues.name,
-          city: show.venues.city,
-          state: show.venues.state,
-          country: show.venues.country
-        } : null
-      };
-
-      setShowData(transformedShow);
-
-      // Ensure setlist exists (create if needed)
-      const setlistIdResult = await ensureSetlistExists(showId);
+    const fetchShowAndSetlist = async () => {
+      if (!showId) return;
       
-      if (!setlistIdResult) {
-        toast.error('Failed to create setlist for this show');
-        return;
-      }
+      setLoading(true);
+      setVotingError(null);
 
-      setSetlistId(setlistIdResult);
+      try {
+        // Fetch show data
+        const { data: showData, error: showError } = await supabase
+          .from('shows')
+          .select(`
+            *,
+            artist:artists!shows_artist_id_fkey(id, name, image_url),
+            venue:venues!shows_venue_id_fkey(id, name, city, state, country)
+          `)
+          .eq('id', showId)
+          .single();
 
-      // Fetch setlist songs with proper column hints
-      await fetchSetlistSongs(setlistIdResult);
-
-      // Increment view count
-      await supabase
-        .from('shows')
-        .update({ view_count: (show.view_count || 0) + 1 })
-        .eq('id', showId);
-
-    } catch (error) {
-      console.error('Error fetching show data:', error);
-      toast.error('Failed to load show data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSetlistSongs = async (setlistId: string) => {
-    try {
-      const { data: songs, error } = await supabase
-        .from('setlist_songs')
-        .select(`
-          *,
-          songs!setlist_songs_song_id_fkey(id, name, artist_id, album, spotify_url)
-        `)
-        .eq('setlist_id', setlistId)
-        .order('votes', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching setlist songs:', error);
-        toast.error('Failed to load setlist');
-        return;
-      }
-
-      // Transform the data to match expected format
-      const transformedSongs = (songs || []).map(song => ({
-        ...song,
-        song: song.songs ? {
-          id: song.songs.id,
-          name: song.songs.name,
-          artist_id: song.songs.artist_id,
-          album: song.songs.album,
-          spotify_url: song.songs.spotify_url
-        } : {
-          id: '',
-          name: 'Unknown Song',
-          artist_id: '',
-          album: '',
-          spotify_url: ''
+        if (showError) {
+          console.error("Error fetching show:", showError);
+          setVotingError("Failed to load show. Please try again.");
+          return;
         }
-      }));
 
-      setSetlistSongs(transformedSongs);
-    } catch (error) {
-      console.error('Error fetching setlist songs:', error);
-      toast.error('Failed to load setlist');
-    }
-  };
+        if (!showData) {
+          setVotingError("Show not found.");
+          return;
+        }
+
+        // Transform the data to match expected format
+        const transformedShow: Show = {
+          id: showData.id,
+          name: showData.name,
+          date: showData.date,
+          start_time: showData.start_time,
+          status: showData.status,
+          artist: {
+            id: showData.artist?.id || '',
+            name: showData.artist?.name || 'Unknown Artist',
+            image_url: showData.artist?.image_url
+          },
+          venue: {
+            id: showData.venue?.id || '',
+            name: showData.venue?.name || 'Unknown Venue',
+            city: showData.venue?.city || '',
+            state: showData.venue?.state,
+            country: showData.venue?.country || ''
+          }
+        };
+
+        setShow(transformedShow);
+
+        // Ensure setlist exists for this show
+        const setlistId = await ensureSetlistExists(showId);
+        
+        if (!setlistId) {
+          setVotingError("Failed to create setlist for this show.");
+          return;
+        }
+
+        // Fetch setlist songs
+        const { data: setlistData, error: setlistError } = await supabase
+          .from('setlist_songs')
+          .select(`
+            *,
+            song:songs!setlist_songs_song_id_fkey(id, name, album, spotify_url)
+          `)
+          .eq('setlist_id', setlistId)
+          .order('votes', { ascending: false });
+
+        if (setlistError) {
+          console.error("Error fetching setlist:", setlistError);
+          setVotingError("Failed to load setlist. Please try again.");
+          return;
+        }
+
+        if (setlistData) {
+          const transformedSetlist: SetlistSong[] = setlistData.map(item => ({
+            id: item.id,
+            song_id: item.song_id,
+            votes: item.votes,
+            position: item.position,
+            song: {
+              id: item.song?.id || '',
+              name: item.song?.name || 'Unknown Song',
+              album: item.song?.album || '',
+              spotify_url: item.song?.spotify_url
+            }
+          }));
+          
+          setSetlist(transformedSetlist);
+        }
+
+        // Fetch user's vote count if logged in
+        if (user) {
+          const { data: userVotes } = await supabase
+            .from('votes')
+            .select('id')
+            .eq('user_id', user.id);
+          
+          setUsedVotesCount(userVotes?.length || 0);
+        }
+
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setVotingError("An unexpected error occurred. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchShowAndSetlist();
+  }, [showId, user]);
 
   const handleVote = async (setlistSongId: string) => {
-    try {
-      // Optimistic update
-      setSetlistSongs(prev => 
-        prev.map(song => 
-          song.id === setlistSongId 
-            ? { ...song, votes: song.votes + 1 }
-            : song
-        )
-      );
+    if (!user) {
+      toast.error("Please log in to vote");
+      return;
+    }
 
-      const { data, error } = await supabase.rpc('vote_for_song', {
+    if (usedVotesCount >= maxFreeVotes) {
+      toast.error("You've reached your vote limit");
+      return;
+    }
+
+    setVoteSubmitting(setlistSongId);
+    setVotingError(null);
+
+    try {
+      // Optimistically update the UI
+      setSetlist(prev => prev.map(song =>
+        song.id === setlistSongId ? { ...song, votes: song.votes + 1 } : song
+      ));
+      setUsedVotesCount(prev => prev + 1);
+
+      // Call Supabase RPC function to handle the vote
+      const { error } = await supabase.rpc('vote_for_song', {
         setlist_song_id: setlistSongId
       });
 
       if (error) {
-        // Revert optimistic update on error
-        setSetlistSongs(prev => 
-          prev.map(song => 
-            song.id === setlistSongId 
-              ? { ...song, votes: song.votes - 1 }
-              : song
-          )
-        );
+        console.error("Error voting:", error);
+        setVotingError("Failed to vote. Please try again.");
         
-        if (error.message.includes('Already voted')) {
-          toast.error("You've already voted for this song!");
-        } else {
-          toast.error("Failed to vote. Please try again.");
-        }
-        return;
-      }
-
-      // Check if response indicates success
-      if (data && typeof data === 'object' && 'success' in data && data.success) {
+        // Revert the optimistic update on error
+        setSetlist(prev => prev.map(song =>
+          song.id === setlistSongId ? { ...song, votes: song.votes - 1 } : song
+        ));
+        setUsedVotesCount(prev => prev - 1);
+        
+        toast.error("Failed to vote. Please try again.");
+      } else {
         toast.success("Vote recorded!");
       }
-    } catch (error) {
-      console.error('Error voting:', error);
-      // Revert optimistic update on error
-      setSetlistSongs(prev => 
-        prev.map(song => 
-          song.id === setlistSongId 
-            ? { ...song, votes: song.votes - 1 }
-            : song
-        )
-      );
-      toast.error("Failed to vote. Please try again.");
+    } catch (err) {
+      console.error("Error voting:", err);
+      setVotingError("An unexpected error occurred. Please try again.");
+      
+      // Revert the optimistic update on error
+      setSetlist(prev => prev.map(song =>
+        song.id === setlistSongId ? { ...song, votes: song.votes - 1 } : song
+      ));
+      setUsedVotesCount(prev => prev - 1);
+      
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setVoteSubmitting(null);
     }
   };
 
+  const handleSongAdded = (newSong: any) => {
+    // This would be called when a user adds a new song to the setlist
+    // For now, we'll just refresh the setlist
+    window.location.reload();
+  };
+
   return {
-    showData,
-    setlistSongs,
-    setSetlistSongs,
+    show,
+    setlist,
     loading,
-    setlistId,
+    votingError,
+    voteSubmitting,
+    usedVotesCount,
+    maxFreeVotes,
+    votesRemaining,
     handleVote,
-    refetch: fetchShowData
+    handleSongAdded
   };
 };
+
+export default useShowVoting;

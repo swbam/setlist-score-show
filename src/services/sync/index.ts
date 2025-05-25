@@ -1,3 +1,4 @@
+
 import { SyncResult } from "./types";
 import { syncTrendingShows } from "./trendingSync";
 import { syncArtistCatalogs } from "./catalogSync";
@@ -63,29 +64,24 @@ export async function syncAll(): Promise<SyncResult[]> {
     setlistResult,
     statsResult
   ] = await Promise.all([
-    catalogSync.syncArtistCatalogs().catch(error => ({ 
+    syncArtistCatalogs().catch(error => ({ 
       success: false, 
-      message: `Catalog sync failed: ${error.message}`, 
-      count: 0 
+      message: `Catalog sync failed: ${error.message}`
     })),
-    trendingSync.syncTrendingData().catch(error => ({ 
+    syncTrendingShows().catch(error => ({ 
       success: false, 
-      message: `Trending sync failed: ${error.message}`, 
-      count: 0 
+      message: `Trending sync failed: ${error.message}`
     })),
-    setlistImport.importRecentSetlists().then(count => ({ 
-      success: count > 0, 
-      message: `Imported ${count} recent setlists`, 
-      count 
+    importRecentSetlists().then(count => ({ 
+      success: true, 
+      message: `Imported ${count} recent setlists`
     })).catch(error => ({ 
       success: false, 
-      message: `Setlist import failed: ${error.message}`, 
-      count: 0 
+      message: `Setlist import failed: ${error.message}`
     })),
-    statsUpdate.updateStats().catch(error => ({ 
+    updateTrendingStats().catch(error => ({ 
       success: false, 
-      message: `Stats update failed: ${error.message}`, 
-      count: 0 
+      message: `Stats update failed: ${error.message}`
     }))
   ]);
   
@@ -99,18 +95,17 @@ export async function syncArtistData(artistId: string): Promise<SyncResult> {
   console.log(`Syncing data for artist: ${artistId}`);
   
   try {
-    const result = await catalogSync.syncArtistCatalog(artistId);
+    const { syncArtistCatalog } = await import("@/services/catalog");
+    const result = await syncArtistCatalog(artistId);
     return {
       success: result,
-      message: result ? 'Artist data synced successfully' : 'Failed to sync artist data',
-      count: result ? 1 : 0
+      message: result ? 'Artist data synced successfully' : 'Failed to sync artist data'
     };
   } catch (error) {
     console.error(`Error syncing artist ${artistId}:`, error);
     return {
       success: false,
-      message: `Failed to sync artist: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      count: 0
+      message: `Failed to sync artist: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
 }

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
@@ -14,6 +15,37 @@ export interface SearchResult {
   location?: string;
   artist_name?: string;
   score: number; // Search relevance score
+}
+
+export interface Artist {
+  id: string;
+  name: string;
+  image_url?: string;
+  source?: string;
+}
+
+export interface Show {
+  id: string;
+  artist_id: string;
+  venue_id: string;
+  name: string;
+  date: string;
+  start_time?: string | null;
+  status: string;
+  ticketmaster_url?: string | null;
+  view_count: number;
+  artist: {
+    id: string;
+    name: string;
+    image_url?: string;
+  };
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    state?: string | null;
+    country: string;
+  };
 }
 
 export interface SearchOptions {
@@ -78,9 +110,8 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
             image_url: artist.images?.[0]?.url,
             genres: artist.genres,
             popularity: artist.popularity,
-            spotify_url: artist.external_urls?.spotify,
-            source: 'spotify'
-          }, true).catch(console.error);
+            spotify_url: artist.external_urls?.spotify
+          }).catch(console.error);
         }
       });
     }
@@ -150,12 +181,11 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
             const artistData = {
               id: artist.id,
               name: artist.name,
-              image_url: artist.images?.[0]?.url,
-              source: 'ticketmaster'
+              image_url: artist.images?.[0]?.url
             };
             
             // Store artist and show in background
-            artistUtils.ensureArtistInDatabase(artistData as any, true)
+            artistUtils.ensureArtistInDatabase(artistData)
               .then(savedArtist => {
                 // Store venue
                 ticketmasterService.storeVenueInDatabase(venue)
@@ -202,148 +232,6 @@ export async function search(options: SearchOptions): Promise<SearchResult[]> {
 }
 
 /**
- * Store search results in the database for future searches
- * This helps build up our database over time with artists and shows people search for
- */
-export async function storeSearchResults(results: SearchResult[]): Promise<void> {
-  try {
-    // Process artists
-    const artists = results.filter(result => result.type === 'artist');
-    
-    for (const artist of artists) {
-      // Skip artists that don't have IDs
-      if (!artist.id) continue;
-      
-      // Check if artist is already in database
-      const { data: existingArtist } = await supabase
-        .from('artists')
-        .select('id')
-        .eq('id', artist.id)
-        .maybeSingle();
-      
-      // If artist doesn't exist, add to database
-      if (!existingArtist) {
-        await supabase
-          .from('artists')
-          .insert({
-            id: artist.id,
-            name: artist.name,
-            image_url: artist.image_url
-          });
-      }
-    }
-    
-    // Process shows
-    const shows = results.filter(result => result.type === 'show');
-    
-    for (const show of shows) {
-      // Skip shows that don't have IDs or artist names
-      if (!show.id || !show.artist_name) continue;
-      
-      // Check if show is already in database
-      const { data: existingShow } = await supabase
-        .from('shows')
-        .select('id')
-        .eq('id', show.id)
-        .maybeSingle();
-      
-      // If show doesn't exist and we have enough info, try to add it
-      if (!existingShow && show.venue && show.date) {
-        // First, try to find the artist in the database
-        let artistId = null;
-        
-        // Search for artist by name
-        const { data: artistMatch } = await supabase
-          .from('artists')
-          .select('id')
-          .ilike('name', show.artist_name)
-          .maybeSingle();
-        
-        if (artistMatch) {
-          artistId = artistMatch.id;
-        } else {
-          // If we can't find the artist, look up on Spotify
-          const spotifyArtists = await spotifyService.searchArtists(show.artist_name);
-          
-          if (spotifyArtists.length > 0) {
-            const spotifyArtist = spotifyArtists[0];
-            
-            // Store the artist
-            await supabase
-              .from('artists')
-              .insert({
-                id: spotifyArtist.id,
-                name: spotifyArtist.name,
-                image_url: spotifyArtist.images?.[0]?.url,
-                popularity: spotifyArtist.popularity,
-                genres: spotifyArtist.genres,
-                spotify_url: spotifyArtist.external_urls?.spotify
-              });
-            
-            artistId = spotifyArtist.id;
-          }
-        }
-        
-        // If we have an artist ID, try to add the show
-        if (artistId) {
-          // Check if venue exists
-          let venueId = null;
-          
-          // Try to find venue by name
-          const { data: venueMatch } = await supabase
-            .from('venues')
-            .select('id')
-            .ilike('name', show.venue)
-            .maybeSingle();
-          
-          if (venueMatch) {
-            venueId = venueMatch.id;
-          } else if (show.location) {
-            // Create a simple venue from the info we have
-            const venueParts = show.location.split(', ');
-            const venueCity = venueParts[0];
-            const venueState = venueParts.length > 1 ? venueParts[1] : null;
-            
-            const { data: newVenue } = await supabase
-              .from('venues')
-              .insert({
-                id: `venue-${Date.now()}`, // Generate a unique ID
-                name: show.venue,
-                city: venueCity,
-                state: venueState,
-                country: 'United States' // Assume US for now
-              })
-              .select()
-              .single();
-            
-            if (newVenue) {
-              venueId = newVenue.id;
-            }
-          }
-          
-          // If we have venue ID, add the show
-          if (venueId) {
-            await supabase
-              .from('shows')
-              .insert({
-                id: show.id,
-                name: show.name,
-                artist_id: artistId,
-                venue_id: venueId,
-                date: new Date(show.date).toISOString(),
-                status: 'scheduled'
-              });
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error storing search results:", error);
-    // Don't throw - this is a background operation
-  }
-}
-
-/**
  * Search for artists in database
  */
 async function searchArtistsInDatabase(query: string): Promise<any[]> {
@@ -382,17 +270,9 @@ async function searchShowsInDatabase(
       .from('shows')
       .select(`
         *,
-        artist:artists(*),
-        venue:venues(*)
+        artist:artists!shows_artist_id_fkey(*),
+        venue:venues!shows_venue_id_fkey(*)
       `);
-    
-    // Apply artist name filter if query provided
-    if (query) {
-      dbQuery = dbQuery.textSearch('artist:artists(name)', query, {
-        type: 'websearch',
-        config: 'english'
-      });
-    }
     
     // Apply date range filters if provided
     if (dateFrom) {
@@ -401,11 +281,6 @@ async function searchShowsInDatabase(
     
     if (dateTo) {
       dbQuery = dbQuery.lte('date', dateTo.toISOString());
-    }
-    
-    // Apply location filter if provided
-    if (location) {
-      dbQuery = dbQuery.filter('venue:venues.city', 'ilike', `%${location}%`);
     }
     
     // Execute query

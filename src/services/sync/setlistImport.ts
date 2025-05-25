@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import * as setlistfmService from "@/services/setlistfm";
+import { SyncResult } from "./types";
 
 export interface SetlistFmSong {
   name: string;
@@ -112,7 +113,7 @@ export async function importActualSetlist(showId: string): Promise<boolean> {
 }
 
 // Import recent setlists for shows that occurred in the last 7 days
-export async function importRecentSetlists(): Promise<number> {
+export async function importRecentSetlists(): Promise<SyncResult> {
   try {
     console.log("Importing recent setlists...");
     
@@ -127,7 +128,10 @@ export async function importRecentSetlists(): Promise<number> {
     
     if (error) {
       console.error("Error fetching recent shows:", error);
-      return 0;
+      return {
+        success: false,
+        message: 'Failed to fetch recent shows'
+      };
     }
     
     let importedCount = 0;
@@ -142,11 +146,19 @@ export async function importRecentSetlists(): Promise<number> {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    console.log(`Imported ${importedCount} setlists from ${recentShows?.length || 0} recent shows`);
-    return importedCount;
+    const message = `Imported ${importedCount} setlists from ${recentShows?.length || 0} recent shows`;
+    console.log(message);
+    
+    return {
+      success: importedCount > 0,
+      message
+    };
   } catch (error) {
     console.error("Error importing recent setlists:", error);
-    return 0;
+    return {
+      success: false,
+      message: 'Failed to import recent setlists'
+    };
   }
 }
 
