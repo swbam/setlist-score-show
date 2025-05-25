@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TrendingShow {
@@ -216,10 +215,10 @@ export async function getPopularShows(limit: number = 20): Promise<TrendingShow[
 // Increment view count for a show
 export async function incrementShowViews(showId: string): Promise<boolean> {
   try {
-    // Use raw SQL update since the RPC function might not be in types yet
+    // Use direct SQL update instead of raw
     const { error } = await supabase
       .from('shows')
-      .update({ view_count: supabase.raw('view_count + 1') })
+      .update({ view_count: supabase.sql`view_count + 1` })
       .eq('id', showId);
 
     if (error) {

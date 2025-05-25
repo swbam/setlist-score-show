@@ -5,21 +5,29 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { incrementShowViews } from '@/services/trending';
 import { ensureSetlistExists } from '@/services/setlistCreation';
+import { useRealtimeVoting } from '@/hooks/useRealtimeVoting';
 import ShowHeader from './ShowHeader';
 import VotingSection from './VotingSection';
 import Sidebar from './Sidebar';
 import { Show, SetlistSong } from './types';
 
-const ShowVoting = () => {
+const ShowVotingWithRealtime = () => {
   const { showId } = useParams<{ showId: string }>();
   const navigate = useNavigate();
   const [show, setShow] = useState<Show | null>(null);
-  const [setlistSongs, setSetlistSongs] = useState<SetlistSong[]>([]);
+  const [initialSongs, setInitialSongs] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [usedVotesCount, setUsedVotesCount] = useState(0);
+  const [setlistId, setSetlistId] = useState<string | null>(null);
   const maxFreeVotes = 10;
+
+  // Use realtime voting hook
+  const { songs: setlistSongs, setSongs: setSetlistSongs } = useRealtimeVoting({
+    setlistId,
+    initialSongs
+  });
 
   useEffect(() => {
     if (showId) {
@@ -42,7 +50,7 @@ const ShowVoting = () => {
       // Increment view count
       await incrementShowViews(showId);
 
-      // Fetch show details with proper relationship names
+      // Fetch show details
       const { data: showData, error: showError } = await supabase
         .from('shows')
         .select(`
@@ -63,16 +71,9 @@ const ShowVoting = () => {
         .eq('id', showId)
         .single();
 
-      if (showError) {
+      if (showError || !showData) {
         console.error("Error fetching show:", showError);
         toast("Failed to load show details");
-        return;
-      }
-
-      if (!showData) {
-        console.error("No show data found");
-        toast("Show not found");
-        navigate('/');
         return;
       }
 
@@ -101,19 +102,18 @@ const ShowVoting = () => {
 
       setShow(transformedShow);
 
-      // Ensure setlist exists for this show (creates with 5 random songs if needed)
-      console.log("Ensuring setlist exists for show:", showId);
-      const setlistId = await ensureSetlistExists(showId);
+      // Ensure setlist exists
+      const createdSetlistId = await ensureSetlistExists(showId);
       
-      if (!setlistId) {
+      if (!createdSetlistId) {
         console.error("Failed to create or get setlist");
         toast("Failed to load voting data");
         return;
       }
 
-      console.log("Fetching setlist songs for setlist ID:", setlistId);
-      
-      // Fetch setlist songs with explicit relationship name and artist_id
+      setSetlistId(createdSetlistId);
+
+      // Fetch setlist songs
       const { data: setlistData, error: setlistError } = await supabase
         .from('setlist_songs')
         .select(`
@@ -130,7 +130,7 @@ const ShowVoting = () => {
             spotify_url
           )
         `)
-        .eq('setlist_id', setlistId)
+        .eq('setlist_id', createdSetlistId)
         .order('votes', { ascending: false })
         .order('position', { ascending: true });
 
@@ -156,10 +156,7 @@ const ShowVoting = () => {
           }
         }));
         
-        setSetlistSongs(transformedSetlist);
-      } else {
-        console.log("No setlist songs found, setlist may be empty");
-        setSetlistSongs([]);
+        setInitialSongs(transformedSetlist);
       }
 
       // Fetch user's vote count if logged in
@@ -311,4 +308,4 @@ const ShowVoting = () => {
   );
 };
 
-export default ShowVoting;
+export default ShowVotingWithRealtime;

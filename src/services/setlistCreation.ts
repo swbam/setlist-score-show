@@ -92,7 +92,7 @@ export async function ensureSetlistExists(showId: string): Promise<string | null
         return await createSetlistManually(showId);
       }
 
-      if (result && result.length > 0) {
+      if (result && Array.isArray(result) && result.length > 0) {
         console.log(`Created setlist with ${result[0].songs_added} songs`);
         return result[0].setlist_id;
       }
