@@ -56,6 +56,20 @@ const ShowVoting = () => {
     );
   }
 
+  // Transform show data to match expected type
+  const showWithViewCount = {
+    ...show,
+    view_count: 0, // Default value for view_count
+    ticketmaster_url: show.ticketmaster_url || null
+  };
+
+  // Transform setlist data to match expected type
+  const transformedSetlist = setlist.map(song => ({
+    ...song,
+    setlist_id: '', // Default empty string for setlist_id
+    userVoted: false
+  }));
+
   // Calculate stats for sidebar
   const totalVotes = setlist.reduce((sum, song) => sum + song.votes, 0);
   const totalSongs = setlist.length;
@@ -65,7 +79,7 @@ const ShowVoting = () => {
       <AppHeader />
       
       {/* Show Header */}
-      <ShowHeader show={show} />
+      <ShowHeader show={showWithViewCount} />
 
       {/* Main Content */}
       <div className="container mx-auto max-w-7xl px-4 py-8 pb-32 md:pb-12">
@@ -73,17 +87,17 @@ const ShowVoting = () => {
           {/* Voting Section */}
           <div className="lg:col-span-2">
             <VotingSection
-              songs={setlist}
+              songs={transformedSetlist}
               onVote={handleVote}
               submitting={voteSubmitting}
-              onAddSong={handleSongAdded}
+              onAddSong={() => handleSongAdded({})}
             />
           </div>
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <Sidebar 
-              show={show} 
+              show={showWithViewCount} 
               totalVotes={totalVotes}
               totalSongs={totalSongs}
             />

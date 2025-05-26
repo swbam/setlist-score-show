@@ -18,18 +18,18 @@ const VotingSection = ({ songs, onVote, submitting, onAddSong }: VotingSectionPr
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-start">
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Vote for Songs</h2>
-            <p className="text-gray-400">Help create the perfect setlist for this show</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">What do you want to hear?</h2>
+            <p className="text-gray-400">Vote for songs you want to hear at this show</p>
           </div>
           
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600"
             >
               <Eye className="h-4 w-4 mr-2" />
               {totalVotes} votes
@@ -37,7 +37,7 @@ const VotingSection = ({ songs, onVote, submitting, onAddSong }: VotingSectionPr
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600"
             >
               <Share className="h-4 w-4 mr-2" />
               Share
@@ -46,97 +46,101 @@ const VotingSection = ({ songs, onVote, submitting, onAddSong }: VotingSectionPr
         </div>
 
         {/* Add Song Section */}
-        <div className="flex items-center gap-4 p-4 bg-gray-900 rounded-lg border border-gray-800">
-          <span className="text-gray-300">Add a song to this setlist:</span>
-          <select className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-300 min-w-[200px]">
-            <option>Select a song</option>
-          </select>
-          <Button 
-            size="sm"
-            className="bg-white text-black hover:bg-gray-200 font-medium"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Song
-          </Button>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="text-gray-300 font-medium">Add a song to this setlist:</span>
+            <div className="flex gap-3 flex-1">
+              <select className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-300 flex-1 min-w-0 focus:ring-2 focus:ring-white focus:border-transparent">
+                <option>Select a song</option>
+              </select>
+              <Button 
+                size="sm"
+                className="bg-white text-black hover:bg-gray-200 font-medium px-6 whitespace-nowrap"
+                onClick={onAddSong}
+              >
+                Add to Setlist
+              </Button>
+            </div>
+          </div>
+          <p className="text-gray-500 text-sm mt-3">{songs.length} songs available in the catalog</p>
         </div>
       </div>
 
+      {/* Table Header */}
+      <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-gray-400 uppercase tracking-wide border-b border-gray-800">
+        <div className="col-span-1">#</div>
+        <div className="col-span-6">Song</div>
+        <div className="col-span-3 text-center">Votes</div>
+        <div className="col-span-2"></div>
+      </div>
+
       {/* Songs List */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {songs.length > 0 ? (
           songs.map((song, index) => (
-            <Card 
+            <div 
               key={song.id} 
-              className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors"
+              className="grid grid-cols-12 gap-4 items-center p-4 bg-gray-900/30 hover:bg-gray-900/50 transition-colors border border-gray-800/50 rounded-lg"
             >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  {/* Song Info */}
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                    {/* Position */}
-                    <div className="w-8 h-8 bg-white text-black rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {index + 1}
-                    </div>
-                    
-                    {/* Song Details */}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-white font-medium truncate">
-                        {song.song?.name || 'Unknown Song'}
-                      </h3>
-                      <p className="text-gray-400 text-sm truncate">
-                        {song.song?.album || 'Unknown Album'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Voting Section */}
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className="text-center">
-                      <div className="text-white font-bold text-lg">
-                        {song.votes}
-                      </div>
-                      <div className="text-gray-400 text-xs uppercase tracking-wide">
-                        VOTES
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => onVote(song.id)}
-                      disabled={submitting === song.id}
-                      size="sm"
-                      className="bg-white text-black hover:bg-gray-200 font-medium min-w-[70px]"
-                    >
-                      {submitting === song.id ? (
-                        <div className="h-4 w-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <Heart className="h-4 w-4 mr-1" />
-                          Vote
-                        </>
-                      )}
-                    </Button>
-                  </div>
+              {/* Position */}
+              <div className="col-span-1">
+                <div className="w-8 h-8 bg-white text-black rounded-full flex items-center justify-center text-sm font-bold">
+                  {index + 1}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              {/* Song Info */}
+              <div className="col-span-6 min-w-0">
+                <h3 className="text-white font-semibold truncate text-lg">
+                  {song.song?.name || 'Unknown Song'}
+                </h3>
+                <p className="text-gray-400 text-sm truncate">
+                  {song.song?.album || 'Unknown Album'}
+                </p>
+              </div>
+
+              {/* Votes */}
+              <div className="col-span-3 text-center">
+                <div className="text-white font-bold text-xl">
+                  {song.votes}
+                </div>
+              </div>
+
+              {/* Vote Button */}
+              <div className="col-span-2 flex justify-end">
+                <Button
+                  onClick={() => onVote(song.id)}
+                  disabled={submitting === song.id}
+                  size="sm"
+                  className="bg-white text-black hover:bg-gray-200 font-medium min-w-[80px]"
+                >
+                  {submitting === song.id ? (
+                    <div className="h-4 w-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Heart className="h-4 w-4 mr-1" />
+                      Vote
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           ))
         ) : (
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-8 text-center">
-              <p className="text-gray-400 mb-4">
-                No songs in this setlist yet. Be the first to add one!
-              </p>
-              {onAddSong && (
-                <Button
-                  onClick={onAddSong}
-                  className="bg-white text-black hover:bg-gray-200 font-medium"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Song
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <div className="text-center py-12 bg-gray-900/30 border border-gray-800 rounded-lg">
+            <p className="text-gray-400 mb-4 text-lg">
+              No songs in this setlist yet. Be the first to add one!
+            </p>
+            {onAddSong && (
+              <Button
+                onClick={onAddSong}
+                className="bg-white text-black hover:bg-gray-200 font-medium"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add First Song
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
