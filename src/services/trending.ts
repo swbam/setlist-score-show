@@ -109,13 +109,15 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
         const venue = show.venues as any;
         const setlists = show.setlists as any[] || [];
         
-        // Calculate total votes across all setlist songs
+        // Calculate total votes across all setlist songs - fix the TypeScript error
         let totalVotes = 0;
-        setlists.forEach((setlist: any) => {
-          if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
-            totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
-          }
-        });
+        if (Array.isArray(setlists)) {
+          setlists.forEach((setlist: any) => {
+            if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
+              totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
+            }
+          });
+        }
         
         // Calculate days until show
         const daysUntilShow = Math.ceil((new Date(show.date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
