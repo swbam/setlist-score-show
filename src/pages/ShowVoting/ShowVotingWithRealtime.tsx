@@ -6,6 +6,8 @@ import { toast } from '@/components/ui/sonner';
 import { incrementShowViews } from '@/services/trending';
 import { getOrCreateSetlistWithSongs } from '@/services/setlistCreation';
 import { useRealtimeVoting } from '@/hooks/useRealtimeVoting';
+import AppHeader from '@/components/AppHeader';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import ShowHeader from './ShowHeader';
 import VotingSection from './VotingSection';
 import Sidebar from './Sidebar';
@@ -249,11 +251,13 @@ const ShowVotingWithRealtime = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
-        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
+        <AppHeader />
+        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-16">
           <div className="flex items-center justify-center h-64">
             <div className="text-white text-lg">Loading show...</div>
           </div>
         </div>
+        <MobileBottomNav />
       </div>
     );
   }
@@ -261,7 +265,8 @@ const ShowVotingWithRealtime = () => {
   if (!show) {
     return (
       <div className="min-h-screen bg-black">
-        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
+        <AppHeader />
+        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-16">
           <div className="text-center py-16">
             <h1 className="text-2xl font-bold text-white mb-4">Show Not Found</h1>
             <button 
@@ -272,13 +277,16 @@ const ShowVotingWithRealtime = () => {
             </button>
           </div>
         </div>
+        <MobileBottomNav />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="container mx-auto max-w-7xl px-4 pt-20 pb-16">
+      <AppHeader />
+      
+      <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-16">
         {/* Show Header */}
         <ShowHeader show={show} />
 
@@ -304,6 +312,9 @@ const ShowVotingWithRealtime = () => {
           </div>
         </div>
       </div>
+      
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

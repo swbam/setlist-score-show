@@ -2,6 +2,7 @@
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { useArtistData } from "./useArtistData";
 import { ArtistHeader } from "./ArtistHeader";
 import { ShowsTabs } from "./ShowsTabs";
@@ -14,7 +15,13 @@ const ArtistPage = () => {
   
   // Show loading state
   if (loading || !artist) {
-    return <LoadingState />;
+    return (
+      <div className="min-h-screen bg-black">
+        <AppHeader />
+        <LoadingState />
+        <MobileBottomNav />
+      </div>
+    );
   }
   
   return (
@@ -25,7 +32,7 @@ const ArtistPage = () => {
       <div className="container mx-auto max-w-7xl px-4 pt-6">
         <Link 
           to="/artists" 
-          className="inline-flex items-center text-gray-400 hover:text-yellow-metal-300 transition-colors text-sm font-medium"
+          className="inline-flex items-center text-gray-400 hover:text-white transition-colors text-sm font-medium"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to search
@@ -36,7 +43,7 @@ const ArtistPage = () => {
       <ArtistHeader artist={artist} upcomingShowsCount={upcomingShows.length} />
       
       {/* Shows Content */}
-      <div className="container mx-auto max-w-7xl px-4 py-12">
+      <div className="container mx-auto max-w-7xl px-4 py-12 pb-32 md:pb-12">
         <ShowsTabs 
           artist={artist}
           upcomingShows={upcomingShows} 
@@ -46,6 +53,9 @@ const ArtistPage = () => {
         {/* Stats Section */}
         <StatsSection setlistId={setlistId} artistId={artist.id} />
       </div>
+      
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };
