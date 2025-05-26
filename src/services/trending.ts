@@ -81,7 +81,7 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
           state,
           country
         ),
-        setlists (
+        setlists!fk_setlists_show_id (
           id,
           setlist_songs (
             votes
