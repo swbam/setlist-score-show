@@ -21,7 +21,7 @@ const ArtistCard = ({ artist }: ArtistCardProps) => {
   
   return (
     <Card 
-      className={`bg-gray-900 border-gray-700 overflow-hidden hover:border-gray-600 transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
+      className={`bg-gray-900 border-gray-700 overflow-hidden hover:border-yellow-metal-600 transition-all duration-300 group ${isMobile ? 'native-tap' : ''}`}
     >
       <Link to={`/artists/${artist.id}/${artistSlug}`} className="block h-full">
         <div className={`${isMobile ? 'h-32' : 'h-40'} bg-gray-800 relative`}>
@@ -29,7 +29,7 @@ const ArtistCard = ({ artist }: ArtistCardProps) => {
             <img
               src={artist.image_url}
               alt={artist.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
             />
           ) : (
@@ -45,7 +45,7 @@ const ArtistCard = ({ artist }: ArtistCardProps) => {
         </div>
         
         <CardContent className="p-4">
-          <h3 className="text-white font-medium truncate">{artist.name}</h3>
+          <h3 className="text-white font-medium truncate group-hover:text-yellow-metal-300 transition-colors">{artist.name}</h3>
           {artist.genres && artist.genres.length > 0 && (
             <p className="text-sm text-gray-400 truncate">
               {artist.genres.slice(0, 2).join(", ")}

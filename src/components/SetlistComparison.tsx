@@ -187,7 +187,7 @@ const SetlistComparison = ({ showId, onClose }: SetlistComparisonProps) => {
     return (
       <div className="text-center py-16">
         <h1 className="text-2xl font-bold text-white mb-4">Show Not Found</h1>
-        <Button onClick={onClose} className="bg-cyan-600 hover:bg-cyan-700">
+        <Button onClick={onClose} className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black">
           Go Back
         </Button>
       </div>
@@ -217,7 +217,7 @@ const SetlistComparison = ({ showId, onClose }: SetlistComparisonProps) => {
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4">
-            <div className="text-4xl font-bold text-cyan-400">
+            <div className="text-4xl font-bold text-yellow-metal-300">
               {matchPercentage}%
             </div>
             <div className="text-gray-400">
@@ -236,7 +236,7 @@ const SetlistComparison = ({ showId, onClose }: SetlistComparisonProps) => {
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader>
             <CardTitle className="text-white flex items-center">
-              <Music className="h-5 w-5 mr-2 text-cyan-400" />
+              <Music className="h-5 w-5 mr-2 text-yellow-metal-300" />
               Fan-Voted Setlist
             </CardTitle>
           </CardHeader>
@@ -326,7 +326,7 @@ const SetlistComparison = ({ showId, onClose }: SetlistComparisonProps) => {
       <div className="flex justify-center space-x-4">
         <Button 
           onClick={onClose}
-          className="bg-cyan-600 hover:bg-cyan-700"
+          className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black"
         >
           Back to Show
         </Button>
