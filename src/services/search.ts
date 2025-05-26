@@ -26,33 +26,40 @@ export interface SearchResult {
   spotify_id?: string;
 }
 
-// Unified search for artists and shows
+/**
+ * MAIN SEARCH FUNCTION - searches both artists and shows
+ * Uses the data consistency layer to ensure all results are properly stored
+ */
 export async function search(options: SearchOptions): Promise<SearchResult[]> {
   const { query, limit = 20 } = options;
   const results: SearchResult[] = [];
 
   try {
-    console.log(`Unified search for: ${query}`);
+    console.log(`🔍 Unified search for: ${query}`);
 
-    // Search artists from database first, then Spotify
+    // Search artists (database + Spotify)
     const artistResults = await searchArtists(query, Math.floor(limit / 2));
     results.push(...artistResults);
 
-    // Search shows from database and Ticketmaster
+    // Search shows (database + Ticketmaster)
     const showResults = await searchShows(query, Math.floor(limit / 2));
     results.push(...showResults);
 
+    console.log(`✅ Found ${results.length} total search results for: ${query}`);
     return results.slice(0, limit);
   } catch (error) {
-    console.error("Search error:", error);
+    console.error("❌ Search error:", error);
     return [];
   }
 }
 
-// Search artists specifically
+/**
+ * ARTIST SEARCH - searches database first, then Spotify
+ * Uses data consistency layer to ensure all artists are properly imported
+ */
 export async function searchArtists(query: string, limit: number = 20): Promise<SearchResult[]> {
   try {
-    console.log(`Searching artists for: ${query}`);
+    console.log(`🎵 Searching artists for: ${query}`);
     const results: SearchResult[] = [];
 
     // First search in database
@@ -64,7 +71,7 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       .limit(limit);
 
     if (dbError) {
-      console.error("Database search error:", dbError);
+      console.error("❌ Database search error:", dbError);
     }
 
     // Add database results
@@ -80,15 +87,17 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       }
     }
 
-    // If we need more results, search Spotify and ensure consistent data
+    // If we need more results, search Spotify and use data consistency layer
     if (results.length < limit) {
       const remainingLimit = limit - results.length;
+      console.log(`🔍 Searching Spotify for additional results: ${remainingLimit} needed`);
+      
       const spotifyArtists = await spotifyService.searchArtists(query);
       
       for (const artist of spotifyArtists.slice(0, remainingLimit)) {
         // Avoid duplicates
         if (!results.find(r => r.id === artist.id)) {
-          // Ensure artist exists in database with consistent data
+          // Use data consistency layer to ensure artist exists with complete data
           const ensuredArtist = await dataConsistency.ensureArtistExists({
             id: artist.id,
             name: artist.name
@@ -107,20 +116,24 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       }
     }
 
+    console.log(`✅ Found ${results.length} artist results for: ${query}`);
     return results.slice(0, limit);
   } catch (error) {
-    console.error("Error searching artists:", error);
+    console.error("❌ Error searching artists:", error);
     return [];
   }
 }
 
-// Search shows specifically
+/**
+ * SHOW SEARCH - searches database first, then Ticketmaster
+ * Uses data consistency layer to ensure all shows and related data are properly imported
+ */
 export async function searchShows(query: string, limit: number = 20): Promise<SearchResult[]> {
   try {
-    console.log(`Searching shows for: ${query}`);
+    console.log(`🎤 Searching shows for: ${query}`);
     const results: SearchResult[] = [];
 
-    // First search in database with explicit relationship names
+    // First search in database
     const { data: dbShows, error: dbError } = await supabase
       .from('shows')
       .select(`
@@ -138,37 +151,44 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
           country
         )
       `)
-      .or(`name.ilike.%${query}%,artists.name.ilike.%${query}%`)
       .gte('date', new Date().toISOString())
       .order('date', { ascending: true })
       .limit(Math.floor(limit / 2));
 
     if (dbError) {
-      console.error("Database shows search error:", dbError);
+      console.error("❌ Database shows search error:", dbError);
     }
 
-    // Add database results
+    // Add database results that match the query
     if (dbShows) {
       for (const show of dbShows) {
         const venue = show.venues as any;
         const artist = show.artists as any;
         
-        results.push({
-          id: show.id,
-          type: 'show',
-          name: show.name || `${artist?.name} Concert`,
-          date: show.date,
-          venue: venue?.name,
-          location: `${venue?.city || ''}, ${venue?.country || ''}`,
-          artist_name: artist?.name,
-          ticketmaster_id: show.id
-        });
+        // Check if query matches artist name or show name
+        const matchesArtist = artist?.name?.toLowerCase().includes(query.toLowerCase());
+        const matchesShow = show.name?.toLowerCase().includes(query.toLowerCase());
+        
+        if (matchesArtist || matchesShow) {
+          results.push({
+            id: show.id,
+            type: 'show',
+            name: show.name || `${artist?.name} Concert`,
+            date: show.date,
+            venue: venue?.name,
+            location: `${venue?.city || ''}, ${venue?.country || ''}`,
+            artist_name: artist?.name,
+            ticketmaster_id: show.id
+          });
+        }
       }
     }
 
-    // If we need more results, search Ticketmaster and ensure consistent data
+    // If we need more results, search Ticketmaster and use data consistency layer
     if (results.length < limit) {
       const remainingLimit = limit - results.length;
+      console.log(`🔍 Searching Ticketmaster for additional results: ${remainingLimit} needed`);
+      
       const events = await ticketmasterService.searchEvents(query);
       
       for (const event of events.slice(0, remainingLimit)) {
@@ -177,7 +197,7 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
           
           // Avoid duplicates
           if (!results.find(r => r.id === eventId)) {
-            // Process the entire event to ensure data consistency
+            // Use data consistency layer to process the entire event
             const processed = await dataConsistency.processTicketmasterEvent(event);
             
             if (processed.artist && processed.venue && processed.show) {
@@ -197,28 +217,33 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
       }
     }
 
+    console.log(`✅ Found ${results.length} show results for: ${query}`);
     return results.slice(0, limit);
   } catch (error) {
-    console.error("Error searching shows:", error);
+    console.error("❌ Error searching shows:", error);
     return [];
   }
 }
 
-// Store search results in database for caching
+/**
+ * Helper function to store search results (for caching)
+ */
 export async function storeSearchResults(results: SearchResult[]): Promise<void> {
   try {
-    console.log(`Storing ${results.length} search results`);
+    console.log(`💾 Caching ${results.length} search results`);
     
     for (const result of results) {
       if (result.type === 'artist' && result.spotify_id) {
-        // Ensure artist exists with consistent data
+        // Ensure artist exists with complete data
         await dataConsistency.ensureArtistExists({
           id: result.spotify_id,
           name: result.name
         });
       }
     }
+    
+    console.log(`✅ Successfully cached search results`);
   } catch (error) {
-    console.error("Error storing search results:", error);
+    console.error("❌ Error storing search results:", error);
   }
 }

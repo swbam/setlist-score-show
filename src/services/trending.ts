@@ -55,7 +55,7 @@ export async function incrementShowViews(showId: string): Promise<void> {
 // Get trending shows based on vote activity and view count
 export async function getTrendingShows(limit: number = 10): Promise<TrendingShow[]> {
   try {
-    console.log('Fetching trending shows...');
+    console.log('🔥 Fetching trending shows...');
     
     // Get shows with their vote counts, view counts, and related data
     const { data: showsData, error } = await supabase
@@ -89,12 +89,12 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
       .limit(50); // Get more than needed to calculate trending
 
     if (error) {
-      console.error('Error fetching shows for trending:', error);
+      console.error('❌ Error fetching shows for trending:', error);
       return [];
     }
 
     if (!showsData || showsData.length === 0) {
-      console.log('No shows found for trending calculation');
+      console.log('⚠️ No shows found for trending calculation');
       return [];
     }
 
@@ -137,11 +137,11 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
       .sort((a, b) => b.trending_score - a.trending_score)
       .slice(0, limit);
 
-    console.log(`Found ${sortedShows.length} trending shows`);
+    console.log(`✅ Found ${sortedShows.length} trending shows`);
     return sortedShows;
 
   } catch (error) {
-    console.error('Error getting trending shows:', error);
+    console.error('❌ Error getting trending shows:', error);
     return [];
   }
 }
@@ -149,7 +149,7 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
 // Get popular shows based on view count (for fallback when no trending data)
 export async function getPopularShows(limit: number = 10): Promise<TrendingShow[]> {
   try {
-    console.log('Fetching popular shows...');
+    console.log('📈 Fetching popular shows...');
     
     const { data: showsData, error } = await supabase
       .from('shows')
@@ -176,13 +176,13 @@ export async function getPopularShows(limit: number = 10): Promise<TrendingShow[
       .limit(limit);
 
     if (error) {
-      console.error('Error fetching popular shows:', error);
+      console.error('❌ Error fetching popular shows:', error);
       return [];
     }
 
     if (!showsData) return [];
 
-    return showsData.map(show => ({
+    const popularShows = showsData.map(show => ({
       id: show.id,
       name: show.name || `${show.artists?.name} Concert`,
       date: show.date,
@@ -203,8 +203,11 @@ export async function getPopularShows(limit: number = 10): Promise<TrendingShow[
       trending_score: show.view_count || 0
     }));
 
+    console.log(`✅ Found ${popularShows.length} popular shows`);
+    return popularShows;
+
   } catch (error) {
-    console.error('Error getting popular shows:', error);
+    console.error('❌ Error getting popular shows:', error);
     return [];
   }
 }
@@ -212,13 +215,13 @@ export async function getPopularShows(limit: number = 10): Promise<TrendingShow[
 // Update trending scores (can be called periodically)
 export async function updateTrendingScores(): Promise<void> {
   try {
-    console.log('Updating trending scores...');
+    console.log('🔄 Updating trending scores...');
     
     // This would typically be implemented as a database function
     // For now, we rely on the real-time calculation in getTrendingShows
     
-    console.log('Trending scores updated');
+    console.log('✅ Trending scores updated');
   } catch (error) {
-    console.error('Error updating trending scores:', error);
+    console.error('❌ Error updating trending scores:', error);
   }
 }

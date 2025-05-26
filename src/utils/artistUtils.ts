@@ -23,7 +23,9 @@ export interface ArtistWithShows extends Artist {
   };
 }
 
-// Get artist by ID from database
+/**
+ * Get artist by ID using data consistency layer
+ */
 export async function getArtistById(artistId: string): Promise<Artist | null> {
   try {
     const { data, error } = await supabase
@@ -33,18 +35,20 @@ export async function getArtistById(artistId: string): Promise<Artist | null> {
       .single();
 
     if (error) {
-      console.error("Error fetching artist:", error);
+      console.error("❌ Error fetching artist:", error);
       return null;
     }
 
     return { ...data, source: 'database' };
   } catch (error) {
-    console.error("Error getting artist by ID:", error);
+    console.error("❌ Error getting artist by ID:", error);
     return null;
   }
 }
 
-// Search artists in database
+/**
+ * Search artists in database
+ */
 export async function searchArtists(query: string, limit: number = 10): Promise<Artist[]> {
   try {
     const { data, error } = await supabase
@@ -55,18 +59,20 @@ export async function searchArtists(query: string, limit: number = 10): Promise<
       .limit(limit);
 
     if (error) {
-      console.error("Error searching artists:", error);
+      console.error("❌ Error searching artists:", error);
       return [];
     }
 
     return (data || []).map(artist => ({ ...artist, source: 'database' as const }));
   } catch (error) {
-    console.error("Error searching artists:", error);
+    console.error("❌ Error searching artists:", error);
     return [];
   }
 }
 
-// Fetch artists from database
+/**
+ * Fetch artists from database
+ */
 export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Artist[]> {
   try {
     const { data, error } = await supabase
@@ -76,23 +82,20 @@ export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Arti
       .limit(limit);
 
     if (error) {
-      console.error("Error fetching artists from database:", error);
+      console.error("❌ Error fetching artists from database:", error);
       return [];
     }
 
     return (data || []).map(artist => ({ ...artist, source: 'database' as const }));
   } catch (error) {
-    console.error("Error fetching artists from database:", error);
+    console.error("❌ Error fetching artists from database:", error);
     return [];
   }
 }
 
-// Search artists from database
-export async function searchArtistsFromDatabase(query: string, limit: number = 20): Promise<Artist[]> {
-  return await searchArtists(query, limit);
-}
-
-// Extract unique artists from Ticketmaster events
+/**
+ * Extract unique artists from Ticketmaster events
+ */
 export async function extractUniqueArtistsFromEvents(events: any[]): Promise<Artist[]> {
   const artistMap = new Map<string, Artist>();
   
@@ -114,7 +117,9 @@ export async function extractUniqueArtistsFromEvents(events: any[]): Promise<Art
   return Array.from(artistMap.values());
 }
 
-// Merge artists from different sources
+/**
+ * Merge artists from different sources
+ */
 export function mergeArtists(ticketmasterArtists: Artist[], databaseArtists: Artist[]): Artist[] {
   const artistMap = new Map<string, Artist>();
   
@@ -134,7 +139,9 @@ export function mergeArtists(ticketmasterArtists: Artist[], databaseArtists: Art
   return Array.from(artistMap.values());
 }
 
-// Sort search results by relevance
+/**
+ * Sort search results by relevance
+ */
 export function sortSearchResults(artists: Artist[], query: string): Artist[] {
   return artists.sort((a, b) => {
     const aExact = a.name.toLowerCase() === query.toLowerCase();
@@ -153,7 +160,9 @@ export function sortSearchResults(artists: Artist[], query: string): Artist[] {
   });
 }
 
-// Get artist's upcoming shows
+/**
+ * Get artist's upcoming shows
+ */
 export async function getArtistUpcomingShows(artistId: string): Promise<any[]> {
   try {
     const { data, error } = await supabase
@@ -177,18 +186,21 @@ export async function getArtistUpcomingShows(artistId: string): Promise<any[]> {
       .order('date', { ascending: true });
 
     if (error) {
-      console.error("Error fetching artist shows:", error);
+      console.error("❌ Error fetching artist shows:", error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error("Error getting artist upcoming shows:", error);
+    console.error("❌ Error getting artist upcoming shows:", error);
     return [];
   }
 }
 
-// Get or create artist from multiple sources using the data consistency layer
+/**
+ * Get or create artist using the data consistency layer
+ * This is the main function to use when you need an artist with complete data
+ */
 export async function getOrCreateArtist(artistId: string, artistName?: string): Promise<Artist | null> {
   try {
     // First, try to get from database
@@ -199,7 +211,7 @@ export async function getOrCreateArtist(artistId: string, artistName?: string): 
     }
 
     // If not found, use the data consistency layer to ensure artist exists
-    console.log(`Artist ${artistId} not found in database, ensuring it exists...`);
+    console.log(`🔍 Artist ${artistId} not found in database, creating with complete data...`);
     
     const ensuredArtist = await dataConsistency.ensureArtistExists({
       id: artistId,
@@ -220,20 +232,22 @@ export async function getOrCreateArtist(artistId: string, artistName?: string): 
 
     return null;
   } catch (error) {
-    console.error("Error getting or creating artist:", error);
+    console.error("❌ Error getting or creating artist:", error);
     return null;
   }
 }
 
-// Sync artist data with external APIs using the data consistency layer
+/**
+ * Sync artist data using the data consistency layer
+ */
 export async function syncArtistData(artistId: string): Promise<boolean> {
   try {
-    console.log(`Syncing data for artist: ${artistId}`);
+    console.log(`🔄 Syncing data for artist: ${artistId}`);
     
     // Get current artist data
     const existingArtist = await getArtistById(artistId);
     if (!existingArtist) {
-      console.error(`Artist ${artistId} not found for sync`);
+      console.error(`❌ Artist ${artistId} not found for sync`);
       return false;
     }
 
@@ -244,13 +258,20 @@ export async function syncArtistData(artistId: string): Promise<boolean> {
     });
 
     if (syncedArtist) {
-      console.log(`Successfully synced artist data for: ${artistId}`);
+      console.log(`✅ Successfully synced artist data for: ${artistId}`);
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error("Error syncing artist data:", error);
+    console.error("❌ Error syncing artist data:", error);
     return false;
   }
+}
+
+/**
+ * Search for artist by name and create if found on Spotify
+ */
+export async function findOrCreateArtistByName(artistName: string): Promise<Artist | null> {
+  return await dataConsistency.findOrCreateArtistByName(artistName);
 }

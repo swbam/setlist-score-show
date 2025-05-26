@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Background update scheduler for artist data, shows, and trends
  * 
- * This service coordinates background updates at appropriate intervals
+ * This service coordinates background updates using the data consistency layer
  */
 
 // Cache to prevent duplicate update operations
@@ -43,58 +43,76 @@ function needsUpdate(lastUpdated: number | null, interval: number): boolean {
  * Import modules only when needed to avoid circular dependencies
  */
 async function getServices() {
-  const artistUtils = await import("@/utils/artistUtils");
   const catalogService = await import("@/services/catalog");
   const ticketmasterService = await import("@/services/ticketmaster");
   const dataConsistency = await import("@/services/dataConsistency");
-  return { artistUtils, catalogService, ticketmasterService, dataConsistency };
+  return { catalogService, ticketmasterService, dataConsistency };
 }
 
 /**
- * Update artist data (metadata and catalog)
+ * Update artist data using the data consistency layer
  */
 export async function updateArtist(artistId: string, force = false): Promise<boolean> {
   // Check cache to avoid unnecessary updates
   const lastUpdated = updateCache.artists.get(artistId);
   
   if (!force && !needsUpdate(lastUpdated, UPDATE_INTERVALS.ARTIST)) {
-    console.log(`Artist ${artistId} was updated recently, skipping`);
+    console.log(`✅ Artist ${artistId} was updated recently, skipping`);
     return false;
   }
   
   try {
-    console.log(`Background update: Refreshing artist data for ${artistId}`);
-    const { catalogService } = await getServices();
+    console.log(`🔄 Background update: Refreshing artist data for ${artistId}`);
+    const { catalogService, dataConsistency } = await getServices();
     
-    // Update artist catalog
-    const success = await catalogService.syncArtistCatalog(artistId, force);
+    // Get artist name first
+    const { data: artist } = await supabase
+      .from('artists')
+      .select('name')
+      .eq('id', artistId)
+      .maybeSingle();
     
-    if (success) {
-      updateCache.artists.set(artistId, Date.now());
+    if (!artist) {
+      console.error(`❌ Artist ${artistId} not found in database`);
+      return false;
     }
     
-    return success;
+    // Use data consistency layer to re-ensure the artist with fresh data
+    const updatedArtist = await dataConsistency.ensureArtistExists({
+      id: artistId,
+      name: artist.name
+    });
+    
+    if (updatedArtist) {
+      // Also sync their catalog
+      await catalogService.syncArtistCatalog(artistId, force);
+      updateCache.artists.set(artistId, Date.now());
+      console.log(`✅ Successfully updated artist: ${artistId}`);
+      return true;
+    }
+    
+    return false;
   } catch (error) {
-    console.error(`Error updating artist ${artistId}:`, error);
+    console.error(`❌ Error updating artist ${artistId}:`, error);
     return false;
   }
 }
 
 /**
- * Update show status from Ticketmaster
+ * Update show status using data consistency layer
  */
 export async function updateShow(showId: string, artistName: string): Promise<boolean> {
   // Check cache to avoid unnecessary updates
   const lastUpdated = updateCache.shows.get(showId);
   
   if (!needsUpdate(lastUpdated, UPDATE_INTERVALS.SHOWS)) {
-    console.log(`Show ${showId} was updated recently, skipping`);
+    console.log(`✅ Show ${showId} was updated recently, skipping`);
     return false;
   }
   
   try {
-    console.log(`Background update: Refreshing show data for ${showId}`);
-    const { ticketmasterService } = await getServices();
+    console.log(`🔄 Background update: Refreshing show data for ${showId}`);
+    const { ticketmasterService, dataConsistency } = await getServices();
     
     // Get events for the artist from Ticketmaster
     const events = await ticketmasterService.getArtistEvents(artistName);
@@ -103,80 +121,69 @@ export async function updateShow(showId: string, artistName: string): Promise<bo
     const event = events.find(e => e.id === showId);
     
     if (event) {
-      // Get venue and artist details
-      const venue = event._embedded?.venues?.[0];
-      const artist = event._embedded?.attractions?.[0];
+      // Use data consistency layer to process the complete event
+      const processed = await dataConsistency.processTicketmasterEvent(event);
       
-      if (venue && artist) {
-        // Store venue in database
-        await ticketmasterService.storeVenueInDatabase(venue);
-        
-        // Store show in database (will update if exists)
-        await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
-        
+      if (processed.show) {
         updateCache.shows.set(showId, Date.now());
+        console.log(`✅ Successfully updated show: ${showId}`);
         return true;
       }
     }
     
+    console.warn(`⚠️ Show ${showId} not found in Ticketmaster results`);
     return false;
   } catch (error) {
-    console.error(`Error updating show ${showId}:`, error);
+    console.error(`❌ Error updating show ${showId}:`, error);
     return false;
   }
 }
 
 /**
- * Update trending artists and shows
+ * Update trending artists and shows using data consistency layer
  */
 export async function updateTrends(): Promise<boolean> {
   // Check if trends were updated recently
   if (isUpdating.trends || !needsUpdate(updateCache.trends, UPDATE_INTERVALS.TRENDS)) {
-    console.log('Trends were updated recently, skipping');
+    console.log('✅ Trends were updated recently, skipping');
     return false;
   }
   
   isUpdating.trends = true;
   
   try {
-    console.log('Background update: Recalculating trends');
+    console.log('🔄 Background update: Updating trending data');
     
     // Get popular events from Ticketmaster
     const { ticketmasterService, dataConsistency } = await getServices();
     const events = await ticketmasterService.getPopularEvents(20);
     
-    // Process each event to ensure artist and show data is up to date
+    // Process each event using data consistency layer
     let processedCount = 0;
     
     for (const event of events) {
       if (!event._embedded?.attractions?.[0] || !event._embedded?.venues?.[0]) continue;
       
-      const artist = event._embedded.attractions[0];
-      const venue = event._embedded.venues[0];
-      
-      // Store venue in database
-      await ticketmasterService.storeVenueInDatabase(venue);
-      
-      // Create artist object using data consistency layer
-      const artistData = await dataConsistency.ensureArtistExists({
-        id: artist.id,
-        name: artist.name,
-        ticketmaster_id: artist.id
-      });
-      
-      if (artistData) {
-        // Store show
-        await ticketmasterService.storeShowInDatabase(event, artistData.id, venue.id);
-        processedCount++;
+      try {
+        // Use the main data consistency function
+        const processed = await dataConsistency.processTicketmasterEvent(event);
+        
+        if (processed.artist && processed.venue && processed.show) {
+          processedCount++;
+          console.log(`✅ Processed trending event: ${event.name}`);
+        }
+      } catch (eventError) {
+        console.error(`❌ Error processing trending event ${event.id}:`, eventError);
+        continue;
       }
     }
     
-    console.log(`Updated ${processedCount} trending events`);
+    console.log(`✅ Updated ${processedCount} trending events`);
     
     updateCache.trends = Date.now();
     return true;
   } catch (error) {
-    console.error('Error updating trends:', error);
+    console.error('❌ Error updating trends:', error);
     return false;
   } finally {
     isUpdating.trends = false;
@@ -188,15 +195,35 @@ export async function updateTrends(): Promise<boolean> {
  * This will be called from main App component
  */
 export function initBackgroundUpdates(): void {
-  // Initial trends update
-  setTimeout(() => {
-    updateTrends().catch(console.error);
-  }, 5000); // Wait 5 seconds after app load
+  console.log('🚀 Initializing background update scheduler...');
   
-  // Periodic trend updates
+  // Initial trends update after 5 seconds
+  setTimeout(() => {
+    updateTrends().catch(error => {
+      console.error('❌ Initial trend update failed:', error);
+    });
+  }, 5000);
+  
+  // Periodic trend updates every hour
   setInterval(() => {
-    updateTrends().catch(console.error);
+    updateTrends().catch(error => {
+      console.error('❌ Periodic trend update failed:', error);
+    });
   }, UPDATE_INTERVALS.TRENDS);
   
-  console.log('Background update scheduler initialized');
+  console.log('✅ Background update scheduler initialized');
+}
+
+/**
+ * Manual trigger for updating a specific artist
+ */
+export async function triggerArtistUpdate(artistId: string): Promise<boolean> {
+  return await updateArtist(artistId, true);
+}
+
+/**
+ * Manual trigger for updating trending data
+ */
+export async function triggerTrendingUpdate(): Promise<boolean> {
+  return await updateTrends();
 }
