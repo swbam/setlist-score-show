@@ -495,9 +495,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_setlist_with_songs: {
+        Args: { p_show_id: string }
+        Returns: {
+          setlist_id: string
+          songs_added: number
+        }[]
+      }
       get_or_create_setlist: {
         Args: { show_id: string }
         Returns: string
+      }
+      increment_show_views: {
+        Args: { show_id: string }
+        Returns: undefined
       }
       match_song_similarity: {
         Args: {

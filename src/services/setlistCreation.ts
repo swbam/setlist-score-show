@@ -93,7 +93,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     }
 
     if (result && Array.isArray(result) && result.length > 0) {
-      const firstResult = result[0] as any;
+      const firstResult = result[0];
       console.log(`Successfully created setlist with ${firstResult.songs_added} songs`);
       return {
         setlist_id: firstResult.setlist_id,

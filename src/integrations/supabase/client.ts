@@ -22,7 +22,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
 export const typedSupabase = supabase as typeof supabase & {
   rpc: {
     increment_show_views: (args: { show_id: string }) => Promise<{ data: any; error: any }>;
-    create_setlist_with_songs: (args: { p_show_id: string }) => Promise<{ data: any; error: any }>;
+    create_setlist_with_songs: (args: { p_show_id: string }) => Promise<{ data: { setlist_id: string; songs_added: number }[] | null; error: any }>;
     vote_for_song: (args: { setlist_song_id: string }) => Promise<{ data: any; error: any }>;
     get_or_create_setlist: (args: { show_id: string }) => Promise<{ data: any; error: any }>;
     match_song_similarity: (args: { p_artist_id: string; p_song_name: string; p_similarity_threshold: number }) => Promise<{ data: any; error: any }>;

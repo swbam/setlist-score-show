@@ -111,7 +111,7 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
         
         // Calculate total votes across all setlist songs
         let totalVotes = 0;
-        setlists.forEach(setlist => {
+        setlists.forEach((setlist: any) => {
           if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
             totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
           }
@@ -210,9 +210,9 @@ export async function getTrendingArtists(limit: number = 20): Promise<TrendingAr
         upcomingShows.forEach(show => {
           totalViews += show.view_count || 0;
           
-          if (show.setlists) {
+          if (show.setlists && Array.isArray(show.setlists)) {
             show.setlists.forEach((setlist: any) => {
-              if (setlist.setlist_songs) {
+              if (setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
                 totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
               }
             });
