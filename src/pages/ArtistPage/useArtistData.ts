@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
@@ -28,12 +29,17 @@ export function useArtistData(artistId: string | undefined) {
     try {
       console.log(`Fetching shows for artist: ${artistName}`);
       
-      // First check database for shows
+      // First check database for shows with explicit relationship names
       const { data: dbShows, error: dbError } = await supabase
         .from('shows')
         .select(`
           *,
-          venue:venues(name, city, state, country)
+          venues!fk_shows_venue_id (
+            name, 
+            city, 
+            state, 
+            country
+          )
         `)
         .eq('artist_id', artistId);
         
@@ -101,7 +107,7 @@ export function useArtistData(artistId: string | undefined) {
             status: event.dates.status?.code === 'cancelled' ? 'canceled' : 
                    event.dates.status?.code === 'postponed' ? 'postponed' : 'scheduled',
             ticketmaster_url: event.url || null,
-            venue: {
+            venues: {
               name: venue.name,
               city: typeof venue.city === 'object' ? venue.city?.name : venue.city || '',
               state: typeof venue.state === 'object' ? venue.state?.name : venue.state || null,

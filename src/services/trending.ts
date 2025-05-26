@@ -57,7 +57,7 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
   try {
     console.log('🔥 Fetching trending shows...');
     
-    // Get shows with their vote counts, view counts, and related data
+    // Get shows with their vote counts, view counts, and related data using explicit relationship names
     const { data: showsData, error } = await supabase
       .from('shows')
       .select(`
@@ -65,21 +65,21 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
         name,
         date,
         view_count,
-        artists!shows_artist_id_fkey (
+        artists!fk_shows_artist_id (
           id,
           name,
           image_url
         ),
-        venues!shows_venue_id_fkey (
+        venues!fk_shows_venue_id (
           id,
           name,
           city,
           state,
           country
         ),
-        setlists!setlists_show_id_fkey (
+        setlists!fk_setlists_show_id (
           id,
-          setlist_songs!setlist_songs_setlist_id_fkey (
+          setlist_songs!fk_setlist_songs_setlist_id (
             votes
           )
         )
@@ -158,12 +158,12 @@ export async function getPopularShows(limit: number = 10): Promise<TrendingShow[
         name,
         date,
         view_count,
-        artists!shows_artist_id_fkey (
+        artists!fk_shows_artist_id (
           id,
           name,
           image_url
         ),
-        venues!shows_venue_id_fkey (
+        venues!fk_shows_venue_id (
           id,
           name,
           city,

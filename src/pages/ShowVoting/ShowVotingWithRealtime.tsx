@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { incrementShowViews } from '@/services/trending';
-import { ensureSetlistExists } from '@/services/setlistCreation';
+import { getOrCreateSetlistWithSongs } from '@/services/setlistCreation';
 import { useRealtimeVoting } from '@/hooks/useRealtimeVoting';
 import ShowHeader from './ShowHeader';
 import VotingSection from './VotingSection';
@@ -50,7 +50,7 @@ const ShowVotingWithRealtime = () => {
       // Increment view count
       await incrementShowViews(showId);
 
-      // Fetch show details
+      // Fetch show details with explicit relationship names
       const { data: showData, error: showError } = await supabase
         .from('shows')
         .select(`
@@ -102,18 +102,18 @@ const ShowVotingWithRealtime = () => {
 
       setShow(transformedShow);
 
-      // Ensure setlist exists
-      const createdSetlistId = await ensureSetlistExists(showId);
+      // Create setlist with 5 random songs if needed
+      const setlistResult = await getOrCreateSetlistWithSongs(showId);
       
-      if (!createdSetlistId) {
+      if (!setlistResult.success || !setlistResult.setlist_id) {
         console.error("Failed to create or get setlist");
         toast("Failed to load voting data");
         return;
       }
 
-      setSetlistId(createdSetlistId);
+      setSetlistId(setlistResult.setlist_id);
 
-      // Fetch setlist songs
+      // Fetch setlist songs with explicit relationship name
       const { data: setlistData, error: setlistError } = await supabase
         .from('setlist_songs')
         .select(`
@@ -130,7 +130,7 @@ const ShowVotingWithRealtime = () => {
             spotify_url
           )
         `)
-        .eq('setlist_id', createdSetlistId)
+        .eq('setlist_id', setlistResult.setlist_id)
         .order('votes', { ascending: false })
         .order('position', { ascending: true });
 

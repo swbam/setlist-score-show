@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { incrementShowViews } from '@/services/trending';
-import { ensureSetlistExists } from '@/services/setlistCreation';
+import { getOrCreateSetlistWithSongs } from '@/services/setlistCreation';
 import ShowHeader from './ShowHeader';
 import VotingSection from './VotingSection';
 import Sidebar from './Sidebar';
@@ -42,7 +42,7 @@ const ShowVoting = () => {
       // Increment view count
       await incrementShowViews(showId);
 
-      // Fetch show details with proper relationship names
+      // Fetch show details with explicit relationship names
       const { data: showData, error: showError } = await supabase
         .from('shows')
         .select(`
@@ -101,19 +101,19 @@ const ShowVoting = () => {
 
       setShow(transformedShow);
 
-      // Ensure setlist exists for this show (creates with 5 random songs if needed)
-      console.log("Ensuring setlist exists for show:", showId);
-      const setlistId = await ensureSetlistExists(showId);
+      // Create setlist with 5 random songs if needed
+      console.log("Creating/getting setlist for show:", showId);
+      const setlistResult = await getOrCreateSetlistWithSongs(showId);
       
-      if (!setlistId) {
-        console.error("Failed to create or get setlist");
+      if (!setlistResult.success || !setlistResult.setlist_id) {
+        console.error("Failed to create or get setlist:", setlistResult.message);
         toast("Failed to load voting data");
         return;
       }
 
-      console.log("Fetching setlist songs for setlist ID:", setlistId);
+      console.log("Fetching setlist songs for setlist ID:", setlistResult.setlist_id);
       
-      // Fetch setlist songs with explicit relationship name and artist_id
+      // Fetch setlist songs with explicit relationship name
       const { data: setlistData, error: setlistError } = await supabase
         .from('setlist_songs')
         .select(`
@@ -130,7 +130,7 @@ const ShowVoting = () => {
             spotify_url
           )
         `)
-        .eq('setlist_id', setlistId)
+        .eq('setlist_id', setlistResult.setlist_id)
         .order('votes', { ascending: false })
         .order('position', { ascending: true });
 
