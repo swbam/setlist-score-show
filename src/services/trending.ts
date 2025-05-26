@@ -83,7 +83,7 @@ export async function getTrendingShows(limit: number = 20): Promise<TrendingShow
         ),
         setlists!fk_setlists_show_id (
           id,
-          setlist_songs (
+          setlist_songs!fk_setlist_songs_setlist_id (
             votes
           )
         )
