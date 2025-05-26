@@ -28,10 +28,8 @@ const ShowVoting = () => {
     return (
       <div className="min-h-screen bg-black">
         <AppHeader />
-        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-12">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-white text-lg">Loading show...</div>
-          </div>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-white text-lg">Loading show...</div>
         </div>
         <MobileBottomNav />
       </div>
@@ -47,7 +45,7 @@ const ShowVoting = () => {
             <h1 className="text-2xl font-bold text-white mb-4">Show Not Found</h1>
             <button 
               onClick={() => window.history.back()} 
-              className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black px-4 py-2 rounded"
+              className="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded font-medium"
             >
               Go Back
             </button>
@@ -58,29 +56,38 @@ const ShowVoting = () => {
     );
   }
 
+  // Calculate stats for sidebar
+  const totalVotes = setlist.reduce((sum, song) => sum + song.votes, 0);
+  const totalSongs = setlist.length;
+
   return (
     <div className="min-h-screen bg-black">
       <AppHeader />
       
-      <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-12">
-        <ShowHeader show={show} />
+      {/* Show Header */}
+      <ShowHeader show={show} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-          <VotingSection
-            setlist={setlist}
-            show={show}
-            loading={loading}
-            votingError={votingError}
-            voteSubmitting={voteSubmitting}
-            handleVote={handleVote}
-            handleSongAdded={handleSongAdded}
-            usedVotesCount={usedVotesCount}
-            maxFreeVotes={maxFreeVotes}
-            votesRemaining={votesRemaining}
-            user={user}
-          />
+      {/* Main Content */}
+      <div className="container mx-auto max-w-7xl px-4 py-8 pb-32 md:pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Voting Section */}
+          <div className="lg:col-span-2">
+            <VotingSection
+              songs={setlist}
+              onVote={handleVote}
+              submitting={voteSubmitting}
+              onAddSong={handleSongAdded}
+            />
+          </div>
 
-          <Sidebar setlist={setlist} show={show} />
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <Sidebar 
+              show={show} 
+              totalVotes={totalVotes}
+              totalSongs={totalSongs}
+            />
+          </div>
         </div>
       </div>
 
