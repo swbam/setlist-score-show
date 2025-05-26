@@ -41,7 +41,7 @@ const UserFlowTest = () => {
       addStep('Search for artists');
       console.log('🔍 Testing artist search...');
       
-      const searchResults = await searchService.searchArtists('Taylor Swift', 5);
+      const searchResults = await searchService.searchArtists('Rebelution', 5);
       
       if (searchResults.length === 0) {
         updateResult('Search for artists', 'error', 'No artists found in search');
@@ -101,7 +101,8 @@ const UserFlowTest = () => {
             name: 'Test Venue',
             city: 'Test City',
             state: 'Test State',
-            country: 'US'
+            country: 'US',
+            type: 'venue' as const
           };
           
           await ticketmasterService.storeVenueInDatabase(testVenue);
@@ -109,6 +110,7 @@ const UserFlowTest = () => {
           const testShowData = {
             id: 'test-show-001',
             name: `${artistData.name} Concert`,
+            type: 'event' as const,
             dates: {
               start: {
                 localDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
@@ -283,7 +285,7 @@ const UserFlowTest = () => {
     <div className="max-w-4xl mx-auto p-6 bg-gray-900 text-white rounded-lg">
       <h2 className="text-2xl font-bold mb-4">End-to-End User Flow Test</h2>
       <p className="text-gray-300 mb-6">
-        This test simulates the complete user journey: search artist → view artist page → 
+        This test simulates the complete user journey: search artist (Rebelution) → view artist page → 
         click show → create setlist with 5 random songs → vote → add song
       </p>
       
