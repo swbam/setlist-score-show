@@ -1,14 +1,10 @@
 
-import { typedSupabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface TrendingShow {
   id: string;
-  name?: string;
+  name: string;
   date: string;
-  start_time?: string;
-  view_count: number;
-  vote_count: number;
-  trending_score: number;
   artist: {
     id: string;
     name: string;
@@ -21,242 +17,191 @@ export interface TrendingShow {
     state?: string;
     country: string;
   };
-}
-
-export interface TrendingArtist {
-  id: string;
-  name: string;
-  image_url?: string;
-  popularity: number;
-  upcoming_shows_count: number;
-  total_votes: number;
+  vote_count: number;
+  view_count: number;
   trending_score: number;
 }
 
-// Increment show view count
-export async function incrementShowViews(showId: string): Promise<boolean> {
-  try {
-    const { error } = await typedSupabase.rpc('increment_show_views', {
-      show_id: showId
-    });
-
-    if (error) {
-      console.error('Error incrementing show views:', error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error in incrementShowViews:', error);
-    return false;
-  }
+// Calculate trending score based on votes, views, and recency
+function calculateTrendingScore(voteCount: number, viewCount: number, showDate: string): number {
+  const now = new Date();
+  const showDateTime = new Date(showDate);
+  const daysUntilShow = Math.max(0, (showDateTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Shows closer to today get higher score, but not too close (same day = 0.5)
+  const recencyMultiplier = daysUntilShow === 0 ? 0.5 : Math.max(0.1, 1 / (1 + daysUntilShow / 30));
+  
+  // Weighted score: votes are more important than views
+  const baseScore = (voteCount * 3) + (viewCount * 1);
+  
+  return baseScore * recencyMultiplier;
 }
 
-// Calculate trending shows based on views, votes, and recency
-export async function getTrendingShows(limit: number = 20): Promise<TrendingShow[]> {
+// Get trending shows based on vote activity and view count
+export async function getTrendingShows(limit: number = 10): Promise<TrendingShow[]> {
   try {
     console.log('Fetching trending shows...');
     
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(today.getDate() + 90); // Next 90 days
-    
-    const { data: showsData, error } = await typedSupabase
+    // Get shows with their vote counts, view counts, and related data
+    const { data: showsData, error } = await supabase
       .from('shows')
       .select(`
         id,
         name,
         date,
-        start_time,
         view_count,
-        artists!fk_shows_artist_id (
+        artists!shows_artist_id_fkey (
           id,
           name,
           image_url
         ),
-        venues!fk_shows_venue_id (
+        venues!shows_venue_id_fkey (
           id,
           name,
           city,
           state,
           country
         ),
-        setlists!fk_setlists_show_id (
+        setlists!setlists_show_id_fkey (
           id,
-          setlist_songs!fk_setlist_songs_setlist_id (
+          setlist_songs!setlist_songs_setlist_id_fkey (
             votes
           )
         )
       `)
-      .gte('date', today.toISOString())
-      .lte('date', futureDate.toISOString())
-      .order('view_count', { ascending: false })
-      .limit(limit * 2); // Get more to calculate trending scores
+      .gte('date', new Date().toISOString()) // Only future shows
+      .order('date', { ascending: true })
+      .limit(50); // Get more than needed to calculate trending
 
     if (error) {
-      console.error('Error fetching trending shows:', error);
+      console.error('Error fetching shows for trending:', error);
       return [];
     }
 
     if (!showsData || showsData.length === 0) {
+      console.log('No shows found for trending calculation');
       return [];
     }
 
-    // Calculate trending scores and format data
-    const trendingShows: TrendingShow[] = showsData
-      .map(show => {
-        const artist = show.artists as any;
-        const venue = show.venues as any;
-        const setlists = show.setlists as any[] || [];
-        
-        // Calculate total votes across all setlist songs - fix the TypeScript error
-        let totalVotes = 0;
-        if (Array.isArray(setlists)) {
-          setlists.forEach((setlist: any) => {
-            if (setlist && setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
-              totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
-            }
-          });
-        }
-        
-        // Calculate days until show
-        const daysUntilShow = Math.ceil((new Date(show.date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const recencyBoost = Math.max(1, 91 - daysUntilShow); // Higher score for sooner shows
-        
-        // Calculate trending score: views + votes*3 + recency boost
-        const trendingScore = (show.view_count || 0) + (totalVotes * 3) + (recencyBoost * 0.5);
-        
-        return {
-          id: show.id,
-          name: show.name,
-          date: show.date,
-          start_time: show.start_time,
-          view_count: show.view_count || 0,
-          vote_count: totalVotes,
-          trending_score: trendingScore,
-          artist: {
-            id: artist?.id || '',
-            name: artist?.name || 'Unknown Artist',
-            image_url: artist?.image_url
-          },
-          venue: {
-            id: venue?.id || '',
-            name: venue?.name || 'Unknown Venue',
-            city: venue?.city || '',
-            state: venue?.state,
-            country: venue?.country || ''
-          }
-        };
-      })
+    // Calculate trending scores
+    const trendingShows: TrendingShow[] = showsData.map(show => {
+      // Calculate total votes for this show
+      const totalVotes = (show.setlists || []).reduce((total, setlist) => {
+        const setlistVotes = (setlist.setlist_songs || []).reduce((sum, song) => sum + (song.votes || 0), 0);
+        return total + setlistVotes;
+      }, 0);
+
+      const trendingScore = calculateTrendingScore(totalVotes, show.view_count || 0, show.date);
+
+      return {
+        id: show.id,
+        name: show.name || `${show.artists?.name} Concert`,
+        date: show.date,
+        artist: {
+          id: show.artists?.id || '',
+          name: show.artists?.name || 'Unknown Artist',
+          image_url: show.artists?.image_url
+        },
+        venue: {
+          id: show.venues?.id || '',
+          name: show.venues?.name || 'Unknown Venue',
+          city: show.venues?.city || '',
+          state: show.venues?.state,
+          country: show.venues?.country || ''
+        },
+        vote_count: totalVotes,
+        view_count: show.view_count || 0,
+        trending_score: trendingScore
+      };
+    });
+
+    // Sort by trending score and return top results
+    const sortedShows = trendingShows
       .sort((a, b) => b.trending_score - a.trending_score)
       .slice(0, limit);
 
-    console.log(`Found ${trendingShows.length} trending shows`);
-    return trendingShows;
+    console.log(`Found ${sortedShows.length} trending shows`);
+    return sortedShows;
+
   } catch (error) {
-    console.error('Error in getTrendingShows:', error);
+    console.error('Error getting trending shows:', error);
     return [];
   }
 }
 
-// Get trending artists based on their shows' activity
-export async function getTrendingArtists(limit: number = 20): Promise<TrendingArtist[]> {
+// Get popular shows based on view count (for fallback when no trending data)
+export async function getPopularShows(limit: number = 10): Promise<TrendingShow[]> {
   try {
-    console.log('Fetching trending artists...');
+    console.log('Fetching popular shows...');
     
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(today.getDate() + 90);
-    
-    const { data: artistsData, error } = await typedSupabase
-      .from('artists')
+    const { data: showsData, error } = await supabase
+      .from('shows')
       .select(`
         id,
         name,
-        image_url,
-        popularity,
-        shows!fk_shows_artist_id (
+        date,
+        view_count,
+        artists!shows_artist_id_fkey (
           id,
-          date,
-          view_count,
-          setlists (
-            setlist_songs (
-              votes
-            )
-          )
+          name,
+          image_url
+        ),
+        venues!shows_venue_id_fkey (
+          id,
+          name,
+          city,
+          state,
+          country
         )
       `)
-      .order('popularity', { ascending: false });
+      .gte('date', new Date().toISOString())
+      .order('view_count', { ascending: false })
+      .limit(limit);
 
     if (error) {
-      console.error('Error fetching trending artists:', error);
+      console.error('Error fetching popular shows:', error);
       return [];
     }
 
-    if (!artistsData || artistsData.length === 0) {
-      return [];
-    }
+    if (!showsData) return [];
 
-    // Calculate trending scores for artists
-    const trendingArtists: TrendingArtist[] = artistsData
-      .map(artist => {
-        const shows = artist.shows as any[] || [];
-        const upcomingShows = shows.filter(show => 
-          new Date(show.date) >= today && new Date(show.date) <= futureDate
-        );
-        
-        // Calculate total views and votes for upcoming shows
-        let totalViews = 0;
-        let totalVotes = 0;
-        
-        upcomingShows.forEach(show => {
-          totalViews += show.view_count || 0;
-          
-          if (show.setlists && Array.isArray(show.setlists)) {
-            show.setlists.forEach((setlist: any) => {
-              if (setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
-                totalVotes += setlist.setlist_songs.reduce((sum: number, song: any) => sum + (song.votes || 0), 0);
-              }
-            });
-          }
-        });
-        
-        // Calculate trending score: popularity + views + votes*2 + show count*10
-        const trendingScore = (artist.popularity || 0) + totalViews + (totalVotes * 2) + (upcomingShows.length * 10);
-        
-        return {
-          id: artist.id,
-          name: artist.name,
-          image_url: artist.image_url,
-          popularity: artist.popularity || 0,
-          upcoming_shows_count: upcomingShows.length,
-          total_votes: totalVotes,
-          trending_score: trendingScore
-        };
-      })
-      .filter(artist => artist.upcoming_shows_count > 0) // Only artists with upcoming shows
-      .sort((a, b) => b.trending_score - a.trending_score)
-      .slice(0, limit);
+    return showsData.map(show => ({
+      id: show.id,
+      name: show.name || `${show.artists?.name} Concert`,
+      date: show.date,
+      artist: {
+        id: show.artists?.id || '',
+        name: show.artists?.name || 'Unknown Artist',
+        image_url: show.artists?.image_url
+      },
+      venue: {
+        id: show.venues?.id || '',
+        name: show.venues?.name || 'Unknown Venue',
+        city: show.venues?.city || '',
+        state: show.venues?.state,
+        country: show.venues?.country || ''
+      },
+      vote_count: 0,
+      view_count: show.view_count || 0,
+      trending_score: show.view_count || 0
+    }));
 
-    console.log(`Found ${trendingArtists.length} trending artists`);
-    return trendingArtists;
   } catch (error) {
-    console.error('Error in getTrendingArtists:', error);
+    console.error('Error getting popular shows:', error);
     return [];
   }
 }
 
-// Update trending calculations (for background jobs)
-export async function updateTrendingCalculations(): Promise<boolean> {
+// Update trending scores (can be called periodically)
+export async function updateTrendingScores(): Promise<void> {
   try {
-    console.log('Updating trending calculations...');
+    console.log('Updating trending scores...');
     
-    // This would typically be run as a background job
-    // For now, we'll just log that it would update cached trending data
-    console.log('Trending calculations updated successfully');
-    return true;
+    // This would typically be implemented as a database function
+    // For now, we rely on the real-time calculation in getTrendingShows
+    
+    console.log('Trending scores updated');
   } catch (error) {
-    console.error('Error updating trending calculations:', error);
-    return false;
+    console.error('Error updating trending scores:', error);
   }
 }

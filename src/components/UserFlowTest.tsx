@@ -99,10 +99,10 @@ const UserFlowTest = () => {
           const testVenue = {
             id: 'test-venue-001',
             name: 'Test Venue',
-            city: 'Test City',
-            state: 'Test State',
-            country: 'US',
-            type: 'venue' as const
+            type: 'venue' as const,
+            city: { name: 'Test City' },
+            state: { name: 'Test State', stateCode: 'TS' },
+            country: { name: 'United States', countryCode: 'US' }
           };
           
           await ticketmasterService.storeVenueInDatabase(testVenue);
@@ -115,7 +115,8 @@ const UserFlowTest = () => {
               start: {
                 localDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
                 localTime: '20:00:00'
-              }
+              },
+              status: { code: 'onsale' }
             },
             url: 'https://test.com',
             _embedded: {

@@ -1,7 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import * as spotifyService from "@/services/spotify";
-import * as ticketmasterService from "@/services/ticketmaster";
+import * as dataConsistency from "@/services/dataConsistency";
 
 export interface Artist {
   id: string;
@@ -52,6 +51,7 @@ export async function searchArtists(query: string, limit: number = 10): Promise<
       .from('artists')
       .select('*')
       .ilike('name', `%${query}%`)
+      .order('popularity', { ascending: false, nullsLast: true })
       .limit(limit);
 
     if (error) {
@@ -72,7 +72,7 @@ export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Arti
     const { data, error } = await supabase
       .from('artists')
       .select('*')
-      .order('popularity', { ascending: false })
+      .order('popularity', { ascending: false, nullsLast: true })
       .limit(limit);
 
     if (error) {
@@ -188,38 +188,7 @@ export async function getArtistUpcomingShows(artistId: string): Promise<any[]> {
   }
 }
 
-// Ensure artist exists in database (create if needed)
-export async function ensureArtistInDatabase(artistData: {
-  id: string;
-  name: string;
-  image_url?: string;
-  ticketmaster_id?: string;
-  spotify_id?: string;
-}): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('artists')
-      .upsert({
-        id: artistData.id,
-        name: artistData.name,
-        image_url: artistData.image_url,
-        ticketmaster_id: artistData.ticketmaster_id,
-        last_synced_at: new Date().toISOString()
-      });
-
-    if (error) {
-      console.error("Error ensuring artist in database:", error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Error ensuring artist in database:", error);
-    return false;
-  }
-}
-
-// Get or create artist from multiple sources
+// Get or create artist from multiple sources using the data consistency layer
 export async function getOrCreateArtist(artistId: string, artistName?: string): Promise<Artist | null> {
   try {
     // First, try to get from database
@@ -229,32 +198,24 @@ export async function getOrCreateArtist(artistId: string, artistName?: string): 
       return artist;
     }
 
-    // If not found, try to import from Spotify
-    console.log(`Artist ${artistId} not found in database, importing from Spotify...`);
+    // If not found, use the data consistency layer to ensure artist exists
+    console.log(`Artist ${artistId} not found in database, ensuring it exists...`);
     
-    const spotifyArtist = await spotifyService.getArtist(artistId);
-    if (spotifyArtist) {
-      const stored = await spotifyService.storeArtistInDatabase(spotifyArtist);
-      if (stored) {
-        artist = await getArtistById(artistId);
-        if (artist) {
-          // Also import their top tracks
-          await spotifyService.importArtistCatalog(artistId);
-          return artist;
-        }
-      }
-    }
+    const ensuredArtist = await dataConsistency.ensureArtistExists({
+      id: artistId,
+      name: artistName || 'Unknown Artist'
+    });
 
-    // If Spotify fails and we have a name, create a basic entry
-    if (artistName) {
-      const success = await ensureArtistInDatabase({
-        id: artistId,
-        name: artistName
-      });
-
-      if (success) {
-        return await getArtistById(artistId);
-      }
+    if (ensuredArtist) {
+      return {
+        id: ensuredArtist.id,
+        name: ensuredArtist.name,
+        image_url: ensuredArtist.image_url,
+        popularity: ensuredArtist.popularity,
+        genres: ensuredArtist.genres,
+        spotify_url: ensuredArtist.spotify_url,
+        source: 'database'
+      };
     }
 
     return null;
@@ -264,31 +225,27 @@ export async function getOrCreateArtist(artistId: string, artistName?: string): 
   }
 }
 
-// Sync artist data with external APIs
+// Sync artist data with external APIs using the data consistency layer
 export async function syncArtistData(artistId: string): Promise<boolean> {
   try {
     console.log(`Syncing data for artist: ${artistId}`);
     
-    // Update from Spotify if possible
-    const spotifyArtist = await spotifyService.getArtist(artistId);
-    if (spotifyArtist) {
-      const stored = await spotifyService.storeArtistInDatabase(spotifyArtist);
-      if (stored) {
-        // Also sync their catalog
-        await spotifyService.importArtistCatalog(artistId);
-        console.log(`Successfully synced artist data for: ${artistId}`);
-        return true;
-      }
+    // Get current artist data
+    const existingArtist = await getArtistById(artistId);
+    if (!existingArtist) {
+      console.error(`Artist ${artistId} not found for sync`);
+      return false;
     }
 
-    // Update last synced timestamp even if Spotify sync fails
-    const { error } = await supabase
-      .from('artists')
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq('id', artistId);
+    // Use the data consistency layer to re-ensure the artist with fresh data
+    const syncedArtist = await dataConsistency.ensureArtistExists({
+      id: artistId,
+      name: existingArtist.name
+    });
 
-    if (error) {
-      console.error("Error updating last_synced_at:", error);
+    if (syncedArtist) {
+      console.log(`Successfully synced artist data for: ${artistId}`);
+      return true;
     }
 
     return false;

@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
+import * as dataConsistency from "@/services/dataConsistency";
 
 export interface SearchOptions {
   query: string;
@@ -59,6 +60,7 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       .from('artists')
       .select('*')
       .ilike('name', `%${query}%`)
+      .order('popularity', { ascending: false, nullsLast: true })
       .limit(limit);
 
     if (dbError) {
@@ -78,7 +80,7 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       }
     }
 
-    // If we need more results, search Spotify
+    // If we need more results, search Spotify and ensure consistent data
     if (results.length < limit) {
       const remainingLimit = limit - results.length;
       const spotifyArtists = await spotifyService.searchArtists(query);
@@ -86,16 +88,21 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       for (const artist of spotifyArtists.slice(0, remainingLimit)) {
         // Avoid duplicates
         if (!results.find(r => r.id === artist.id)) {
-          results.push({
+          // Ensure artist exists in database with consistent data
+          const ensuredArtist = await dataConsistency.ensureArtistExists({
             id: artist.id,
-            type: 'artist',
-            name: artist.name,
-            image_url: artist.images?.[0]?.url,
-            spotify_id: artist.id
+            name: artist.name
           });
 
-          // Store new artists in database for future searches
-          await spotifyService.storeArtistInDatabase(artist);
+          if (ensuredArtist) {
+            results.push({
+              id: ensuredArtist.id,
+              type: 'artist',
+              name: ensuredArtist.name,
+              image_url: ensuredArtist.image_url,
+              spotify_id: ensuredArtist.id
+            });
+          }
         }
       }
     }
@@ -159,43 +166,31 @@ export async function searchShows(query: string, limit: number = 20): Promise<Se
       }
     }
 
-    // If we need more results, search Ticketmaster
+    // If we need more results, search Ticketmaster and ensure consistent data
     if (results.length < limit) {
       const remainingLimit = limit - results.length;
       const events = await ticketmasterService.searchEvents(query);
       
       for (const event of events.slice(0, remainingLimit)) {
         if (event._embedded?.venues?.[0]) {
-          const venue = event._embedded.venues[0];
           const eventId = event.id;
           
           // Avoid duplicates
           if (!results.find(r => r.id === eventId)) {
-            results.push({
-              id: eventId,
-              type: 'show',
-              name: event.name,
-              date: event.dates.start.localDate,
-              venue: venue.name,
-              location: `${venue.city?.name || venue.city}, ${venue.country?.name || venue.country}`,
-              artist_name: event.name.split(':')[0].trim(),
-              ticketmaster_id: eventId
-            });
-
-            // Store new shows in database for future searches
-            try {
-              await ticketmasterService.storeVenueInDatabase(venue);
-              
-              // Try to find or create artist
-              const artistName = event.name.split(':')[0].trim();
-              const spotifyArtists = await spotifyService.searchArtists(artistName);
-              if (spotifyArtists.length > 0) {
-                const artist = spotifyArtists[0];
-                await spotifyService.storeArtistInDatabase(artist);
-                await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
-              }
-            } catch (storeError) {
-              console.error("Error storing show data:", storeError);
+            // Process the entire event to ensure data consistency
+            const processed = await dataConsistency.processTicketmasterEvent(event);
+            
+            if (processed.artist && processed.venue && processed.show) {
+              results.push({
+                id: processed.show.id,
+                type: 'show',
+                name: processed.show.name || `${processed.artist.name} Concert`,
+                date: processed.show.date,
+                venue: processed.venue.name,
+                location: `${processed.venue.city}, ${processed.venue.country}`,
+                artist_name: processed.artist.name,
+                ticketmaster_id: processed.show.id
+              });
             }
           }
         }
@@ -216,11 +211,11 @@ export async function storeSearchResults(results: SearchResult[]): Promise<void>
     
     for (const result of results) {
       if (result.type === 'artist' && result.spotify_id) {
-        // Store artist if not already stored
-        const artist = await spotifyService.getArtist(result.spotify_id);
-        if (artist) {
-          await spotifyService.storeArtistInDatabase(artist);
-        }
+        // Ensure artist exists with consistent data
+        await dataConsistency.ensureArtistExists({
+          id: result.spotify_id,
+          name: result.name
+        });
       }
     }
   } catch (error) {
