@@ -28,8 +28,10 @@ const ShowVoting = () => {
     return (
       <div className="min-h-screen bg-black">
         <AppHeader />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-white text-lg">Loading show...</div>
+        <div className="container mx-auto max-w-7xl px-4 pt-20 pb-32 md:pb-12">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-white text-lg">Loading show...</div>
+          </div>
         </div>
         <MobileBottomNav />
       </div>
@@ -56,21 +58,7 @@ const ShowVoting = () => {
     );
   }
 
-  // Transform show data to match expected type
-  const showWithViewCount = {
-    ...show,
-    view_count: 0, // Default value for view_count
-    ticketmaster_url: show.ticketmaster_url || null
-  };
-
-  // Transform setlist data to match expected type
-  const transformedSetlist = setlist.map(song => ({
-    ...song,
-    setlist_id: '', // Default empty string for setlist_id
-    userVoted: false
-  }));
-
-  // Calculate stats for sidebar
+  // Calculate total votes for sidebar
   const totalVotes = setlist.reduce((sum, song) => sum + song.votes, 0);
   const totalSongs = setlist.length;
 
@@ -79,7 +67,7 @@ const ShowVoting = () => {
       <AppHeader />
       
       {/* Show Header */}
-      <ShowHeader show={showWithViewCount} />
+      <ShowHeader show={show} />
 
       {/* Main Content */}
       <div className="container mx-auto max-w-7xl px-4 py-8 pb-32 md:pb-12">
@@ -87,7 +75,7 @@ const ShowVoting = () => {
           {/* Voting Section */}
           <div className="lg:col-span-2">
             <VotingSection
-              songs={transformedSetlist}
+              songs={setlist}
               onVote={handleVote}
               submitting={voteSubmitting}
               onAddSong={() => handleSongAdded({})}
@@ -97,7 +85,7 @@ const ShowVoting = () => {
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <Sidebar 
-              show={showWithViewCount} 
+              show={show} 
               totalVotes={totalVotes}
               totalSongs={totalSongs}
             />
