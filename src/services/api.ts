@@ -10,80 +10,6 @@ import * as artistUtils from "@/utils/artistUtils";
  */
 
 /**
- * SEARCH OPERATIONS
- */
-export const searchOperations = {
-  // Main search function
-  search: search.search,
-  
-  // Specific searches
-  searchArtists: search.searchArtists,
-  searchShows: search.searchShows,
-  
-  // Cache search results
-  storeResults: search.storeSearchResults
-};
-
-/**
- * ARTIST OPERATIONS
- */
-export const artistOperations = {
-  // Get artist (from DB or create)
-  getOrCreate: artistUtils.getOrCreateArtist,
-  
-  // Find by name (search + create)
-  findByName: dataConsistency.findOrCreateArtistByName,
-  
-  // Ensure exists with complete data
-  ensure: dataConsistency.ensureArtistExists,
-  
-  // Get from database only
-  getById: artistUtils.getArtistById,
-  
-  // Sync with external APIs
-  sync: artistUtils.syncArtistData,
-  
-  // Get shows
-  getShows: artistUtils.getArtistUpcomingShows
-};
-
-/**
- * VENUE OPERATIONS
- */
-export const venueOperations = {
-  // Ensure venue exists with complete data
-  ensure: dataConsistency.ensureVenueExists
-};
-
-/**
- * SHOW OPERATIONS
- */
-export const showOperations = {
-  // Ensure show exists with complete data
-  ensure: dataConsistency.ensureShowExists,
-  
-  // Process complete Ticketmaster event
-  processEvent: dataConsistency.processTicketmasterEvent
-};
-
-/**
- * TRENDING OPERATIONS
- */
-export const trendingOperations = {
-  // Get trending shows
-  getTrending: trending.getTrendingShows,
-  
-  // Get popular shows
-  getPopular: trending.getPopularShows,
-  
-  // Increment views
-  incrementViews: trending.incrementShowViews,
-  
-  // Update trending data
-  updateScores: trending.updateTrendingScores
-};
-
-/**
  * MAIN API FUNCTIONS - USE THESE FOR CONSISTENT DATA HANDLING
  */
 
@@ -97,13 +23,13 @@ export async function processArtist(input: {
   ticketmaster_id?: string;
 }) {
   if (input.id) {
-    return await artistOperations.ensure({
+    return await dataConsistency.ensureArtistExists({
       id: input.id,
       name: input.name,
       ticketmaster_id: input.ticketmaster_id
     });
   } else {
-    return await artistOperations.findByName(input.name);
+    return await dataConsistency.findOrCreateArtistByName(input.name);
   }
 }
 
@@ -112,7 +38,7 @@ export async function processArtist(input: {
  * This ensures the show, artist, and venue all exist with complete data
  */
 export async function processShow(ticketmasterEvent: any) {
-  return await showOperations.processEvent(ticketmasterEvent);
+  return await dataConsistency.processTicketmasterEvent(ticketmasterEvent);
 }
 
 /**
@@ -120,8 +46,8 @@ export async function processShow(ticketmasterEvent: any) {
  * This ensures all search results are properly stored in the database
  */
 export async function searchWithConsistency(query: string, options: any = {}) {
-  const results = await searchOperations.search({ query, ...options });
-  await searchOperations.storeResults(results);
+  const results = await search.search({ query, ...options });
+  await search.storeSearchResults(results);
   return results;
 }
 
@@ -129,21 +55,76 @@ export async function searchWithConsistency(query: string, options: any = {}) {
  * Get trending data with automatic refresh
  */
 export async function getTrendingData(limit: number = 10) {
-  const trending = await trendingOperations.getTrending(limit);
+  const trendingShows = await trending.getTrendingShows(limit);
   
   // If no trending data, fall back to popular
-  if (trending.length === 0) {
-    return await trendingOperations.getPopular(limit);
+  if (trendingShows.length === 0) {
+    return await trending.getPopularShows(limit);
   }
   
-  return trending;
+  return trendingShows;
 }
 
-// Export individual operation groups for specific use cases
-export {
-  searchOperations,
-  artistOperations,
-  venueOperations,
-  showOperations,
-  trendingOperations
+/**
+ * OPERATION GROUPS FOR SPECIFIC USE CASES
+ */
+export const operations = {
+  search: {
+    // Main search function
+    search: search.search,
+    
+    // Specific searches
+    searchArtists: search.searchArtists,
+    searchShows: search.searchShows,
+    
+    // Cache search results
+    storeResults: search.storeSearchResults
+  },
+
+  artist: {
+    // Get artist (from DB or create)
+    getOrCreate: artistUtils.getOrCreateArtist,
+    
+    // Find by name (search + create)
+    findByName: dataConsistency.findOrCreateArtistByName,
+    
+    // Ensure exists with complete data
+    ensure: dataConsistency.ensureArtistExists,
+    
+    // Get from database only
+    getById: artistUtils.getArtistById,
+    
+    // Sync with external APIs
+    sync: artistUtils.syncArtistData,
+    
+    // Get shows
+    getShows: artistUtils.getArtistUpcomingShows
+  },
+
+  venue: {
+    // Ensure venue exists with complete data
+    ensure: dataConsistency.ensureVenueExists
+  },
+
+  show: {
+    // Ensure show exists with complete data
+    ensure: dataConsistency.ensureShowExists,
+    
+    // Process complete Ticketmaster event
+    processEvent: dataConsistency.processTicketmasterEvent
+  },
+
+  trending: {
+    // Get trending shows
+    getTrending: trending.getTrendingShows,
+    
+    // Get popular shows
+    getPopular: trending.getPopularShows,
+    
+    // Increment views
+    incrementViews: trending.incrementShowViews,
+    
+    // Update trending data
+    updateScores: trending.updateTrendingScores
+  }
 };

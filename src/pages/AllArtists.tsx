@@ -9,7 +9,7 @@ import {
   Artist, 
   extractUniqueArtistsFromEvents, 
   fetchArtistsFromDatabase,
-  searchArtistsFromDatabase,
+  searchArtists,
   mergeArtists,
   sortSearchResults
 } from "@/utils/artistUtils";
@@ -75,7 +75,7 @@ const AllArtists = () => {
       const ticketmasterArtists = await extractUniqueArtistsFromEvents(events);
       
       // Also search for artists in our database
-      const databaseArtists = await searchArtistsFromDatabase(searchQuery);
+      const databaseArtists = await searchArtists(searchQuery);
       
       // Merge and sort search results
       const searchResults = sortSearchResults(
