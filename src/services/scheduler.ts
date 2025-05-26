@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -45,7 +46,8 @@ async function getServices() {
   const artistUtils = await import("@/utils/artistUtils");
   const catalogService = await import("@/services/catalog");
   const ticketmasterService = await import("@/services/ticketmaster");
-  return { artistUtils, catalogService, ticketmasterService };
+  const dataConsistency = await import("@/services/dataConsistency");
+  return { artistUtils, catalogService, ticketmasterService, dataConsistency };
 }
 
 /**
@@ -140,7 +142,7 @@ export async function updateTrends(): Promise<boolean> {
     console.log('Background update: Recalculating trends');
     
     // Get popular events from Ticketmaster
-    const { ticketmasterService } = await getServices();
+    const { ticketmasterService, dataConsistency } = await getServices();
     const events = await ticketmasterService.getPopularEvents(20);
     
     // Process each event to ensure artist and show data is up to date
@@ -152,25 +154,21 @@ export async function updateTrends(): Promise<boolean> {
       const artist = event._embedded.attractions[0];
       const venue = event._embedded.venues[0];
       
-      // Store artist and venue
+      // Store venue in database
       await ticketmasterService.storeVenueInDatabase(venue);
       
-      // Create artist object
-      const artistData = {
+      // Create artist object using data consistency layer
+      const artistData = await dataConsistency.ensureArtistExists({
         id: artist.id,
         name: artist.name,
-        image_url: artist.images?.[0]?.url,
         ticketmaster_id: artist.id
-      };
+      });
       
-      // Store artist with Spotify enrichment
-      const { artistUtils } = await getServices();
-      await artistUtils.ensureArtistInDatabase(artistData);
-      
-      // Store show
-      await ticketmasterService.storeShowInDatabase(event, artist.id, venue.id);
-      
-      processedCount++;
+      if (artistData) {
+        // Store show
+        await ticketmasterService.storeShowInDatabase(event, artistData.id, venue.id);
+        processedCount++;
+      }
     }
     
     console.log(`Updated ${processedCount} trending events`);

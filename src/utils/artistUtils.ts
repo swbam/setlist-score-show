@@ -51,7 +51,7 @@ export async function searchArtists(query: string, limit: number = 10): Promise<
       .from('artists')
       .select('*')
       .ilike('name', `%${query}%`)
-      .order('popularity', { ascending: false, nullsLast: true })
+      .order('popularity', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -72,7 +72,7 @@ export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Arti
     const { data, error } = await supabase
       .from('artists')
       .select('*')
-      .order('popularity', { ascending: false, nullsLast: true })
+      .order('popularity', { ascending: false })
       .limit(limit);
 
     if (error) {

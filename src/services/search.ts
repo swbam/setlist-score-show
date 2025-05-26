@@ -60,7 +60,7 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
       .from('artists')
       .select('*')
       .ilike('name', `%${query}%`)
-      .order('popularity', { ascending: false, nullsLast: true })
+      .order('popularity', { ascending: false })
       .limit(limit);
 
     if (dbError) {

@@ -207,6 +207,14 @@ export async function ensureShowExists(
       return null;
     }
 
+    // Map status properly
+    let status: 'scheduled' | 'postponed' | 'canceled' = 'scheduled';
+    if (showInput.dates.status.code === 'cancelled') {
+      status = 'canceled';
+    } else if (showInput.dates.status.code === 'postponed') {
+      status = 'postponed';
+    }
+
     // Return the show data
     return {
       id: showInput.id,
@@ -215,9 +223,7 @@ export async function ensureShowExists(
       name: showInput.name,
       date: new Date(showInput.dates.start.localDate + (showInput.dates.start.localTime ? `T${showInput.dates.start.localTime}` : 'T00:00:00')).toISOString(),
       start_time: showInput.dates.start.localTime || null,
-      status: showInput.dates.status.code === 'onsale' ? 'scheduled' : 
-              showInput.dates.status.code === 'cancelled' ? 'canceled' : 
-              showInput.dates.status.code === 'postponed' ? 'postponed' : 'scheduled',
+      status,
       ticketmaster_url: showInput.url || null,
       view_count: 0
     };

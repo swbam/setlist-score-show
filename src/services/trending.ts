@@ -37,6 +37,21 @@ function calculateTrendingScore(voteCount: number, viewCount: number, showDate: 
   return baseScore * recencyMultiplier;
 }
 
+// Increment show views
+export async function incrementShowViews(showId: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('increment_show_views', {
+      show_id: showId
+    });
+
+    if (error) {
+      console.error('Error incrementing show views:', error);
+    }
+  } catch (error) {
+    console.error('Error incrementing show views:', error);
+  }
+}
+
 // Get trending shows based on vote activity and view count
 export async function getTrendingShows(limit: number = 10): Promise<TrendingShow[]> {
   try {
@@ -86,8 +101,10 @@ export async function getTrendingShows(limit: number = 10): Promise<TrendingShow
     // Calculate trending scores
     const trendingShows: TrendingShow[] = showsData.map(show => {
       // Calculate total votes for this show
-      const totalVotes = (show.setlists || []).reduce((total, setlist) => {
-        const setlistVotes = (setlist.setlist_songs || []).reduce((sum, song) => sum + (song.votes || 0), 0);
+      const setlists = Array.isArray(show.setlists) ? show.setlists : [];
+      const totalVotes = setlists.reduce((total, setlist) => {
+        const setlistSongs = Array.isArray(setlist.setlist_songs) ? setlist.setlist_songs : [];
+        const setlistVotes = setlistSongs.reduce((sum, song) => sum + (song.votes || 0), 0);
         return total + setlistVotes;
       }, 0);
 
