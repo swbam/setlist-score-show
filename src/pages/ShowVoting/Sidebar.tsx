@@ -1,93 +1,124 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Users, Clock, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, MapPin, Users, Clock } from "lucide-react";
 import { Show } from "./types";
+import VoteTracker from "@/components/VoteTracker";
 
 interface SidebarProps {
-  show: Show | null;
+  show: Show;
   totalVotes: number;
   totalSongs: number;
+  usedVotes?: number;
+  maxVotes?: number;
 }
 
-const Sidebar = ({ show, totalVotes, totalSongs }: SidebarProps) => {
+const Sidebar = ({ show, totalVotes, totalSongs, usedVotes = 0, maxVotes = 10 }: SidebarProps) => {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatTime = (timeString?: string) => {
+    if (!timeString) return 'Time TBA';
+    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
   return (
     <div className="space-y-6">
-      {/* Voting Stats */}
-      <Card className="bg-gray-900/60 border-gray-800">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-yellow-metal-300 flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Voting Stats
-          </CardTitle>
+      {/* Show Details */}
+      <Card className="bg-gray-900/40 border-gray-800/50">
+        <CardHeader>
+          <CardTitle className="text-lg text-white">Show Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-white">{totalVotes}</div>
-            <div className="text-sm text-gray-400">Total Votes</div>
+          <div className="flex items-start space-x-3">
+            <Calendar className="h-5 w-5 text-yellow-400 mt-0.5" />
+            <div>
+              <p className="text-white font-medium">{formatDate(show.date)}</p>
+              <p className="text-gray-400 text-sm">{formatTime(show.start_time)}</p>
+            </div>
           </div>
-          
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Songs in setlist:</span>
-            <span className="text-yellow-metal-300 font-medium">{totalSongs}</span>
+
+          <div className="flex items-start space-x-3">
+            <MapPin className="h-5 w-5 text-yellow-400 mt-0.5" />
+            <div>
+              <p className="text-white font-medium">{show.venue.name}</p>
+              <p className="text-gray-400 text-sm">
+                {show.venue.city}
+                {show.venue.state && `, ${show.venue.state}`}
+                , {show.venue.country}
+              </p>
+            </div>
           </div>
-          
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Voting closes in:</span>
-            <span className="text-yellow-metal-300 font-medium">2d 14h</span>
+
+          <div className="flex items-center space-x-3">
+            <Users className="h-5 w-5 text-yellow-400" />
+            <div>
+              <p className="text-white font-medium">{show.view_count} views</p>
+              <p className="text-gray-400 text-sm">Total page views</p>
+            </div>
           </div>
-          
-          <div className="text-center pt-2">
-            <div className="text-yellow-metal-400 text-sm font-medium">127 fans have voted</div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+            <Badge variant="outline" className="text-green-400 border-green-400">
+              {show.status}
+            </Badge>
+            <Badge variant="outline" className="text-blue-400 border-blue-400">
+              {totalSongs} Songs
+            </Badge>
           </div>
         </CardContent>
       </Card>
-      
-      {/* How It Works */}
-      <Card className="bg-gray-900/60 border-gray-800">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-yellow-metal-300 flex items-center gap-2">
-            <CheckCircle className="h-5 w-5" />
-            How it Works
-          </CardTitle>
+
+      {/* Vote Tracker */}
+      <VoteTracker 
+        showId={show.id}
+        usedVotes={usedVotes}
+        maxVotes={maxVotes}
+      />
+
+      {/* Voting Stats */}
+      <Card className="bg-gray-900/40 border-gray-800/50">
+        <CardHeader>
+          <CardTitle className="text-lg text-white">Voting Activity</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3 text-sm">
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-yellow-metal-400 text-black rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
-                1
-              </div>
-              <div className="text-gray-300">
-                Vote for songs you want to hear at this show. The most voted songs rise to the top of the list.
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-yellow-metal-400 text-black rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
-                2
-              </div>
-              <div className="text-gray-300">
-                Anyone can add songs to the setlist. Select from the dropdown above to help build the perfect concert.
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-yellow-metal-400 text-black rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
-                3
-              </div>
-              <div className="text-gray-300">
-                Non-logged in users can vote for up to 3 songs. Create an account to vote for unlimited songs!
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-yellow-metal-400 text-black rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
-                4
-              </div>
-              <div className="text-gray-300">
-                <Clock className="inline h-3 w-3 mr-1" />
-                Voting closes 2 hours before the show
-              </div>
+        <CardContent>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-yellow-400">{totalVotes}</div>
+            <p className="text-gray-400 text-sm">Total Votes Cast</p>
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-gray-700">
+            <p className="text-xs text-gray-400 text-center">
+              Votes update in real-time as fans participate
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Artist Info */}
+      <Card className="bg-gray-900/40 border-gray-800/50">
+        <CardContent className="pt-6">
+          <div className="flex items-center space-x-3">
+            {show.artist.image_url && (
+              <img 
+                src={show.artist.image_url} 
+                alt={show.artist.name}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+            )}
+            <div>
+              <p className="text-white font-medium">{show.artist.name}</p>
+              <p className="text-gray-400 text-sm">Artist</p>
             </div>
           </div>
         </CardContent>

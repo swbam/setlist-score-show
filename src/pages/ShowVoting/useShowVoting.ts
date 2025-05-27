@@ -11,7 +11,7 @@ interface Show {
   date: string;
   start_time?: string | null;
   status: string;
-  view_count: number; // Added missing property
+  view_count: number;
   artist: {
     id: string;
     name: string;
@@ -28,15 +28,17 @@ interface Show {
 
 interface SetlistSong {
   id: string;
-  setlist_id: string; // Added missing property
+  setlist_id: string;
   song_id: string;
   votes: number;
   position: number;
+  userVoted?: boolean;
   song: {
     id: string;
     name: string;
     album: string;
-    spotify_url?: string;
+    artist_id: string;
+    spotify_url: string;
   };
 }
 
@@ -48,7 +50,8 @@ const useShowVoting = (user: any) => {
   const [votingError, setVotingError] = useState<string | null>(null);
   const [voteSubmitting, setVoteSubmitting] = useState<string | null>(null);
   const [usedVotesCount, setUsedVotesCount] = useState(0);
-  const maxFreeVotes = 5;
+  const [userVotes, setUserVotes] = useState<Set<string>>(new Set());
+  const maxFreeVotes = 10;
   const votesRemaining = maxFreeVotes - usedVotesCount;
 
   useEffect(() => {
@@ -88,7 +91,7 @@ const useShowVoting = (user: any) => {
           date: showData.date,
           start_time: showData.start_time,
           status: showData.status,
-          view_count: showData.view_count, // Include view_count
+          view_count: showData.view_count,
           artist: {
             id: showData.artists?.id || '',
             name: showData.artists?.name || 'Unknown Artist',
@@ -113,12 +116,12 @@ const useShowVoting = (user: any) => {
           return;
         }
 
-        // Fetch setlist songs
+        // Fetch setlist songs with proper song data including artist_id
         const { data: setlistData, error: setlistError } = await supabase
           .from('setlist_songs')
           .select(`
             *,
-            songs!setlist_songs_song_id_fkey(id, name, album, spotify_url)
+            songs!setlist_songs_song_id_fkey(id, name, album, artist_id, spotify_url)
           `)
           .eq('setlist_id', setlistId)
           .order('votes', { ascending: false });
@@ -132,29 +135,41 @@ const useShowVoting = (user: any) => {
         if (setlistData) {
           const transformedSetlist: SetlistSong[] = setlistData.map(item => ({
             id: item.id,
-            setlist_id: item.setlist_id, // Include setlist_id
+            setlist_id: item.setlist_id,
             song_id: item.song_id,
             votes: item.votes,
             position: item.position,
+            userVoted: false,
             song: {
               id: item.songs?.id || '',
               name: item.songs?.name || 'Unknown Song',
               album: item.songs?.album || '',
-              spotify_url: item.songs?.spotify_url
+              artist_id: item.songs?.artist_id || showData.artist_id,
+              spotify_url: item.songs?.spotify_url || ''
             }
           }));
           
           setSetlist(transformedSetlist);
         }
 
-        // Fetch user's vote count if logged in
+        // Fetch user's vote data if logged in
         if (user) {
-          const { data: userVotes } = await supabase
+          const { data: userVoteData } = await supabase
             .from('votes')
-            .select('id')
+            .select('setlist_song_id')
             .eq('user_id', user.id);
           
-          setUsedVotesCount(userVotes?.length || 0);
+          if (userVoteData) {
+            const userVoteSet = new Set(userVoteData.map(vote => vote.setlist_song_id));
+            setUserVotes(userVoteSet);
+            setUsedVotesCount(userVoteData.length);
+            
+            // Update setlist with user vote status
+            setSetlist(prev => prev.map(song => ({
+              ...song,
+              userVoted: userVoteSet.has(song.id)
+            })));
+          }
         }
 
       } catch (err) {
@@ -168,14 +183,68 @@ const useShowVoting = (user: any) => {
     fetchShowAndSetlist();
   }, [showId, user]);
 
+  // Set up real-time subscription for vote updates
+  useEffect(() => {
+    if (!show || !setlist.length) return;
+
+    const setlistIds = [...new Set(setlist.map(song => song.setlist_id))];
+    
+    const channel = supabase
+      .channel(`setlist-voting-${showId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'setlist_songs',
+          filter: `setlist_id=in.(${setlistIds.join(',')})`
+        },
+        (payload) => {
+          setSetlist(prev => prev.map(song =>
+            song.id === payload.new.id
+              ? { ...song, votes: payload.new.votes, position: payload.new.position }
+              : song
+          ).sort((a, b) => b.votes - a.votes));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'votes'
+        },
+        (payload) => {
+          if (payload.new.user_id === user?.id) {
+            setUserVotes(prev => new Set([...prev, payload.new.setlist_song_id]));
+            setSetlist(prev => prev.map(song =>
+              song.id === payload.new.setlist_song_id
+                ? { ...song, userVoted: true }
+                : song
+            ));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [show, setlist.length, showId, user?.id]);
+
   const handleVote = async (setlistSongId: string) => {
     if (!user) {
       toast.error("Please log in to vote");
       return;
     }
 
+    if (userVotes.has(setlistSongId)) {
+      toast.info("You've already voted for this song");
+      return;
+    }
+
     if (usedVotesCount >= maxFreeVotes) {
-      toast.error("You've reached your vote limit");
+      toast.error("You've reached your vote limit for this show");
       return;
     }
 
@@ -185,37 +254,59 @@ const useShowVoting = (user: any) => {
     try {
       // Optimistically update the UI
       setSetlist(prev => prev.map(song =>
-        song.id === setlistSongId ? { ...song, votes: song.votes + 1 } : song
-      ));
+        song.id === setlistSongId 
+          ? { ...song, votes: song.votes + 1, userVoted: true } 
+          : song
+      ).sort((a, b) => b.votes - a.votes));
+      
+      setUserVotes(prev => new Set([...prev, setlistSongId]));
       setUsedVotesCount(prev => prev + 1);
 
       // Call Supabase RPC function to handle the vote
-      const { error } = await supabase.rpc('vote_for_song', {
+      const { data, error } = await supabase.rpc('vote_for_song', {
         setlist_song_id: setlistSongId
       });
 
       if (error) {
         console.error("Error voting:", error);
-        setVotingError("Failed to vote. Please try again.");
         
         // Revert the optimistic update on error
         setSetlist(prev => prev.map(song =>
-          song.id === setlistSongId ? { ...song, votes: song.votes - 1 } : song
-        ));
+          song.id === setlistSongId 
+            ? { ...song, votes: song.votes - 1, userVoted: false } 
+            : song
+        ).sort((a, b) => b.votes - a.votes));
+        
+        setUserVotes(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(setlistSongId);
+          return newSet;
+        });
         setUsedVotesCount(prev => prev - 1);
         
-        toast.error("Failed to vote. Please try again.");
+        if (error.message.includes("Already voted")) {
+          toast.info("You already voted for this song");
+        } else {
+          toast.error("Failed to vote. Please try again.");
+        }
       } else {
         toast.success("Vote recorded!");
       }
     } catch (err) {
       console.error("Error voting:", err);
-      setVotingError("An unexpected error occurred. Please try again.");
       
       // Revert the optimistic update on error
       setSetlist(prev => prev.map(song =>
-        song.id === setlistSongId ? { ...song, votes: song.votes - 1 } : song
-      ));
+        song.id === setlistSongId 
+          ? { ...song, votes: song.votes - 1, userVoted: false } 
+          : song
+      ).sort((a, b) => b.votes - a.votes));
+      
+      setUserVotes(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(setlistSongId);
+        return newSet;
+      });
       setUsedVotesCount(prev => prev - 1);
       
       toast.error("An unexpected error occurred. Please try again.");
@@ -225,8 +316,7 @@ const useShowVoting = (user: any) => {
   };
 
   const handleSongAdded = (newSong: any) => {
-    // This would be called when a user adds a new song to the setlist
-    // For now, we'll just refresh the setlist
+    // Refresh the setlist when a new song is added
     window.location.reload();
   };
 
