@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -48,7 +49,7 @@ export function useVoteTracking(showId: string) {
       if (error) throw error;
 
       if (data) {
-        setVoteStatus(data as VoteStatus);
+        setVoteStatus(data as unknown as VoteStatus);
       }
     } catch (error) {
       console.error('Error fetching vote status:', error);
@@ -75,11 +76,11 @@ export function useVoteTracking(showId: string) {
 
     try {
       const { data, error } = await supabase
-        .rpc('vote_for_song', { p_setlist_song_id: setlistSongId });
+        .rpc('vote_for_song', { setlist_song_id: setlistSongId });
 
       if (error) throw error;
 
-      const result = data as VoteResult;
+      const result = data as unknown as VoteResult;
 
       if (!result.success) {
         toast({

@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -44,7 +45,7 @@ export function useRealtimeVoting(setlistId: string | null) {
   }, [setlistId]);
 
   // Handle incoming vote updates
-  const handleVoteUpdate = useCallback((payload: any) => {
+  const handleVoteUpdate = useCallback(async (payload: any) => {
     const update = payload.new as VoteUpdate;
     
     // Update local vote count
@@ -54,7 +55,8 @@ export function useRealtimeVoting(setlistId: string | null) {
     }));
 
     // Show toast for other users' votes
-    if (update.user_id !== supabase.auth.getUser().then(u => u.data.user?.id)) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (update.user_id !== user?.id) {
       toast({
         title: "New Vote!",
         description: "Someone just voted for a song",

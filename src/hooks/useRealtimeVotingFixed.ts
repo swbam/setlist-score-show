@@ -66,20 +66,17 @@ export function useRealtimeVotingFixed(setlistId: string | null) {
           }));
         }
       )
-      .on('subscribe', (status) => {
+      .subscribe((status) => {
         console.log('📡 Subscription status:', status);
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           console.log('✅ Real-time connection established');
+        } else {
+          setIsConnected(false);
         }
-      })
-      .on('error', (error) => {
-        console.error('❌ Real-time subscription error:', error);
-        setIsConnected(false);
       });
 
     // Subscribe to the channel
-    realtimeChannel.subscribe();
     setChannel(realtimeChannel);
 
     // Initialize vote counts
@@ -88,7 +85,9 @@ export function useRealtimeVotingFixed(setlistId: string | null) {
     // Cleanup function
     return () => {
       console.log('🧹 Cleaning up real-time subscription');
-      realtimeChannel.unsubscribe();
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
       setIsConnected(false);
       setChannel(null);
     };

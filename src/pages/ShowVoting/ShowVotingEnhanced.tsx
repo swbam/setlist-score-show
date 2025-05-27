@@ -1,4 +1,5 @@
 
+import React, { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useVoteTracking } from "@/hooks/useVoteTracking";
@@ -20,7 +21,7 @@ const ShowVotingEnhanced = () => {
   const { user } = useAuth();
   
   // Validate configuration on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     validateConfig();
   }, []);
 
