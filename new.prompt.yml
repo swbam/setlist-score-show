@@ -1,0 +1,1341 @@
+messages:
+  - role: system
+    content: >-
+      You are a world class engineer, full stack developer, designer, marketer
+      and entrepreneur. Your task is to follow all guidelines precisiley. You
+      are a genius in data architecture, data flows, problem solving and
+      building amazing world class web apps. 
+  - role: user
+    content: >+
+      review the codebase in this proiject for my concert setlist voting web app
+      in this repo: https://github.com/swbam/setlist-score-show
+
+      . revirew all codes, tables, fields, types, functions, package.json,
+      config files thoroughly. Then review the initial outline of the web app
+      and creat a detailed overview of whats completed, needs fixed/improved,
+      already built etc. and also create a full implementation plan and fix
+      plan. The new plan should still include a full paragraph overview of the
+      app at the top then the rest of the detailed plan. Think if I can give
+      this plan to a developer and they know nothing about the app and can read
+      the new document, understand the app, then implement the plan and fixes to
+      get this app 100% completed.
+
+
+
+
+
+      **Overview:** 
+
+      TheSet is a concert setlist voting platform that integrates Spotify for
+      user authentication and artist data, and Ticketmaster for concert
+      information. Users can log in with Spotify, view their most listened-to
+      artists in a "my-artists" dashboard, search for concerts, and vote on
+      setlists in real time. The app must be mobile-friendly, performant, and
+      maintain fresh data through background updates and caching.
+
+
+
+      **Feature List:**
+
+
+
+      \- \*\*Core Features\*\*: 
+       \- Login with Spotify to access personalized artist dashboard or with email 
+       \- Search for artists with upcoming shows via Ticketmaster 
+       \- View artist profiles with upcoming concert details 
+       \- Vote on setlists for specific shows with real-time updates 
+       \- See your top artists in a personalized "my-artists" dashboard 
+       \- Imp
+
+
+      \- \*\*Tech Stack\*\*: 
+       \- Frontend: React with TypeScript and Vite 
+       \- Styling: Tailwind CSS with ShadCN UI components 
+       \- Database: Neon PostgreSQL with Drizzle ORM 
+       \- Authentication: Supabase with Spotify login 
+       \- Real-time updates: Neon Realtime or Pusher for WebSockets
+
+
+      \- \*\*API Integration\*\*: 
+       \- Spotify API: Supabase Spotify authuser authentication. Separate Spotify API key for importing the artist song catalog and artist info  
+       \- Ticketmaster API: For concert/show data and venue information
+
+
+      \- \*\*Data Flow\*\*: 
+       \- User searches for artists with upcoming shows via Ticketmaster API 
+       \- Artist pages display concerts pulled from Ticketmaster 
+       \- Show pages feature interactive setlists populated with 5 initial random songs from the artist’s imported Spotify song catalog. Initial setlist 5 songs vote count set to 0  
+       \- Real-time voting updates via Supabase realtime for all users viewing the same setlist 
+       \- Full sync and logic in places for artists, shows, venues, song catalogs between Spotify and Ticketmaster APIs so the data is imported to my Supabase db  
+      \- Trending and most popular shows on the homepage that auto import to
+      Supabase every 6 hours
+
+
+
+      \- \*\*User Experience\*\*: 
+       \- Mobile-friendly, responsive design across all devices 
+       \- Optimistic UI updates for immediate feedback on votes 
+       \- Automatic setlist creation with 5 random initial songs with 0 from, pulled from the artist's songs in my db after they are imported
+       \- Dynamic reordering of songs based on votes
+
+
+      \- \*\*Credentials\*\*:  
+       \- Spotify Client ID: 2946864dc822469b9c672292ead45f43 
+       \- Spotify Client Secret: feaf0fc901124b839b11e02f97d18a8d 
+       \- Ticketmaster API Key: k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b
+
+
+      **User Feedback:** 
+
+      TheSet is aimed to be like an open platform users to vote on setlists,
+      without artists having to do anything. The entire process is automated
+      with importing artists from spotify api and shows from the ticketmaster
+      api, and importing an artists Spotify song catalog (song catalog is used
+      for the setlist. Each setlist on initial creation starts with 5 random
+      songs from the catalog with 0 votes so the setlist isn't blank and unique
+      to start). All of the artists, shows, songs, venues, are stored in my db.
+      There should be background sync
+
+
+
+      **TheSet: Concert Setlist Voting Platform**
+
+
+
+      ## **Project Overview**
+
+
+
+      TheSet is a modern web application that allows music fans to vote on
+      setlists for upcoming concerts and compare fan-created setlists with
+      actual performed setlists. The platform integrates with Spotify for user
+      authentication and artist data, Ticketmaster for concert information, and
+      setlist.fm for actual performed setlists.
+
+
+
+      ## **Core Requirements**
+
+
+
+      ### **User Experience**
+
+
+
+      * Mobile-first, responsive design that works flawlessly across all
+      devices 
+
+      * Intuitive navigation with minimal friction from search to voting 
+
+      * Real-time updates for setlist voting without page refreshes 
+
+      * Personalized dashboard showing users' favorite artists and upcoming
+      shows
+
+
+
+      ### **Integration Requirements**
+
+
+
+      * **Spotify Integration**: Authentication, artist data, and song catalogs 
+
+      * **Ticketmaster Integration**: Concert/show data and venue information 
+
+      * **setlist.fm Integration**: Actual performed setlists for comparison
+
+
+
+      ### **Authentication**
+
+
+
+      * Primary: Spotify OAuth for personalization and top artist data 
+
+      * Secondary: Email-based authentication for users without Spotify
+
+
+
+      ## **Technical Specifications**
+
+
+
+      ### **Tech Stack**
+
+
+
+      * **Frontend**: Next.js 14+ with App Router (React, TypeScript) 
+
+      * **Styling**: Tailwind CSS with shadcn/ui components 
+
+      * **State Management**: React Query for data fetching & caching 
+
+      * **Database**: Supabase PostgreSQL with Drizzle ORM 
+
+      * **Authentication**: Supabase Auth with Spotify OAuth 
+
+      * **Real-time**: Supabase Realtime for WebSocket connections 
+
+      * **Deployment**: Vercel with Edge Functions and Cron Jobs
+
+
+
+      ### **API Credentials**
+
+
+
+      * Spotify Client ID: 2946864dc822469b9c672292ead45f43 
+
+      * Spotify Client Secret: feaf0fc901124b839b11e02f97d18a8d 
+
+      * Ticketmaster API Key: k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b 
+
+      * setlist.fm API Key: \[You'll need to obtain this\]
+
+
+
+      ## **Database Schema**
+
+
+
+      ### **Core Tables**
+
+
+
+      // Users Table 
+
+      interface User { 
+       id: string;                 // Primary Key (UUID from Supabase Auth) 
+       email?: string;             // May be null if Spotify-only login 
+       spotify\_id?: string;        // Spotify user ID (if logged in with Spotify) 
+       display\_name: string; 
+       avatar\_url?: string; 
+       created\_at: Date; 
+      }
+
+
+
+      // Artists Table 
+
+      interface Artist { 
+       id: string;                 // Primary Key (Spotify ID) 
+       name: string; 
+       image\_url?: string; 
+       popularity: number; 
+       genres: string\[\]; 
+       spotify\_url: string; 
+       last\_synced\_at: Date;       // For tracking data freshness 
+      }
+
+
+
+      // Venues Table 
+
+      interface Venue { 
+       id: string;                 // Primary Key (Ticketmaster ID) 
+       name: string; 
+       city: string; 
+       state?: string; 
+       country: string; 
+       address?: string; 
+       latitude?: number; 
+       longitude?: number; 
+      }
+
+
+
+      // Shows Table 
+
+      interface Show { 
+       id: string;                 // Primary Key (Ticketmaster ID) 
+       artist\_id: string;          // Foreign Key to Artists 
+       venue\_id: string;           // Foreign Key to Venues 
+       name?: string;              // Event name (if different from just artist name) 
+       date: Date; 
+       start\_time?: string; 
+       status: 'scheduled' | 'postponed' | 'canceled'; 
+       ticketmaster\_url?: string; 
+       view\_count: number;         // For trending calculation 
+      }
+
+
+
+      // Songs Table 
+
+      interface Song { 
+       id: string;                 // Primary Key (Spotify ID) 
+       artist\_id: string;          // Foreign Key to Artists 
+       name: string; 
+       album: string; 
+       duration\_ms: number; 
+       popularity: number; 
+       spotify\_url: string; 
+       // No specific relationship to song catalog \- all songs are in this table 
+      }
+
+
+
+      // Setlists Table (fan-voted setlists) 
+
+      interface Setlist { 
+       id: string;                 // Primary Key (UUID) 
+       show\_id: string;            // Foreign Key to Shows 
+       created\_at: Date; 
+       updated\_at: Date; 
+      }
+
+
+
+      // SetlistSongs Table (junction table for voted setlist items) 
+
+      interface SetlistSong { 
+       id: string;                 // Primary Key (UUID) 
+       setlist\_id: string;         // Foreign Key to Setlists 
+       song\_id: string;            // Foreign Key to Songs 
+       position: number;           // Current position in setlist (based on votes) 
+       votes: number;              // Vote count 
+      }
+
+
+
+      // Votes Table (individual user votes) 
+
+      interface Vote { 
+       id: string;                 // Primary Key (UUID) 
+       user\_id: string;            // Foreign Key to Users 
+       setlist\_song\_id: string;    // Foreign Key to SetlistSongs 
+       created\_at: Date; 
+      }
+
+
+
+      // NEW: PlayedSetlists Table (actual setlists from setlist.fm) 
+
+      interface PlayedSetlist { 
+       id: string;                 // Primary Key (UUID) 
+       show\_id: string;            // Foreign Key to Shows 
+       setlist\_fm\_id: string;      // ID from setlist.fm API 
+       played\_date: Date;          // When the concert occurred 
+       imported\_at: Date;          // When we imported this data 
+      }
+
+
+
+      // NEW: PlayedSetlistSongs Table (songs in actual played setlists) 
+
+      interface PlayedSetlistSong { 
+       id: string;                 // Primary Key (UUID) 
+       played\_setlist\_id: string;  // Foreign Key to PlayedSetlists 
+       song\_id: string;            // Foreign Key to Songs 
+       position: number;           // Order in the setlist 
+      }
+
+
+
+      // UserArtists Table (for user's favorite/followed artists) 
+
+      interface UserArtist { 
+       id: string;                 // Primary Key (UUID) 
+       user\_id: string;            // Foreign Key to Users 
+       artist\_id: string;          // Foreign Key to Artists 
+       rank: number;               // Position in user's top artists 
+      }
+
+
+
+      ## **Key Feature Implementation Details**
+
+
+
+      ### **1\. Spotify Song Catalog Integration**
+
+
+
+      The relationship between artist song catalogs and the Songs table is
+      straightforward:
+
+
+
+      * All songs from all artists are stored in a single `Songs` table 
+
+      * Each song is linked to its artist via the `artist_id` foreign key 
+
+      * There is no separate "artist catalog" table \- the Songs table IS the
+      catalog 
+
+      * When an artist is added to the system: 
+       1. Fetch their entire song catalog from the Spotify API
+       2. Store each track in the Songs table with artist\_id reference 
+       3. Set a `last_synced_at` timestamp on the artist
+
+
+      Background processes should:
+
+
+
+      * Update artist song catalogs weekly 
+
+      * Prioritize updating artists with upcoming shows
+
+
+
+      ### **2\. Setlist Voting System**
+
+
+
+      The voting system works as follows:
+
+
+
+      * Each show has one associated `Setlist` 
+
+      * The `Setlist` contains multiple `SetlistSong` entries linking to the
+      `Songs` table 
+
+      * When a setlist is first created for a show: 
+       1. Select 5 random songs from the artist's catalog 
+       2. Create `SetlistSong` entries with initial vote count of 0 
+      * Users can upvote songs, creating entries in the `Votes` table 
+
+      * Real-time updates via Supabase Realtime show vote counts to all users 
+
+      * Setlist order dynamically updates based on vote counts
+
+
+
+      ### **3\. setlist.fm Integration**
+
+
+
+      After a show occurs, the platform automatically:
+
+
+
+      1. Queries the setlist.fm API to find the actual performed setlist 
+
+      2. Creates a `PlayedSetlist` record for the show 
+
+      3. Adds all performed songs as `PlayedSetlistSong` entries 
+
+      4. Matches setlist.fm song names to our `Songs` table entries 
+
+      5. Enables comparison between fan-voted setlist and actual setlist
+
+
+
+      The setlist.fm API response format is:
+
+
+
+      { 
+       "artist": { 
+         "mbid": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d", 
+         "name": "The Beatles", 
+         "sortName": "Beatles, The", 
+         "disambiguation": "John, Paul, George and Ringo", 
+         "url": "https://www.setlist.fm/setlists/the-beatles-23d6a88b.html" 
+       }, 
+       "venue": { 
+         "city": { 
+           "id": "5357527", 
+           "name": "Hollywood", 
+           "stateCode": "CA", 
+           "state": "California", 
+           "coords": {}, 
+           "country": {} 
+         }, 
+         "url": "https://www.setlist.fm/venue/compaq-center-san-jose-ca-usa-6bd6ca6e.html", 
+         "id": "6bd6ca6e", 
+         "name": "Compaq Center" 
+       }, 
+       "tour": { 
+         "name": "North American Tour 1964" 
+       }, 
+       "set": \[ 
+         { 
+           "song": \[ 
+             { 
+               "name": "Yesterday" 
+             }, 
+             { 
+               "name": "Another Song" 
+             } 
+           \] 
+         }, 
+         { 
+           "song": \[ 
+             { 
+               "name": "Third Song" 
+             }, 
+             { 
+               "name": "Fourth Song" 
+             } 
+           \] 
+         } 
+       \], 
+       "info": "Some concert info", 
+       "url": "https://www.setlist.fm/setlist/the-beatles/1964/hollywood-bowl-hollywood-ca-63de4613.html", 
+       "id": "63de4613", 
+       "versionId": "7be1aaa0", 
+       "eventDate": "23-08-1964", 
+       "lastUpdated": "2013-10-20T05:18:08.000+0000" 
+      }
+
+
+
+      When processing this response:
+
+
+
+      * Flatten all songs from all sets into a single ordered list 
+
+      * Match song names to our database using exact match or fuzzy matching 
+
+      * Store position numbers sequentially in PlayedSetlistSong
+
+
+
+      ### **4\. Background Data Synchronization**
+
+
+
+      Implement the following scheduled jobs using Vercel Cron:
+
+
+
+      1. **Daily Artist Sync (every 24 hours)**
+
+
+        * Update artist metadata from Spotify 
+        * Add any new songs to song catalog 
+      2. **Show Data Refresh (every 6 hours)**
+
+
+        * Update show status and details from Ticketmaster 
+        * Add any newly announced shows 
+      3. **Trending Calculation (hourly)**
+
+
+        * Calculate trending shows based on view count and vote activity 
+      4. **Post-Show Setlist Import (daily)**
+
+
+        * For shows that occurred in the last 24 hours 
+        * Query setlist.fm API for actual setlists 
+        * Create PlayedSetlist records
+
+
+      ## **Page-by-Page Specifications**
+
+
+
+      ### **1\. Homepage**
+
+
+
+      * Hero section with search bar for artists or shows 
+
+      * Trending shows section with event cards 
+
+      * Recently added shows with infinite scroll 
+
+      * Quick access to user's followed artists (if logged in)
+
+
+
+      ### **2\. My Artists Dashboard**
+
+
+
+      * Grid layout of user's top Spotify artists 
+
+      * Artist cards with images and upcoming show count 
+
+      * Quick filters for artists with upcoming shows 
+
+      * Prompts to follow more artists if few are displayed
+
+
+
+      ### **3\. Artist Profile Page**
+
+
+
+      * Artist header with image, name, and follow button 
+
+      * Tabs for "Upcoming Shows" and "Past Shows" 
+
+      * Show cards with date, venue, and voting status 
+
+      * Stats section showing user voting history for this artist
+
+
+
+      ### **4\. Show Page with Setlist Voting**
+
+
+
+      * Show details (date, time, venue with map) 
+
+      * Interactive setlist with current vote counts 
+
+      * Voting interface with up/down buttons 
+
+      * Real-time updates as votes change 
+
+      * For past shows: comparison between voted and actual setlist
+
+
+
+      ### **5\. Search Results Page**
+
+
+
+      * Combined results for artists and shows 
+
+      * Filtering options (location, date range) 
+
+      * Smart sorting by relevance and user preference 
+
+      * Quick-add buttons for following artists
+
+
+
+      ### **6\. Setlist Comparison Page (for past shows)**
+
+
+
+      * Side-by-side comparison of voted vs. actual setlist 
+
+      * Match percentage and visual indicators for matching songs 
+
+      * Statistics about how accurately fans predicted the setlist 
+
+      * Share buttons for social media
+
+
+
+      ## **Technical Implementation Notes**
+
+
+
+      **Real-time Updates**
+
+
+
+      // Example Supabase Realtime subscription 
+
+      const channel \= supabase 
+       .channel(\`setlist:${showId}\`) 
+       .on('postgres\_changes',  
+         { event: 'UPDATE', schema: 'public', table: 'setlist\_songs', filter: \`setlist\_id=eq.${setlistId}\` }, 
+         (payload) \=\> { 
+           // Update local state with new vote counts 
+           updateVoteCount(payload.new.id, payload.new.votes); 
+         } 
+       ) 
+       .subscribe();
+
+
+      1.
+
+
+
+      **Optimistic UI Updates**
+
+
+
+      // When user votes 
+
+      async function handleVote(setlistSongId: string) { 
+       // Optimistically update UI 
+       updateLocalVoteCount(setlistSongId, current \=\> current \+ 1); 
+        
+       // Send to server 
+       const { error } \= await supabase.rpc('vote\_for\_song', {  
+         setlist\_song\_id: setlistSongId  
+       }); 
+        
+       // Revert if error 
+       if (error) { 
+         updateLocalVoteCount(setlistSongId, current \=\> current \- 1); 
+         showError(error.message); 
+       } 
+      }
+
+
+
+      2.
+
+
+
+      **Song Matching Algorithm**
+
+
+
+      // Function to match setlist.fm songs to database 
+
+      async function matchSongNameToDatabase(artistId: string, songName: string)
+      { 
+       // Try exact match first 
+       const { data: exactMatches } \= await supabase 
+         .from('songs') 
+         .select('id') 
+         .eq('artist\_id', artistId) 
+         .ilike('name', songName) 
+         .limit(1); 
+          
+       if (exactMatches?.length) return exactMatches\[0\].id; 
+        
+       // Try fuzzy matching if needed 
+       const { data: fuzzyMatches } \= await supabase 
+         .rpc('match\_song\_similarity', { 
+           p\_artist\_id: artistId, 
+           p\_song\_name: songName, 
+           p\_similarity\_threshold: 0.7 
+         }); 
+          
+       if (fuzzyMatches?.length) return fuzzyMatches\[0\].id; 
+        
+       // No match found, create a new song entry 
+       const { data: newSong } \= await supabase 
+         .from('songs') 
+         .insert({ 
+           artist\_id: artistId, 
+           name: songName, 
+           // Other fields would be filled in later during sync 
+         }) 
+         .select() 
+         .single(); 
+          
+       return newSong?.id; 
+      }
+
+
+
+      3.
+
+
+
+      **Importing Played Setlist**
+
+
+
+      async function importSetlistFromSetlistFm(showId: string) { 
+       // Get show details including artist 
+       const { data: show } \= await supabase 
+         .from('shows') 
+         .select('id, date, artists(id, name)') 
+         .eq('id', showId) 
+         .single(); 
+        
+       if (\!show) return null; 
+        
+       const artistName \= show.artists.name; 
+       const eventDate \= new Date(show.date).toISOString().split('T')\[0\].replace(/-/g, '-'); 
+        
+       // Query setlist.fm API 
+       const response \= await fetch( 
+         \`https://api.setlist.fm/rest/1.0/search/setlists?artistName=${encodeURIComponent(artistName)}\&date=${eventDate}\`, 
+         { 
+           headers: { 
+             'Accept': 'application/json', 
+             'x-api-key': process.env.SETLIST\_FM\_API\_KEY 
+           } 
+         } 
+       ); 
+        
+       const data \= await response.json(); 
+        
+       if (\!data.setlist?.length) return null; 
+        
+       // Get first matching setlist 
+       const setlist \= data.setlist\[0\]; 
+        
+       // Create PlayedSetlist record 
+       const { data: playedSetlist } \= await supabase 
+         .from('played\_setlists') 
+         .insert({ 
+           show\_id: showId, 
+           setlist\_fm\_id: setlist.id, 
+           played\_date: new Date(setlist.eventDate.split('-').reverse().join('-')), 
+           imported\_at: new Date() 
+         }) 
+         .select() 
+         .single(); 
+        
+       if (\!playedSetlist) return null; 
+        
+       // Process all songs from all sets 
+       let position \= 0; 
+       const allSongs \= \[\]; 
+        
+       // Flatten all songs from all sets 
+       if (setlist.set) { 
+         for (const set of setlist.set) { 
+           if (set.song) { 
+             for (const song of set.song) { 
+               allSongs.push(song.name); 
+             } 
+           } 
+         } 
+       } 
+        
+       // Process all songs 
+       for (const songName of allSongs) { 
+         position++; 
+          
+         // Match or create song in database 
+         const songId \= await matchSongNameToDatabase(show.artists.id, songName); 
+          
+         if (songId) { 
+           // Add to PlayedSetlistSongs 
+           await supabase 
+             .from('played\_setlist\_songs') 
+             .insert({ 
+               played\_setlist\_id: playedSetlist.id, 
+               song\_id: songId, 
+               position: position 
+             }); 
+         } 
+       } 
+        
+       return playedSetlist; 
+      }
+
+
+
+      4.
+
+
+
+      ## **Deployment Requirements**
+
+
+
+      * Vercel for hosting (production, preview, and development environments) 
+
+      * Environment variables properly configured 
+
+      * Database migration scripts for schema updates 
+
+      * Monitoring and error reporting setup 
+
+      * Vercel Cron jobs configured for background processes 
+
+      *  
+
+      *
+
+
+
+      I'll revise your user feedback to create a much more compelling vision for
+      TheSet platform. Here's a significantly enhanced version: 
+
+      ---
+
+
+
+      # **TheSet: The Future of Concert Experiences**
+
+
+
+      TheSet revolutionizes how fans interact with live music by creating the
+      world's first crowd-powered setlist prediction and influence platform.
+      Without requiring any artist participation, we're building a dynamic
+      ecosystem where fans collectively shape the concert experience.
+
+
+
+      ## **The Vision**
+
+
+
+      TheSet serves as a living, breathing connection between artists and their
+      fanbase. Imagine thousands of fans collaboratively curating the perfect
+      setlist for an upcoming show \- deep cuts, fan favorites, and unexpected
+      gems all rising to the top through collective wisdom. After the show, fans
+      return to see how accurately they predicted what was played, creating a
+      continuous feedback loop that deepens engagement with live music.
+
+
+
+      Our platform operates entirely autonomously, seamlessly importing:
+
+
+
+      * Artist profiles and metadata from Spotify  
+
+      * Upcoming concert details from Ticketmaster in real-time 
+
+      * Actual performed setlists from setlist.fm after shows
+
+
+
+      Every show in our system automatically generates a unique, crowd-sourced
+      setlist prediction. We seed each new setlist with 5 strategically selected
+      songs from the artist's catalog (balancing popularity, recency, and
+      variety) to kickstart the voting process. As votes accumulate, the
+      community's perfect setlist emerges organically.
+
+
+
+      Behind the scenes, sophisticated background sync processes maintain data
+      freshness, with artist catalogs updating as new music releases, show
+      details refreshing as tours evolve, and trending algorithms highlighting
+      surging artist activity across the platform.
+
+
+
+      TheSet isn't just a voting platform \- it's a community destination for
+      passionate music fans to discover new shows, track their favorite artists,
+      and influence the live music landscape \- all without requiring any action
+      from the artists themselves.
+
+
+
+      ---
+
+
+
+      \# TheSet: Fan-Powered Setlist Voting & Prediction Platform
+
+
+
+      \*\*TheSet\*\* is a web platform where fans can vote on the songs they
+      want to hear at upcoming concerts and then compare the fan-created setlist
+      with what was actually played. Powered by Spotify, Ticketmaster, and
+      setlist.fm, it creates a new kind of live music experience —
+      participatory, predictive, and personal.
+
+
+
+      \---
+
+
+
+      \#\# Vision
+
+
+
+      \*\*TheSet\*\* transforms fans from passive spectators into active
+      collaborators in the concert experience.
+
+
+
+      Each upcoming concert becomes a fan-generated prediction game. Fans vote
+      on their ideal setlist ahead of the show, compare it with the actual
+      setlist after the event, and earn credibility within the community for
+      their accuracy. Over time, a data-rich ecosystem of fan behavior, musical
+      trends, and live music analytics emerges — all without requiring artist
+      cooperation.
+
+
+
+      We're building a cultural layer on top of live music, entirely driven by
+      fans.
+
+
+
+      \---
+
+
+
+      \#\# Goals
+
+
+
+      \#\#\# Business Goals
+
+
+
+      \- Drive high MAU/DAU by anchoring around time-sensitive events
+      (concerts).
+
+
+
+      \- Increase fan engagement and repeat visits through voting and post-show
+      analysis.
+
+
+
+      \- Build a data platform that could become valuable to promoters, labels,
+      or artists.
+
+
+
+      \#\#\# User Goals
+
+
+
+      \- Let fans feel influential in shaping concert experiences.
+
+
+
+      \- Track and follow favorite artists and upcoming shows easily.
+
+
+
+      \- Compare predicted vs. actual setlists in a fun, visual way.
+
+
+
+      \#\#\# Non-Goals
+
+
+
+      \- No attempt to contact or influence actual artist setlists.
+
+
+
+      \- Not building a full social network (comments, DMs, etc.).
+
+
+
+      \- Not yet focused on monetization (tickets, merch, etc.).
+
+
+
+      \---
+
+
+
+      \#\# User Stories
+
+
+
+      \- \_"As a fan, I want to vote on upcoming concerts so I can shape what
+      gets played."\_
+
+
+
+      \- \_"As a user, I want to follow my favorite artists and get notified
+      when shows are added."\_
+
+
+
+      \- \_"As a fan, I want to see how accurate our fan predictions were after
+      the concert."\_
+
+
+
+      \- \_"As a data nerd, I want to see which songs are most predicted across
+      all shows."\_
+
+
+
+      \- \_"As a casual user, I want an easy way to explore trending shows and
+      join the fun."\_
+
+
+
+      \---
+
+
+
+      \#\# Product Experience
+
+
+
+      \#\#\# Lifecycle Flow
+
+
+
+      1\. \*\*Discovery\*\*
+
+
+        \- User searches for or discovers an artist/show via homepage or dashboard.
+
+
+        \- Trending and recently added shows are highlighted.
+
+
+      2\. \*\*Voting\*\*
+
+
+        \- User lands on a show page.
+
+
+        \- Sees a seeded setlist of 5 songs.
+
+
+        \- Can upvote any song, add from the artist catalog, or reorder with drag-and-drop.
+
+
+        \- Voting updates in real-time.
+
+
+      3\. \*\*Dashboard\*\*
+
+
+        \- “My Artists” shows top Spotify artists and their upcoming/past shows.
+
+
+        \- Personalized view of fan voting history and setlist accuracy.
+
+
+      4\. \*\*Post-Show\*\*
+
+
+        \- After the concert, platform fetches actual setlist from setlist.fm.
+
+
+        \- User sees side-by-side comparison with their prediction.
+
+
+        \- Accuracy score shown; “Top Predictor” leaderboard per show.
+
+
+      \---
+
+
+
+      \#\# Core Features
+
+
+
+      \#\#\# Setlist Voting Engine
+
+
+
+      \- Each concert has a dedicated setlist object.
+
+
+
+      \- Songs voted on by fans via upvotes (no downvotes to reduce toxicity).
+
+
+
+      \- Order of setlist determined by vote counts.
+
+
+
+      \- Users can only vote once per song; no re-votes.
+
+
+
+      \#\#\# Real-Time Collaboration
+
+
+
+      \- Supabase Realtime updates vote counts live for all users.
+
+
+
+      \- Optimistic UI for smooth experience.
+
+
+
+      \#\#\# Show Import & Song Catalog Sync
+
+
+
+      \- Ticketmaster integration fetches upcoming shows and venues.
+
+
+
+      \- Spotify provides full artist catalogs and metadata (popularity, album,
+      etc.).
+
+
+
+      \- Daily cron jobs update metadata and add new songs/releases.
+
+
+
+      \#\#\# Post-Show Setlist Comparison
+
+
+
+      \- Once a show concludes, we fetch the performed setlist from setlist.fm.
+
+
+
+      \- Songs are matched to database (exact or fuzzy).
+
+
+
+      \- Visual side-by-side comparison and accuracy scoring.
+
+
+
+      \---
+
+
+
+      \#\# Pages & UX Highlights
+
+
+
+      \#\#\# Homepage
+
+
+
+      \- Search bar (artists, shows)
+
+
+
+      \- Trending Shows grid
+
+
+
+      \- Recently Added section
+
+
+
+      \- Quick access to followed artists (if logged in)
+
+
+
+      \#\#\# My Artists Dashboard
+
+
+
+      \- Grid of top followed artists
+
+
+
+      \- Upcoming shows alert
+
+
+
+      \- Past shows summary with comparison scores
+
+
+
+      \#\#\# Artist Page
+
+
+
+      \- Hero banner with artist image
+
+
+
+      \- Tabs: Upcoming Shows | Past Shows | Stats
+
+
+
+      \- Each show has a “Vote Now” or “See Results” CTA
+
+
+
+      \#\#\# Show Page
+
+
+
+      \- Show details: date, time, venue (with map)
+
+
+
+      \- Interactive fan setlist (drag, upvote, reorder)
+
+
+
+      \- Real-time vote counts
+
+
+
+      \- “Actual Setlist” comparison after show
+
+
+
+      \#\#\# Setlist Comparison Page
+
+
+
+      \- Two columns: Voted vs. Actual
+
+
+
+      \- Match percentage and list of matching/missing songs
+
+
+
+      \- Share to social
+
+
+
+      \---
+
+
+
+
+
+
+
+      \- \*\*Realtime\*\*: WebSocket vote updates
+
+
+
+      \- \*\*APIs\*\*:
+
+
+       \- Spotify: artist \+ song catalog
+
+
+       \- Ticketmaster: concerts/shows
+
+
+       \- setlist.fm: actual setlists that show after a show occurs, in comparison to what users voted/suggested
+
+
+      \- \*\*Hosting\*\*: Vercel
+
+
+
+      \- \*\*Scheduled Jobs\*\*: Vercel Cron
+
+
+
+      \---
+
+
+
+
+
+
+
+      \#\#\# Optimistic Voting
+
+
+
+      \- Frontend updates immediately on vote click
+
+
+
+      \- Supabase function handles actual vote insertion
+
+
+
+      \- UI rolls back if failure
+
+
+
+      \#\#\# Setlist Import Pipeline
+
+
+
+      \- After show date, cron fetches setlist.fm data
+
+
+
+      \- Matches & stores songs in played\_setlists
+
+
+
+      \- Triggers fan-vs-actual comparison generation
+
+
+
+
+
+
+
+
+
+
+
+
+
+model: openai/o3
+modelParameters: {}
