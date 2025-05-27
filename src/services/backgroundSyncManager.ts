@@ -1,4 +1,3 @@
-
 import * as spotifyService from './spotify';
 import * as ticketmasterService from './ticketmaster';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,11 +46,7 @@ export class BackgroundSyncManager {
       console.log('🔄 Starting trending shows sync...');
       
       // Fetch trending events from Ticketmaster using existing method
-      const trendingEvents = await ticketmasterService.searchEvents({
-        keyword: 'music',
-        size: 20,
-        sort: 'relevance,desc'
-      });
+      const trendingEvents = await ticketmasterService.getPopularEvents(20);
       
       console.log(`📊 Found ${trendingEvents.length} trending events`);
 

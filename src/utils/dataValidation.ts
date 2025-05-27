@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 // Database entity schemas
@@ -94,8 +93,8 @@ export function validateEntity<T>(schema: z.ZodSchema<T>, data: unknown): { succ
 
 export function validatePartialEntity<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: Partial<T> } | { success: false; errors: string[] } {
   try {
-    // Use deepPartial() for recursive partial validation
-    const partialSchema = schema.deepPartial();
+    // Use partial() for partial validation
+    const partialSchema = schema.partial();
     const validatedData = partialSchema.parse(data);
     return { success: true, data: validatedData };
   } catch (error) {
