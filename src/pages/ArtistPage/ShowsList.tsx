@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ensureSetlistExists } from "@/services/setlistCreation";
+import { getOrCreateSetlistWithSongs } from "@/services/setlistCreation";
 
 interface Show {
   id: string;
@@ -30,7 +30,7 @@ interface ShowsListProps {
 const ShowsList = ({ shows, title, emptyMessage }: ShowsListProps) => {
   const handleShowClick = async (showId: string) => {
     // Ensure setlist exists for this show before navigating
-    await ensureSetlistExists(showId);
+    await getOrCreateSetlistWithSongs(showId);
   };
 
   if (shows.length === 0) {

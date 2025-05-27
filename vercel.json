@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-artists",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-shows",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/import-setlists",
+      "schedule": "0 12 * * *"
+    }
+  ]
+}

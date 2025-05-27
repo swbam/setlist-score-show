@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { format } from 'date-fns';
 
 // Setlist.fm API key
 const SETLISTFM_API_KEY = "xkutflW-aRy_Df9rF4OkJyCsHBYN88V37EBL";
@@ -194,5 +195,74 @@ export async function matchSongToDatabase(
   } catch (error) {
     console.error("Error matching song to database:", error);
     return null;
+  }
+}
+
+/**
+ * Imports a played setlist from setlist.fm for a given show.
+ * Fetches show details, queries setlist.fm, and stores the played setlist and songs.
+ */
+export async function importPlayedSetlist(showId: string): Promise<void> {
+  try {
+    // Get show details including the artist
+    const { data: show, error: showError } = await supabase
+      .from('shows')
+      .select(`
+        date,
+        artist:artists!artist_id(id, name)
+      `)
+      .eq('id', showId)
+      .single();
+
+    if (showError || !show || !show.artist) {
+      console.error(`Error fetching show or artist details for showId ${showId}:`, showError);
+      return;
+    }
+
+    // Format date for setlist.fm API (dd-MM-yyyy)
+    const eventDate = format(new Date(show.date), 'dd-MM-yyyy');
+
+    // Query setlist.fm
+    // Note: This searches for setlists. If multiple are found, it takes the first.
+    // A more robust solution might involve matching venue details if available.
+    const setlistFmResults = await searchSetlists(show.artist.name, eventDate);
+
+    if (!setlistFmResults || setlistFmResults.length === 0) {
+      console.log(`No setlist found on setlist.fm for artist "${show.artist.name}" on date ${eventDate}.`);
+      return;
+    }
+
+    const setlistData = setlistFmResults[0]; // Take the first matching setlist
+
+    // Store the played setlist header
+    const playedSetlistId = await storePlayedSetlist(showId, setlistData.id, setlistData.eventDate);
+
+    if (!playedSetlistId) {
+      console.error(`Failed to store played setlist header for showId ${showId}, setlist.fm ID ${setlistData.id}`);
+      return;
+    }
+
+    // Process and insert songs
+    const songNames = flattenSetlistSongs(setlistData).map(s => s.name);
+
+    console.log(`Found ${songNames.length} songs in setlist.fm data for show ${showId}.`);
+
+    for (let i = 0; i < songNames.length; i++) {
+      const songName = songNames[i];
+      // Try to match the song by name for the given artist
+      const songId = await matchSongToDatabase(show.artist.id, songName);
+
+      if (songId) {
+        await storePlayedSetlistSongs(playedSetlistId, songId, i + 1);
+      } else {
+        // TODO: Implement matchOrCreateSong logic if song creation is desired here.
+        // This might involve looking up the song on Spotify and adding it to our 'songs' table.
+        console.warn(`Song "${songName}" by artist "${show.artist.name}" not found in database and not created. Skipping.`);
+      }
+    }
+    console.log(`Successfully imported played setlist ${setlistData.id} for show ${showId}.`);
+
+  } catch (error) {
+    console.error(`Error in importPlayedSetlist for showId ${showId}:`, error);
   }
 }

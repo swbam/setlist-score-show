@@ -32,25 +32,20 @@ export default function SearchResults() {
   const performSearch = async (searchTerm: string) => {
     setLoading(true);
     try {
-      const searchOptions: searchService.SearchOptions = { 
-        query: searchTerm, 
-        limit: 20,
-        sortBy: 'relevance'
-      };
-      
-      const results = await searchService.search(searchOptions);
-      
-      // Separate artists and shows from results
-      const artists = results.filter(item => item.type === 'artist');
-      const shows = results.filter(item => item.type === 'show');
+      // Use the existing searchArtistsAndShows function
+      const { artists, shows } = await searchService.searchArtistsAndShows(searchTerm);
       
       setArtistResults(artists);
       setShowResults(shows);
       
-      // Store search results in the background to build database
-      searchService.storeSearchResults(results).catch(console.error);
+      // The searchArtistsAndShows function already handles importing/storing data,
+      // so storeSearchResults is likely redundant.
+      // searchService.storeSearchResults(results).catch(console.error);
     } catch (error) {
       console.error("Error performing search:", error);
+      // Set empty results on error to avoid displaying stale data
+      setArtistResults([]);
+      setShowResults([]);
     } finally {
       setLoading(false);
     }

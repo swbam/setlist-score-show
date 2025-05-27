@@ -9,6 +9,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
+import { supabase } from '@/integrations/supabase/client'; // Added for Supabase
+import { PostgrestFilterBuilder } from '@supabase/postgrest-js'; // Added for type
+import { Show, Artist, Venue } from '@/types'; // Assuming these types exist
 
 interface SearchFilters {
   location?: string;
@@ -37,19 +40,117 @@ export default function SearchWithFilters({
   
   const debouncedQuery = useDebounce(query, 300);
 
-  const handleSearch = useCallback((searchQuery: string, searchFilters: SearchFilters) => {
+  // Function to convert string dateRange to actual dates
+  const getDateRangeValues = (dateRangeString?: string): { start?: string; end?: string } => {
+    if (!dateRangeString) return {};
+    const now = new Date();
+    let startDate = new Date(now);
+    let endDate = new Date(now);
+
+    switch (dateRangeString) {
+      case 'this-week':
+        startDate.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+        endDate.setDate(startDate.getDate() + 6);     // End of current week (Saturday)
+        break;
+      case 'this-month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case 'next-month':
+        startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+        break;
+      case 'this-year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear(), 11, 31);
+        break;
+      default:
+        return {}; // No specific range
+    }
+    return {
+      start: startDate.toISOString().split('T')[0],
+      end: endDate.toISOString().split('T')[0]
+    };
+  };
+  
+  // Build Supabase query based on plan
+  const buildSupabaseQuery = (searchQuery: string, searchFilters: SearchFilters): PostgrestFilterBuilder<any, any, any[], "shows", unknown>  => {
+    let queryBuilder = supabase
+      .from('shows')
+      .select(`
+        *,
+        artist:artists!inner(id, name),
+        venue:venues!inner(id, name, city)
+      `); // Ensure !inner or correct FK hint if needed
+
+    if (searchQuery.trim()) {
+      // The plan uses textSearch on 'artist.name'.
+      // For a more general search, you might use a different FTS setup or multiple .or conditions.
+      queryBuilder = queryBuilder.ilike('artist.name', `%${searchQuery.trim()}%`); // Simple ilike for now
+    }
+
+    if (searchFilters.location) {
+      queryBuilder = queryBuilder.eq('venue.city', searchFilters.location);
+    }
+
+    const { start, end } = getDateRangeValues(searchFilters.dateRange);
+    if (start) {
+      queryBuilder = queryBuilder.gte('date', start);
+    }
+    if (end) {
+      queryBuilder = queryBuilder.lte('date', end);
+    }
+    
+    if (searchFilters.genre) {
+      // Assuming artists table has a genres array/column that can be filtered.
+      // This might require a different approach like `contains` or `overlaps` if genres is an array.
+      // queryBuilder = queryBuilder.contains('artist.genres', [searchFilters.genre]);
+      // For simplicity, if genre is a direct column on artist or show, it would be:
+      // queryBuilder = queryBuilder.eq('artist.genre_column_name', searchFilters.genre);
+      // Placeholder: Actual genre filtering depends on DB schema.
+    }
+    
+    if (searchFilters.sortBy) {
+        let sortField = searchFilters.sortBy;
+        let ascending = true;
+        if (sortField === 'popularity' || sortField === 'votes') { // Assuming these are numeric
+            ascending = false; // typically sort descending for these
+        }
+        // Note: Sorting by related table fields like 'artist.name' or 'venue.city' might need specific syntax
+        // or be handled post-query if complex.
+        queryBuilder = queryBuilder.order(sortField as keyof Show, { ascending });
+    }
+
+    return queryBuilder;
+  };
+
+  const handleSearch = useCallback(async (searchQuery: string, searchFilters: SearchFilters) => {
     if (onSearch) {
+      // If onSearch prop is provided, it's responsible for handling the query.
+      // We can pass the built query or just params.
+      // For now, let's assume onSearch expects query and filters.
       onSearch(searchQuery, searchFilters);
     } else {
-      // Default behavior - navigate to search results
+      // Default behavior: navigate or fetch and display results here
+      const queryBuilderInstance = buildSupabaseQuery(searchQuery, searchFilters);
+      console.log('Supabase query built. Implement fetching & display or navigation.');
+      // Example navigation (current behavior):
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set('q', searchQuery.trim());
       if (searchFilters.location) params.set('location', searchFilters.location);
-      if (searchFilters.dateRange) params.set('date', searchFilters.dateRange);
+      if (searchFilters.dateRange) params.set('date', searchFilters.dateRange); // Keep string for URL
       if (searchFilters.genre) params.set('genre', searchFilters.genre);
       if (searchFilters.sortBy) params.set('sort', searchFilters.sortBy);
-      
       navigate(`/search?${params.toString()}`);
+
+      // OR: If this component should fetch and display results:
+      // try {
+      //   const { data, error } = await queryBuilderInstance;
+      //   if (error) throw error;
+      //   // process and display data
+      // } catch (error) {
+      //   console.error("Error fetching search results:", error);
+      // }
     }
   }, [onSearch, navigate]);
 

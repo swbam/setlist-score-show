@@ -267,3 +267,55 @@ export const batchProcessArtistMappings = async (
   
   return mappings;
 };
+
+/**
+ * Maps a Ticketmaster artist name to a Spotify artist ID.
+ * Searches Spotify for the artist, finds the best match, and stores/updates
+ * the artist information in the database, including the Ticketmaster name.
+ */
+export async function mapTicketmasterToSpotify(tmArtistName: string): Promise<string | null> {
+  try {
+    // Search Spotify for the artist
+    const spotifyResults = await spotifyService.searchArtists(tmArtistName);
+
+    if (!spotifyResults || spotifyResults.length === 0) {
+      console.log(`No Spotify results found for Ticketmaster artist name: ${tmArtistName}`);
+      return null;
+    }
+
+    // Use existing robust matching logic
+    const bestMatch = findBestSpotifyMatch(spotifyResults, tmArtistName);
+
+    if (!bestMatch) {
+      console.log(`Could not find a suitable Spotify match for Ticketmaster artist name: ${tmArtistName}`);
+      return null;
+    }
+
+    // Store/update artist information in the database
+    // This will use Spotify ID as the primary key and add/update other details
+    const { error } = await supabase
+      .from('artists')
+      .upsert({
+        id: bestMatch.id, // Spotify ID
+        name: bestMatch.name,
+        image_url: bestMatch.images?.[0]?.url || null,
+        popularity: bestMatch.popularity,
+        genres: bestMatch.genres,
+        spotify_url: bestMatch.external_urls?.spotify,
+        ticketmaster_name: tmArtistName, // Store the original Ticketmaster name
+        last_synced_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('Error upserting artist data for mapping:', error);
+      return null;
+    }
+
+    console.log(`Successfully mapped/updated artist: ${bestMatch.name} (Spotify ID: ${bestMatch.id}) for Ticketmaster name: ${tmArtistName}`);
+    return bestMatch.id;
+
+  } catch (error) {
+    console.error(`Error in mapTicketmasterToSpotify for ${tmArtistName}:`, error);
+    return null;
+  }
+}
