@@ -270,7 +270,7 @@ supabase db push
 - [x] Artists imported from Spotify
 - [x] Shows imported from Ticketmaster  
 - [x] Song catalogs imported synchronously
-- [x] Setlists created with initial songs
+- [x] Setlists created with initial 5 random songs from the catalog
 - [x] Votes tracked and limited properly
 - [x] View counts incremented
 

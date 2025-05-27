@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "./ticketmaster";
 import * as spotifyService from "./spotify";
@@ -36,6 +35,20 @@ export interface SearchShow {
   };
   vote_count?: number;
   view_count: number;
+}
+
+export interface SearchResult {
+  id: string;
+  name: string;
+  type: 'artist' | 'show';
+  image_url?: string;
+  date?: string;
+  venue?: string;
+  city?: string;
+  artist?: {
+    id: string;
+    name: string;
+  };
 }
 
 /**
@@ -311,6 +324,49 @@ export async function getTrendingArtists(limit: number = 10): Promise<SearchArti
     return trendingArtists as SearchArtist[];
   } catch (error) {
     console.error("❌ Error in getTrendingArtists:", error);
+    return [];
+  }
+}
+
+/**
+ * Unified search function that returns mixed artist and show results
+ * Compatible with UserFlowTest component expectations
+ */
+export async function search({ query, limit = 10 }: { query: string; limit?: number }): Promise<SearchResult[]> {
+  try {
+    const { artists, shows } = await searchArtistsAndShows(query);
+    
+    const results: SearchResult[] = [];
+    
+    // Add artists to results
+    artists.slice(0, Math.ceil(limit / 2)).forEach(artist => {
+      results.push({
+        id: artist.id,
+        name: artist.name,
+        type: 'artist' as const,
+        image_url: artist.image_url
+      });
+    });
+    
+    // Add shows to results
+    shows.slice(0, Math.floor(limit / 2)).forEach(show => {
+      results.push({
+        id: show.id,
+        name: show.name,
+        type: 'show' as const,
+        date: show.date,
+        venue: show.venue.name,
+        city: show.venue.city,
+        artist: {
+          id: show.artist.id,
+          name: show.artist.name
+        }
+      });
+    });
+    
+    return results.slice(0, limit);
+  } catch (error) {
+    console.error("❌ Error in unified search:", error);
     return [];
   }
 }
