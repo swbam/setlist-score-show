@@ -3,7 +3,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronUp, Loader2, Check } from 'lucide-react';
+import { ChevronUp, Loader2, Check, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Song {
@@ -54,7 +54,7 @@ export default function VotingInterface({
         </Card>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {sortedSongs.map((setlistSong, index) => {
           const isSubmitting = submitting.has(setlistSong.id);
           const hasVoted = userVotes.has(setlistSong.id);
@@ -64,28 +64,30 @@ export default function VotingInterface({
             <Card 
               key={setlistSong.id}
               className={cn(
-                "bg-gray-900/40 border-gray-800/50 transition-all duration-200",
-                hasVoted && "border-yellow-400/50 bg-yellow-400/5",
-                isSubmitting && "scale-[0.98] opacity-80"
+                "bg-gray-900/60 border-gray-800/50 transition-all duration-200 hover:border-gray-700",
+                hasVoted && "border-yellow-metal-400/50 bg-yellow-metal-400/5"
               )}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  {/* Position Badge */}
-                  <div className="flex items-center space-x-3">
-                    <Badge 
-                      variant="outline" 
-                      className={cn(
-                        "text-xs font-mono w-8 h-8 rounded-full flex items-center justify-center",
-                        index < 3 && "bg-yellow-400/20 text-yellow-400 border-yellow-400/40"
-                      )}
-                    >
-                      {index + 1}
-                    </Badge>
+                  {/* Left side - Song info */}
+                  <div className="flex items-center space-x-4 flex-1 min-w-0">
+                    {/* Position */}
+                    <div className="flex items-center space-x-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2",
+                        index < 3 
+                          ? "bg-yellow-metal-400 text-black border-yellow-metal-400" 
+                          : "bg-gray-800 text-gray-300 border-gray-600"
+                      )}>
+                        {index < 3 && <Star className="h-4 w-4" />}
+                        {index >= 3 && (index + 1)}
+                      </div>
+                    </div>
 
-                    {/* Song Info */}
+                    {/* Song Details */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-white font-medium truncate">
+                      <h3 className="text-white font-semibold truncate text-lg">
                         {setlistSong.song.name}
                       </h3>
                       <p className="text-gray-400 text-sm truncate">
@@ -94,15 +96,15 @@ export default function VotingInterface({
                     </div>
                   </div>
 
-                  {/* Vote Section */}
-                  <div className="flex items-center space-x-3">
+                  {/* Right side - Votes and button */}
+                  <div className="flex items-center space-x-4">
                     {/* Vote Count */}
                     <div className="text-center min-w-[60px]">
-                      <div className="text-lg font-bold text-white">
+                      <div className="text-2xl font-bold text-white">
                         {setlistSong.votes}
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {setlistSong.votes === 1 ? 'vote' : 'votes'}
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">
+                        votes
                       </div>
                     </div>
 
@@ -113,29 +115,35 @@ export default function VotingInterface({
                       variant={hasVoted ? "default" : "outline"}
                       size="sm"
                       className={cn(
-                        "w-16 h-16 rounded-full transition-all duration-200",
-                        hasVoted && "bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-400",
-                        !hasVoted && "border-gray-600 hover:border-yellow-400 hover:bg-yellow-400/10",
+                        "min-w-[80px] h-10 font-semibold transition-all duration-200",
+                        hasVoted && "bg-yellow-metal-400 hover:bg-yellow-metal-300 text-black",
+                        !hasVoted && "border-gray-600 hover:border-yellow-metal-400 hover:bg-yellow-metal-400/10 hover:text-yellow-metal-300",
                         !canVoteForSong && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       {isSubmitting ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : hasVoted ? (
-                        <Check className="h-5 w-5" />
+                        <>
+                          <Check className="h-4 w-4 mr-1" />
+                          Voted
+                        </>
                       ) : (
-                        <ChevronUp className="h-5 w-5" />
+                        <>
+                          <ChevronUp className="h-4 w-4 mr-1" />
+                          Vote
+                        </>
                       )}
                     </Button>
                   </div>
                 </div>
 
-                {/* Progress Bar for Top Songs */}
+                {/* Progress Bar for Top 5 Songs */}
                 {index < 5 && setlistSong.votes > 0 && (
                   <div className="mt-3">
-                    <div className="w-full bg-gray-700 rounded-full h-1">
+                    <div className="w-full bg-gray-800 rounded-full h-1">
                       <div 
-                        className="bg-yellow-400 h-1 rounded-full transition-all duration-300"
+                        className="bg-yellow-metal-400 h-1 rounded-full transition-all duration-500"
                         style={{
                           width: `${Math.min(100, (setlistSong.votes / Math.max(sortedSongs[0]?.votes || 1, 1)) * 100)}%`
                         }}
@@ -148,6 +156,13 @@ export default function VotingInterface({
           );
         })}
       </div>
+
+      {songs.length === 0 && (
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-lg mb-4">No songs in this setlist yet.</p>
+          <p className="text-sm">Be the first to vote when songs are added!</p>
+        </div>
+      )}
     </div>
   );
 }

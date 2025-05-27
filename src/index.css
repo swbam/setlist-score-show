@@ -5,45 +5,45 @@
  
 @layer base {
   :root {
-    --background: 40 30% 5%;
-    --foreground: 40 30% 98%;
+    --background: 0 0% 5%;
+    --foreground: 0 0% 98%;
  
-    --card: 40 30% 8%;
-    --card-foreground: 40 30% 98%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 98%;
  
-    --popover: 40 30% 8%;
-    --popover-foreground: 40 30% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
  
-    --primary: 40 30% 95%; /* Changed from blue to yellow-metal-50 */
-    --primary-foreground: 40 40% 10%;
+    --primary: 45 30% 80%;
+    --primary-foreground: 45 30% 10%;
  
-    --secondary: 40 30% 15%;
-    --secondary-foreground: 40 30% 98%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
  
-    --muted: 40 30% 15%;
-    --muted-foreground: 40 30% 70%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
  
-    --accent: 40 30% 20%;
-    --accent-foreground: 40 30% 98%;
+    --accent: 0 0% 20%;
+    --accent-foreground: 0 0% 98%;
  
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
  
-    --border: 40 30% 20%;
-    --input: 40 30% 20%;
-    --ring: 40 30% 50%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
+    --ring: 45 30% 50%;
  
     --radius: 0.5rem;
 
-    /* Yellow metal sidebar theme */
-    --sidebar-background: 40 30% 8%;
-    --sidebar-foreground: 40 30% 98%;
-    --sidebar-primary: 40 30% 80%; 
-    --sidebar-primary-foreground: 40 30% 10%;
-    --sidebar-accent: 40 30% 30%;
-    --sidebar-accent-foreground: 40 30% 95%;
-    --sidebar-border: 40 30% 25%;
-    --sidebar-ring: 40 30% 50%;
+    /* Yellow metal theme - matching the reference design */
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 45 30% 80%; 
+    --sidebar-primary-foreground: 45 30% 10%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 45 30% 50%;
 
     /* Mobile viewport height fix for better mobile experience */
     --vh: 1vh;
@@ -55,7 +55,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-black text-foreground font-sans;
     /* Better touch handling on mobile */
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
@@ -72,7 +72,7 @@
 }
 
 .app-gradient-bg {
-  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.15), rgba(34, 31, 17, 0.3) 80%);
+  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.15), rgba(0, 0, 0, 0.9) 80%);
 }
 
 /* Loading placeholders animation */
@@ -101,7 +101,7 @@
 /* Mobile bottom nav styles */
 .mobile-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 1rem);
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
 }
 
 /* Hide scrollbar on mobile while preserving functionality */
