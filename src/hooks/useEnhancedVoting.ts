@@ -1,198 +1,216 @@
-
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useRealtimeVotingEnhanced } from './useRealtimeVotingEnhanced';
 import { toast } from '@/components/ui/sonner';
 
-interface VotingState {
-  userVotes: Set<string>;
-  voteCounts: Map<string, number>;
-  submitting: Set<string>;
-  canVote: (setlistSongId: string) => boolean;
-  vote: (setlistSongId: string) => Promise<boolean>;
-  refreshVotes: () => void;
+interface VoteResult {
+  success: boolean;
+  error?: string;
+  votes?: number;
+  daily_votes_used?: number;
+  daily_votes_remaining?: number;
+  show_votes_used?: number;
+  show_votes_remaining?: number;
 }
 
-export function useEnhancedVoting(showId: string): VotingState {
-  const { user } = useAuth();
+interface UserVoteStats {
+  dailyVotesUsed: number;
+  dailyVotesRemaining: number;
+  showVotesUsed: number;
+  showVotesRemaining: number;
+}
+
+export function useEnhancedVoting(setlistId: string | null, showId: string | null, userId: string | null) {
   const [userVotes, setUserVotes] = useState<Set<string>>(new Set());
-  const [voteCounts, setVoteCounts] = useState<Map<string, number>>(new Map());
-  const [submitting, setSubmitting] = useState<Set<string>>(new Set());
+  const [voteStats, setVoteStats] = useState<UserVoteStats>({
+    dailyVotesUsed: 0,
+    dailyVotesRemaining: 50,
+    showVotesUsed: 0,
+    showVotesRemaining: 10
+  });
+  const [submittingVotes, setSubmittingVotes] = useState<Set<string>>(new Set());
+  
+  const {
+    voteCounts,
+    isConnected,
+    recentActivity,
+    getVoteCount,
+    optimisticVoteUpdate,
+    revertVoteUpdate,
+    reconnect
+  } = useRealtimeVotingEnhanced(setlistId);
 
-  useEffect(() => {
-    if (!user || !showId) return;
-
-    fetchUserVotes();
-    setupRealtimeSubscription();
-  }, [user, showId]);
-
-  const fetchUserVotes = async () => {
-    if (!user) return;
+  // Load user's existing votes and stats
+  // Load user's existing votes and stats using the new RPC function
+  const loadUserVoteData = useCallback(async () => {
+    if (!userId || !showId) return;
 
     try {
-      const { data: votes } = await supabase
-        .from('votes')
-        .select(`
-          setlist_song_id,
-          setlist_songs!inner(
-            setlists!inner(show_id)
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('setlist_songs.setlists.show_id', showId);
+      // Use the new get_user_vote_stats RPC function
+      const { data, error } = await supabase.rpc('get_user_vote_stats', {
+        show_id_param: showId
+      });
 
-      if (votes) {
-        const voteSet = new Set(votes.map(v => v.setlist_song_id));
-        setUserVotes(voteSet);
+      if (error) {
+        console.error('Error getting user vote stats:', error);
+        return;
+      }
+
+      const voteData = data as any;
+      if (voteData && voteData.authenticated) {
+        // Set user vote stats
+        setVoteStats({
+          dailyVotesUsed: voteData.daily_votes_used || 0,
+          dailyVotesRemaining: voteData.daily_votes_remaining || 50,
+          showVotesUsed: voteData.show_votes_used || 0,
+          showVotesRemaining: voteData.show_votes_remaining || 10
+        });
+
+        // Set voted songs
+        const votedSongs = voteData.voted_songs || [];
+        setUserVotes(new Set(votedSongs));
+      } else {
+        // User not authenticated or no data
+        setVoteStats({
+          dailyVotesUsed: 0,
+          dailyVotesRemaining: 50,
+          showVotesUsed: 0,
+          showVotesRemaining: 10
+        });
+        setUserVotes(new Set());
       }
     } catch (error) {
-      console.error('Error fetching user votes:', error);
+      console.error('Error loading user vote data:', error);
     }
-  };
+  }, [userId, showId]);
+  useEffect(() => {
+    loadUserVoteData();
+  }, [loadUserVoteData]);
 
-  const setupRealtimeSubscription = () => {
-    const channel = supabase
-      .channel(`voting-${showId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'setlist_songs'
-        },
-        (payload) => {
-          const { id, votes } = payload.new;
-          setVoteCounts(prev => new Map(prev.set(id, votes)));
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes'
-        },
-        (payload) => {
-          if (payload.new.user_id === user?.id) {
-            setUserVotes(prev => new Set([...prev, payload.new.setlist_song_id]));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const canVote = (setlistSongId: string): boolean => {
-    if (!user) return false;
-    if (userVotes.has(setlistSongId)) return false;
-    if (submitting.has(setlistSongId)) return false;
-    return true;
-  };
-
-  const vote = async (setlistSongId: string): Promise<boolean> => {
-    if (!user) {
-      toast.error('Please log in to vote');
-      return false;
+  // Enhanced vote function with proper error handling and optimistic updates
+  const vote = useCallback(async (setlistSongId: string): Promise<VoteResult> => {
+    if (!userId) {
+      toast.error("Please log in to vote");
+      return { success: false, error: "Authentication required" };
     }
 
-    if (!canVote(setlistSongId)) {
-      toast.info('You have already voted for this song');
-      return false;
+    if (userVotes.has(setlistSongId)) {
+      toast.info("You've already voted for this song");
+      return { success: false, error: "Already voted" };
+    }
+
+    if (voteStats.showVotesRemaining <= 0) {
+      toast.error("You've reached your vote limit for this show (10 votes)");
+      return { success: false, error: "Show vote limit reached" };
+    }
+
+    if (voteStats.dailyVotesRemaining <= 0) {
+      toast.error("You've reached your daily vote limit (50 votes)");
+      return { success: false, error: "Daily vote limit reached" };
     }
 
     // Add to submitting set
-    setSubmitting(prev => new Set([...prev, setlistSongId]));
+    setSubmittingVotes(prev => new Set([...prev, setlistSongId]));
 
     try {
-      // Optimistic update
+      // Optimistic updates
+      optimisticVoteUpdate(setlistSongId);
       setUserVotes(prev => new Set([...prev, setlistSongId]));
-      setVoteCounts(prev => {
-        const current = prev.get(setlistSongId) || 0;
-        return new Map(prev.set(setlistSongId, current + 1));
-      });
+      setVoteStats(prev => ({
+        ...prev,
+        dailyVotesUsed: prev.dailyVotesUsed + 1,
+        dailyVotesRemaining: prev.dailyVotesRemaining - 1,
+        showVotesUsed: prev.showVotesUsed + 1,
+        showVotesRemaining: prev.showVotesRemaining - 1
+      }));
 
+      // Call database function
       const { data, error } = await supabase.rpc('vote_for_song', {
         setlist_song_id: setlistSongId
       });
 
       if (error) {
-        // Revert optimistic update
-        setUserVotes(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(setlistSongId);
-          return newSet;
-        });
-        setVoteCounts(prev => {
-          const current = prev.get(setlistSongId) || 1;
-          return new Map(prev.set(setlistSongId, Math.max(0, current - 1)));
-        });
-
-        if (error.message.includes('Already voted')) {
-          toast.info('You already voted for this song');
-        } else if (error.message.includes('limit')) {
-          toast.error(error.message);
-        } else {
-          toast.error('Failed to vote. Please try again.');
-        }
-        return false;
+        throw error;
       }
 
-      const result = data as { success: boolean; message?: string; votes?: number };
+      const result = data as unknown as VoteResult;
       
-      if (result.success) {
-        if (result.votes) {
-          setVoteCounts(prev => new Map(prev.set(setlistSongId, result.votes)));
-        }
-        toast.success('Vote recorded!');
-        return true;
-      } else {
-        // Revert optimistic update
-        setUserVotes(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(setlistSongId);
-          return newSet;
-        });
-        toast.error(result.message || 'Failed to vote');
-        return false;
+      if (!result.success) {
+        throw new Error(result.error || 'Vote failed');
       }
-    } catch (error) {
-      // Revert optimistic update
+
+      // Update stats with server response
+      if (result.daily_votes_used !== undefined) {
+        setVoteStats(prev => ({
+          ...prev,
+          dailyVotesUsed: result.daily_votes_used!,
+          dailyVotesRemaining: result.daily_votes_remaining!,
+          showVotesUsed: result.show_votes_used!,
+          showVotesRemaining: result.show_votes_remaining!
+        }));
+      }
+
+      toast.success("Vote recorded!");
+      return result;
+
+    } catch (error: any) {
+      console.error('Vote error:', error);
+      
+      // Revert optimistic updates
+      revertVoteUpdate(setlistSongId);
       setUserVotes(prev => {
         const newSet = new Set(prev);
         newSet.delete(setlistSongId);
         return newSet;
       });
-      setVoteCounts(prev => {
-        const current = prev.get(setlistSongId) || 1;
-        return new Map(prev.set(setlistSongId, Math.max(0, current - 1)));
-      });
+      setVoteStats(prev => ({
+        ...prev,
+        dailyVotesUsed: Math.max(0, prev.dailyVotesUsed - 1),
+        dailyVotesRemaining: Math.min(50, prev.dailyVotesRemaining + 1),
+        showVotesUsed: Math.max(0, prev.showVotesUsed - 1),
+        showVotesRemaining: Math.min(10, prev.showVotesRemaining + 1)
+      }));
+
+      const errorMessage = error.message || 'Failed to vote';
+      toast.error(errorMessage);
       
-      console.error('Error voting:', error);
-      toast.error('An unexpected error occurred. Please try again.');
-      return false;
+      return { success: false, error: errorMessage };
     } finally {
       // Remove from submitting set
-      setSubmitting(prev => {
+      setSubmittingVotes(prev => {
         const newSet = new Set(prev);
         newSet.delete(setlistSongId);
         return newSet;
       });
     }
-  };
+  }, [userId, userVotes, voteStats, optimisticVoteUpdate, revertVoteUpdate]);
 
-  const refreshVotes = () => {
-    fetchUserVotes();
-  };
+  // Check if user has voted for a specific song
+  const hasUserVoted = useCallback((setlistSongId: string): boolean => {
+    return userVotes.has(setlistSongId);
+  }, [userVotes]);
+
+  // Check if vote is currently submitting
+  const isVoteSubmitting = useCallback((setlistSongId: string): boolean => {
+    return submittingVotes.has(setlistSongId);
+  }, [submittingVotes]);
 
   return {
-    userVotes,
+    // Vote counts and real-time data
     voteCounts,
-    submitting,
-    canVote,
+    getVoteCount,
+    isConnected,
+    recentActivity,
+    
+    // User-specific data
+    userVotes,
+    voteStats,
+    hasUserVoted,
+    isVoteSubmitting,
+    
+    // Actions
     vote,
-    refreshVotes
+    reconnect,
+    refreshUserData: loadUserVoteData
   };
 }

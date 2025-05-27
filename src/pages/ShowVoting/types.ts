@@ -34,6 +34,8 @@ export interface SetlistSong {
     artist_id: string;
     album: string;
     spotify_url: string;
+    duration_ms?: number;
+    popularity?: number;
   };
 }
 

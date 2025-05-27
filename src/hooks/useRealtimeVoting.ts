@@ -1,28 +1,78 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { SetlistSong } from '@/pages/ShowVoting/types';
+import { useToast } from '@/hooks/use-toast';
 
-interface UseRealtimeVotingProps {
-  setlistId: string | null;
-  initialSongs: SetlistSong[];
+type RealtimeChannel = any; // Type from Supabase client
+
+interface VoteUpdate {
+  setlist_song_id: string;
+  votes: number;
+  user_id: string;
 }
 
-export function useRealtimeVoting({ setlistId, initialSongs }: UseRealtimeVotingProps) {
-  const [songs, setSongs] = useState<SetlistSong[]>(initialSongs);
+interface SetlistSongVotes {
+  [setlistSongId: string]: number;
+}
 
-  useEffect(() => {
-    setSongs(initialSongs);
-  }, [initialSongs]);
+export function useRealtimeVoting(setlistId: string | null) {
+  const [voteCounts, setVoteCounts] = useState<SetlistSongVotes>({});
+  const [isConnected, setIsConnected] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const { toast } = useToast();
 
+  // Initialize vote counts from database
+  const initializeVoteCounts = useCallback(async () => {
+    if (!setlistId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('setlist_songs')
+        .select('id, votes')
+        .eq('setlist_id', setlistId);
+
+      if (error) throw error;
+
+      const counts: SetlistSongVotes = {};
+      data?.forEach(song => {
+        counts[song.id] = song.votes;
+      });
+      
+      setVoteCounts(counts);
+    } catch (error) {
+      console.error('Error initializing vote counts:', error);
+    }
+  }, [setlistId]);
+
+  // Handle incoming vote updates
+  const handleVoteUpdate = useCallback((payload: any) => {
+    const update = payload.new as VoteUpdate;
+    
+    // Update local vote count
+    setVoteCounts(prev => ({
+      ...prev,
+      [update.setlist_song_id]: update.votes
+    }));
+
+    // Show toast for other users' votes
+    if (update.user_id !== supabase.auth.getUser().then(u => u.data.user?.id)) {
+      toast({
+        title: "New Vote!",
+        description: "Someone just voted for a song",
+        duration: 2000,
+      });
+    }
+  }, [toast]);
+
+  // Set up realtime subscription
   useEffect(() => {
     if (!setlistId) return;
 
-    console.log('Setting up real-time subscription for setlist:', setlistId);
+    // Initialize counts
+    initializeVoteCounts();
 
-    // Subscribe to changes in setlist_songs table
+    // Create channel for this setlist
     const channel = supabase
-      .channel(`setlist-${setlistId}`)
+      .channel(`setlist-votes-${setlistId}`)
       .on(
         'postgres_changes',
         {
@@ -31,42 +81,56 @@ export function useRealtimeVoting({ setlistId, initialSongs }: UseRealtimeVoting
           table: 'setlist_songs',
           filter: `setlist_id=eq.${setlistId}`
         },
-        (payload) => {
-          console.log('Real-time vote update received:', payload);
-          
-          setSongs(currentSongs => {
-            const updatedSongs = currentSongs.map(song => 
-              song.id === payload.new.id 
-                ? { ...song, votes: payload.new.votes, position: payload.new.position }
-                : song
-            );
-            
-            // Sort by votes (descending) then by position
-            return updatedSongs.sort((a, b) => b.votes - a.votes || a.position - b.position);
-          });
-        }
+        handleVoteUpdate
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'setlist_songs',
-          filter: `setlist_id=eq.${setlistId}`
-        },
-        (payload) => {
-          console.log('New song added to setlist:', payload);
-          // Refresh the entire setlist when new songs are added
-          window.location.reload();
+      .subscribe((status) => {
+        setIsConnected(status === 'SUBSCRIBED');
+        if (status === 'SUBSCRIBED') {
+          console.log('Connected to realtime voting updates');
+        } else if (status === 'CLOSED') {
+          console.log('Disconnected from realtime voting updates');
         }
-      )
-      .subscribe();
+      });
 
+    channelRef.current = channel;
+
+    // Cleanup subscription
     return () => {
-      console.log('Cleaning up real-time subscription');
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      setIsConnected(false);
     };
-  }, [setlistId]);
+  }, [setlistId, initializeVoteCounts, handleVoteUpdate]);
 
-  return { songs, setSongs };
+  // Get vote count for a specific setlist song
+  const getVoteCount = useCallback((setlistSongId: string): number => {
+    return voteCounts[setlistSongId] || 0;
+  }, [voteCounts]);
+
+  // Optimistically update vote count (before server confirmation)
+  const optimisticVoteUpdate = useCallback((setlistSongId: string, increment: number = 1) => {
+    setVoteCounts(prev => ({
+      ...prev,
+      [setlistSongId]: (prev[setlistSongId] || 0) + increment
+    }));
+  }, []);
+
+  // Revert optimistic update if vote fails
+  const revertVoteUpdate = useCallback((setlistSongId: string, decrement: number = 1) => {
+    setVoteCounts(prev => ({
+      ...prev,
+      [setlistSongId]: Math.max(0, (prev[setlistSongId] || 0) - decrement)
+    }));
+  }, []);
+
+  return {
+    voteCounts,
+    isConnected,
+    getVoteCount,
+    optimisticVoteUpdate,
+    revertVoteUpdate,
+    refreshVoteCounts: initializeVoteCounts
+  };
 }

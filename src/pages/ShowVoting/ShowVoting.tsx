@@ -1,12 +1,16 @@
 
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useEnhancedVoting } from "@/hooks/useEnhancedVoting";
 import AppHeader from "@/components/AppHeader";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import ShowHeader from "./ShowHeader";
 import VotingSection from "./VotingSection";
+import { EnhancedVotingSection } from "@/components/EnhancedVotingSection";
 import Sidebar from "./Sidebar";
-import useShowVoting from "./useShowVoting";
+import { useShowVotingEnhanced } from "./useShowVotingEnhanced";
+import { Badge } from "@/components/ui/badge";
+import { Wifi, WifiOff } from "lucide-react";
 
 const ShowVoting = () => {
   const { showId } = useParams<{ showId: string }>();
@@ -15,14 +19,16 @@ const ShowVoting = () => {
     show,
     setlist,
     loading,
-    votingError,
-    voteSubmitting,
-    usedVotesCount,
-    maxFreeVotes,
-    votesRemaining,
-    handleVote,
-    handleSongAdded
-  } = useShowVoting(user);
+    error: votingError,
+    handleVote
+  } = useShowVotingEnhanced(showId);
+
+  // Enhanced voting with real-time updates and validation
+  const enhancedVoting = useEnhancedVoting(
+    setlist.length > 0 ? setlist[0]?.setlist_id : null,
+    showId || null,
+    user?.id || null
+  );
 
   if (loading) {
     return (
@@ -69,16 +75,34 @@ const ShowVoting = () => {
       {/* Show Header */}
       <ShowHeader show={show} />
 
+      {/* Real-time Connection Status */}
+      <div className="container mx-auto max-w-7xl px-4 pt-4">
+        <div className="flex items-center justify-between mb-4">
+          <Badge variant={enhancedVoting.isConnected ? "default" : "destructive"} className="flex items-center gap-2">
+            {enhancedVoting.isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+            {enhancedVoting.isConnected ? "Live Updates" : "Disconnected"}
+          </Badge>
+          
+          {user && (
+            <div className="flex gap-2 text-sm text-gray-400">
+              <span>Daily: {enhancedVoting.voteStats.dailyVotesRemaining}/50</span>
+              <span>Show: {enhancedVoting.voteStats.showVotesRemaining}/10</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Main Content */}
-      <div className="container mx-auto max-w-7xl px-4 py-8 pb-32 md:pb-12">
+      <div className="container mx-auto max-w-7xl px-4 py-4 pb-32 md:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Voting Section */}
           <div className="lg:col-span-2">
-            <VotingSection
+            <EnhancedVotingSection
               songs={setlist}
-              onVote={handleVote}
-              submitting={voteSubmitting}
-              onAddSong={() => handleSongAdded({})}
+              setlistId={setlist.length > 0 ? setlist[0]?.setlist_id || '' : ''}
+              showId={showId || ''}
+              artistId={show?.artist?.id}
+              onSongAdded={() => window.location.reload()}
             />
           </div>
 

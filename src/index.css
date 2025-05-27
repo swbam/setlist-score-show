@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Overpass:wght@300;400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -5,47 +6,49 @@
  
 @layer base {
   :root {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 98%;
+    /* Dark theme with sophisticated greys */
+    --background: 220 20% 8%;
+    --foreground: 0 0% 95%;
  
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 220 15% 12%;
+    --card-foreground: 0 0% 95%;
  
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 0 0% 95%;
  
-    --primary: 45 30% 80%;
-    --primary-foreground: 45 30% 10%;
+    /* Teal accent color */
+    --primary: 174 72% 56%;
+    --primary-foreground: 220 20% 8%;
  
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 0 0% 95%;
  
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 10% 65%;
  
-    --accent: 0 0% 20%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 174 72% 56%;
+    --accent-foreground: 220 20% 8%;
  
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
  
-    --border: 0 0% 20%;
-    --input: 0 0% 15%;
-    --ring: 45 30% 50%;
+    --border: 220 15% 20%;
+    --input: 220 15% 15%;
+    --ring: 174 72% 56%;
  
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    /* Yellow metal theme - matching the reference design */
-    --sidebar-background: 0 0% 5%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 45 30% 80%; 
-    --sidebar-primary-foreground: 45 30% 10%;
-    --sidebar-accent: 0 0% 15%;
+    /* Sidebar theme */
+    --sidebar-background: 220 20% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 174 72% 56%; 
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: 220 15% 15%;
     --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 45 30% 50%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 174 72% 56%;
 
-    /* Mobile viewport height fix for better mobile experience */
+    /* Mobile viewport height fix */
     --vh: 1vh;
   }
 }
@@ -55,27 +58,74 @@
     @apply border-border;
   }
   body {
-    @apply bg-black text-foreground font-sans;
-    /* Better touch handling on mobile */
+    @apply bg-background text-foreground;
+    font-family: 'Overpass', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* iOS momentum scrolling for mobile */
+  /* iOS momentum scrolling */
   .momentum-scroll {
     -webkit-overflow-scrolling: touch;
   }
 }
 
+/* Gradient backgrounds */
+.gradient-bg {
+  background: linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 20% 12%) 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(135deg, hsl(220 15% 12%) 0%, hsl(220 15% 15%) 100%);
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, hsl(174 72% 56%) 0%, hsl(174 72% 46%) 100%);
+}
+
 .gradient-text {
-  @apply text-yellow-metal-300;
+  @apply bg-gradient-to-r from-teal-400 to-teal-500 bg-clip-text text-transparent;
 }
 
-.app-gradient-bg {
-  background: radial-gradient(circle at center, rgba(176, 160, 105, 0.15), rgba(0, 0, 0, 0.9) 80%);
+/* Subtle gradient overlays */
+.gradient-overlay {
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
 }
 
-/* Loading placeholders animation */
+.gradient-overlay-top {
+  background: linear-gradient(to top, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+
+.card-hover:hover {
+  @apply transform -translate-y-1;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+}
+
+/* Button styles */
+.btn-primary {
+  @apply bg-gradient-to-r from-teal-500 to-teal-600 text-white font-medium px-6 py-3 rounded-lg transition-all duration-200;
+}
+
+.btn-primary:hover {
+  @apply from-teal-600 to-teal-700 transform scale-105;
+}
+
+.btn-secondary {
+  @apply bg-secondary text-secondary-foreground font-medium px-6 py-3 rounded-lg transition-all duration-200 border border-border;
+}
+
+.btn-secondary:hover {
+  @apply bg-secondary/80 border-teal-500/30;
+}
+
+/* Loading animation */
 .animate-pulse {
   animation: pulse 2s infinite;
 }
@@ -89,7 +139,7 @@
   }
 }
 
-/* Safe area insets for mobile devices with notches */
+/* Safe area insets */
 .safe-area-inset-top {
   padding-top: env(safe-area-inset-top, 0);
 }
@@ -98,28 +148,64 @@
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* Mobile bottom nav styles */
+/* Mobile bottom nav */
 .mobile-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 1rem);
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.5);
 }
 
-/* Hide scrollbar on mobile while preserving functionality */
+/* Hide scrollbar on mobile */
 @media (max-width: 767px) {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
-/* Native app feeling tap states */
+/* Native tap states */
 @media (max-width: 767px) {
   .native-tap:active {
-    background-color: rgba(176, 160, 105, 0.15);
+    background-color: rgba(94, 234, 212, 0.1);
     transition: background-color 0.1s;
   }
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(31, 41, 55, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Text shadows for better readability */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.text-shadow-lg {
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(220 20% 8%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(220 15% 25%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(174 72% 56%);
 }

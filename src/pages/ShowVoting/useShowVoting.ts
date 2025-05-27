@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ensureSetlistExists } from "@/services/setlistCreation";
+import { getOrCreateSetlistWithSongs } from "@/services/setlistCreation";
 import { toast } from "@/components/ui/sonner";
 
 interface Show {
@@ -108,13 +108,18 @@ const useShowVoting = (user: any) => {
 
         setShow(transformedShow);
 
-        // Ensure setlist exists for this show
-        const setlistId = await ensureSetlistExists(showId);
+        // Increment show view count
+        await supabase.rpc('increment_show_views', { show_id: showId });
+
+        // Ensure setlist exists for this show with songs
+        const setlistResult = await getOrCreateSetlistWithSongs(showId);
         
-        if (!setlistId) {
-          setVotingError("Failed to create setlist for this show.");
+        if (!setlistResult.success || !setlistResult.setlist_id) {
+          setVotingError(`Failed to create setlist: ${setlistResult.message || "Unknown error"}`);
           return;
         }
+
+        const setlistId = setlistResult.setlist_id;
 
         // Fetch setlist songs with proper song data including artist_id
         const { data: setlistData, error: setlistError } = await supabase
@@ -144,7 +149,7 @@ const useShowVoting = (user: any) => {
               id: item.songs?.id || '',
               name: item.songs?.name || 'Unknown Song',
               album: item.songs?.album || '',
-              artist_id: item.songs?.artist_id || showData.artist_id,
+              artist_id: item.songs?.artist_id || transformedShow.artist.id,
               spotify_url: item.songs?.spotify_url || ''
             }
           }));

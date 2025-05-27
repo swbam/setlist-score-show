@@ -104,6 +104,17 @@ export async function searchArtists(query: string, limit: number = 20): Promise<
           });
 
           if (ensuredArtist) {
+            // Ensure artist has songs before adding to results
+            const { count: songCount } = await supabase
+              .from('songs')
+              .select('id', { count: 'exact' })
+              .eq('artist_id', ensuredArtist.id);
+
+            if (!songCount || songCount === 0) {
+              console.log(`No songs for artist ${ensuredArtist.name}, importing catalog...`);
+              await spotifyService.importArtistCatalog(ensuredArtist.id);
+            }
+
             results.push({
               id: ensuredArtist.id,
               type: 'artist',

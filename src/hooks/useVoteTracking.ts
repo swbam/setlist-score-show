@@ -1,107 +1,146 @@
-
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { canUserVote, getUserVoteStatsForShow, VoteValidationResult, VOTE_LIMITS } from '@/services/voteTracking';
-import { useErrorHandler } from './useErrorHandler';
+import { useToast } from '@/hooks/use-toast';
 
-interface VoteTrackingState {
-  canVote: boolean;
-  votesRemaining: number;
-  votesUsedThisShow: number;
-  validationResult: VoteValidationResult | null;
-  loading: boolean;
+interface VoteStatus {
+  authenticated: boolean;
+  daily_votes_used: number;
+  daily_votes_remaining: number;
+  show_votes_used: number;
+  show_votes_remaining: number;
+  voted_song_ids: string[];
 }
 
-export function useVoteTracking(showId: string, setlistSongId?: string) {
+interface VoteResult {
+  success: boolean;
+  error?: string;
+  daily_votes_used?: number;
+  daily_votes_remaining?: number;
+  show_votes_used?: number;
+  show_votes_remaining?: number;
+}
+
+export function useVoteTracking(showId: string) {
   const { user } = useAuth();
-  const { handleError } = useErrorHandler({
-    showToast: false,
-    logError: true
+  const { toast } = useToast();
+  const [voteStatus, setVoteStatus] = useState<VoteStatus>({
+    authenticated: false,
+    daily_votes_used: 0,
+    daily_votes_remaining: 50,
+    show_votes_used: 0,
+    show_votes_remaining: 10,
+    voted_song_ids: []
   });
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [state, setState] = useState<VoteTrackingState>({
-    canVote: false,
-    votesRemaining: 0,
-    votesUsedThisShow: 0,
-    validationResult: null,
-    loading: true
-  });
-
-  useEffect(() => {
-    async function checkVoteEligibility() {
-      if (!user || !showId) {
-        setState(prev => ({
-          ...prev,
-          canVote: false,
-          loading: false,
-          validationResult: {
-            canVote: false,
-            reason: 'Please log in to vote'
-          }
-        }));
-        return;
-      }
-
-      try {
-        setState(prev => ({ ...prev, loading: true }));
-
-        // Get user's vote stats for this show
-        const showStats = await getUserVoteStatsForShow(user.id, showId);
-        
-        let validationResult: VoteValidationResult = {
-          canVote: true,
-          votesRemaining: VOTE_LIMITS.MAX_VOTES_PER_SHOW - showStats.votes_this_show
-        };
-
-        // If we have a specific song, check if user can vote for it
-        if (setlistSongId) {
-          validationResult = await canUserVote(user.id, setlistSongId, showId);
-        }
-
-        setState({
-          canVote: validationResult.canVote,
-          votesRemaining: validationResult.votesRemaining || 0,
-          votesUsedThisShow: showStats.votes_this_show,
-          validationResult,
-          loading: false
-        });
-
-      } catch (error) {
-        handleError(error);
-        setState(prev => ({
-          ...prev,
-          canVote: false,
-          loading: false,
-          validationResult: {
-            canVote: false,
-            reason: 'Unable to verify vote eligibility'
-          }
-        }));
-      }
+  // Fetch user's vote status for this show
+  const fetchVoteStatus = async () => {
+    if (!user || !showId) {
+      setIsLoading(false);
+      return;
     }
 
-    checkVoteEligibility();
-  }, [user, showId, setlistSongId, handleError]);
-
-  const refreshVoteStatus = async () => {
-    if (!user || !showId) return;
-
     try {
-      const showStats = await getUserVoteStatsForShow(user.id, showId);
-      
-      setState(prev => ({
-        ...prev,
-        votesUsedThisShow: showStats.votes_this_show,
-        votesRemaining: VOTE_LIMITS.MAX_VOTES_PER_SHOW - showStats.votes_this_show
-      }));
+      const { data, error } = await supabase
+        .rpc('get_user_votes_for_show', { p_show_id: showId });
+
+      if (error) throw error;
+
+      if (data) {
+        setVoteStatus(data as VoteStatus);
+      }
     } catch (error) {
-      handleError(error);
+      console.error('Error fetching vote status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load vote status",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Vote for a song
+  const voteForSong = async (setlistSongId: string): Promise<boolean> => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to vote",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .rpc('vote_for_song', { p_setlist_song_id: setlistSongId });
+
+      if (error) throw error;
+
+      const result = data as VoteResult;
+
+      if (!result.success) {
+        toast({
+          title: "Vote Failed",
+          description: result.error || "Unable to cast vote",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      // Update local state with new vote counts
+      setVoteStatus(prev => ({
+        ...prev,
+        daily_votes_used: result.daily_votes_used || prev.daily_votes_used,
+        daily_votes_remaining: result.daily_votes_remaining || prev.daily_votes_remaining,
+        show_votes_used: result.show_votes_used || prev.show_votes_used,
+        show_votes_remaining: result.show_votes_remaining || prev.show_votes_remaining
+      }));
+
+      toast({
+        title: "Vote Cast!",
+        description: `${result.show_votes_remaining} votes remaining for this show`,
+      });
+
+      // Refresh vote status to get updated voted_song_ids
+      await fetchVoteStatus();
+      
+      return true;
+    } catch (error) {
+      console.error('Error voting:', error);
+      toast({
+        title: "Error",
+        description: "Failed to cast vote",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
+  // Check if user has voted for a specific song
+  const hasVotedForSong = (songId: string): boolean => {
+    return voteStatus.voted_song_ids.includes(songId);
+  };
+
+  // Check if user can vote
+  const canVote = (): boolean => {
+    return user !== null && 
+           voteStatus.show_votes_remaining > 0 && 
+           voteStatus.daily_votes_remaining > 0;
+  };
+
+  useEffect(() => {
+    fetchVoteStatus();
+  }, [user, showId]);
+
   return {
-    ...state,
-    refreshVoteStatus,
-    maxVotesPerShow: VOTE_LIMITS.MAX_VOTES_PER_SHOW
+    voteStatus,
+    isLoading,
+    voteForSong,
+    hasVotedForSong,
+    canVote,
+    refreshVoteStatus: fetchVoteStatus
   };
 }

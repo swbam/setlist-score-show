@@ -360,8 +360,8 @@ export async function storeTracksInDatabase(artistId: string, tracks: SpotifyTra
 }
 
 // Import the entire song catalog for an artist
-export async function importArtistCatalog(artistId: string): Promise<boolean> {
-  console.log(`Importing catalog for artist: ${artistId}`);
+export async function importArtistCatalog(artistId: string, forceFullCatalog: boolean = false): Promise<boolean> {
+  console.log(`Importing catalog for artist: ${artistId} (full: ${forceFullCatalog})`);
   
   try {
     // Check if we've already imported this artist's catalog recently
@@ -371,8 +371,8 @@ export async function importArtistCatalog(artistId: string): Promise<boolean> {
       .eq('id', artistId)
       .single();
     
-    // If we have this artist and they were synced less than 7 days ago, skip
-    if (artist && artist.last_synced_at) {
+    // If we have this artist and they were synced less than 7 days ago, skip (unless forced)
+    if (artist && artist.last_synced_at && !forceFullCatalog) {
       const lastSynced = new Date(artist.last_synced_at);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -387,9 +387,23 @@ export async function importArtistCatalog(artistId: string): Promise<boolean> {
       console.error(`Error checking artist sync status: ${artistId}`, artistError);
     }
     
-    // Get top tracks for the artist - simpler and more reliable than full catalog
-    console.log("Getting top tracks for artist:", artistId);
-    const tracks = await getArtistTopTracks(artistId);
+    let tracks: SpotifyTrack[] = [];
+    
+    if (forceFullCatalog) {
+      // Import full catalog (albums + singles)
+      console.log("Getting full catalog for artist:", artistId);
+      tracks = await getArtistAllTracks(artistId);
+      
+      // If full catalog fails or is empty, fall back to top tracks
+      if (tracks.length === 0) {
+        console.log("Full catalog empty, falling back to top tracks");
+        tracks = await getArtistTopTracks(artistId);
+      }
+    } else {
+      // Get top tracks for the artist - faster and more reliable for setlist creation
+      console.log("Getting top tracks for artist:", artistId);
+      tracks = await getArtistTopTracks(artistId);
+    }
     
     if (tracks.length === 0) {
       console.warn(`No tracks found for artist: ${artistId}`);
@@ -425,5 +439,103 @@ export async function importArtistCatalog(artistId: string): Promise<boolean> {
   } catch (error) {
     console.error(`Error importing catalog for artist: ${artistId}`, error);
     return false;
+  }
+}
+
+// Enhanced function to import full catalog with progress tracking
+export async function importFullArtistCatalogWithProgress(
+  artistId: string,
+  onProgress?: (progress: { processed: number; total: number; currentAlbum?: string }) => void
+): Promise<{ success: boolean; tracksImported: number; albumsProcessed: number }> {
+  console.log(`Starting full catalog import for artist: ${artistId}`);
+  
+  try {
+    // Get all albums first
+    const albums = await getArtistAlbums(artistId);
+    console.log(`Found ${albums.length} albums for artist ${artistId}`);
+    
+    if (albums.length === 0) {
+      // Fall back to top tracks
+      const topTracks = await getArtistTopTracks(artistId);
+      const stored = await storeTracksInDatabase(artistId, topTracks);
+      return {
+        success: stored,
+        tracksImported: topTracks.length,
+        albumsProcessed: 0
+      };
+    }
+    
+    let allTracks: SpotifyTrack[] = [];
+    let albumsProcessed = 0;
+    
+    // Process albums in smaller batches to avoid rate limits
+    const batchSize = 3;
+    for (let i = 0; i < albums.length; i += batchSize) {
+      const albumBatch = albums.slice(i, i + batchSize);
+      
+      for (const album of albumBatch) {
+        try {
+          onProgress?.({
+            processed: albumsProcessed,
+            total: albums.length,
+            currentAlbum: album.name
+          });
+          
+          const albumTracks = await getAlbumTracks(album.id);
+          allTracks.push(...albumTracks);
+          albumsProcessed++;
+          
+          // Rate limiting between albums - increased to prevent 429 errors
+          await new Promise(resolve => setTimeout(resolve, 250));
+          
+        } catch (error) {
+          console.error(`Error processing album ${album.name}:`, error);
+          albumsProcessed++;
+        }
+      }
+      
+      // Longer delay between batches to prevent rate limiting
+      if (i + batchSize < albums.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Deduplicate tracks
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+    
+    console.log(`Processed ${albumsProcessed} albums, found ${uniqueTracks.length} unique tracks`);
+    
+    // Store tracks in database
+    const tracksStored = await storeTracksInDatabase(artistId, uniqueTracks);
+    
+    // Update artist sync status
+    if (tracksStored) {
+      await supabase
+        .from('artists')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('id', artistId);
+    }
+    
+    onProgress?.({
+      processed: albumsProcessed,
+      total: albums.length,
+      currentAlbum: 'Complete'
+    });
+    
+    return {
+      success: tracksStored,
+      tracksImported: uniqueTracks.length,
+      albumsProcessed
+    };
+    
+  } catch (error) {
+    console.error(`Error in full catalog import for artist ${artistId}:`, error);
+    return {
+      success: false,
+      tracksImported: 0,
+      albumsProcessed: 0
+    };
   }
 }

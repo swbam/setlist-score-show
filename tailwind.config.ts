@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -20,21 +19,36 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				sans: ['Overpass', 'sans-serif'],
+				sans: ['Overpass', 'system-ui', '-apple-system', 'sans-serif'],
 			},
 			colors: {
-				'yellow-metal': {
-					'50': '#f7f4ee',
-					'100': '#eee8d9',
-					'200': '#ded3b8',
-					'300': '#c8b98e',
-					'400': '#b2a069',
-					'500': '#97854b',
-					'600': '#776a39',
-					'700': '#685e35',
-					'800': '#4b4529',
-					'900': '#413c26',
-					'950': '#221f11',
+				// Custom teal palette
+				'teal': {
+					'50': '#f0fdfa',
+					'100': '#ccfbf1',
+					'200': '#99f6e4',
+					'300': '#5eead4',
+					'400': '#2dd4bf',
+					'500': '#14b8a6',
+					'600': '#0d9488',
+					'700': '#0f766e',
+					'800': '#115e59',
+					'900': '#134e4a',
+					'950': '#042f2e',
+				},
+				// Dark greys for backgrounds
+				'dark': {
+					'50': '#f8fafc',
+					'100': '#f1f5f9',
+					'200': '#e2e8f0',
+					'300': '#cbd5e1',
+					'400': '#94a3b8',
+					'500': '#64748b',
+					'600': '#475569',
+					'700': '#334155',
+					'800': '#1e293b',
+					'900': '#0f172a',
+					'950': '#020617',
 				},
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -101,11 +115,34 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'fade-in': {
+					from: {
+						opacity: '0',
+						transform: 'translateY(10px)'
+					},
+					to: {
+						opacity: '1',
+						transform: 'translateY(0)'
+					}
+				},
+				'slide-in': {
+					from: {
+						transform: 'translateX(-100%)'
+					},
+					to: {
+						transform: 'translateX(0)'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'fade-in': 'fade-in 0.5s ease-out',
+				'slide-in': 'slide-in 0.3s ease-out'
+			},
+			backgroundImage: {
+				'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
 			}
 		}
 	},

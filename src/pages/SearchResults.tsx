@@ -181,7 +181,7 @@ export default function SearchResults() {
                               </div>
                             </div>
                             <Button size="sm" asChild>
-                              <Link to={`/shows/${show.id}`}>View Show</Link>
+                              <Link to={`/show/${show.id}`}>View Show</Link>
                             </Button>
                           </div>
                         </div>

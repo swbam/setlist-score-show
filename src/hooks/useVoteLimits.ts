@@ -1,13 +1,12 @@
-
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 interface VoteLimits {
-  votesUsedToday: number;
-  votesUsedThisShow: number;
-  maxDailyVotes: number;
-  maxShowVotes: number;
+  dailyVotesUsed: number;
+  dailyVotesRemaining: number;
+  showVotesUsed: number;
+  showVotesRemaining: number;
   canVote: boolean;
   reason?: string;
 }
@@ -15,87 +14,69 @@ interface VoteLimits {
 export function useVoteLimits(showId?: string) {
   const { user } = useAuth();
   const [limits, setLimits] = useState<VoteLimits>({
-    votesUsedToday: 0,
-    votesUsedThisShow: 0,
-    maxDailyVotes: 50,
-    maxShowVotes: 10,
-    canVote: false
+    dailyVotesUsed: 0,
+    dailyVotesRemaining: 50,
+    showVotesUsed: 0,
+    showVotesRemaining: 10,
+    canVote: true
   });
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) {
-      setLimits(prev => ({ ...prev, canVote: false, reason: 'Please log in to vote', loading: false }));
-      setLoading(false);
+  const refreshLimits = useCallback(async () => {
+    if (!user || !showId) {
+      setLimits({
+        dailyVotesUsed: 0,
+        dailyVotesRemaining: 50,
+        showVotesUsed: 0,
+        showVotesRemaining: 10,
+        canVote: false,
+        reason: 'Please log in to vote'
+      });
       return;
     }
 
-    fetchVoteLimits();
-  }, [user, showId]);
-
-  const fetchVoteLimits = async () => {
-    if (!user || !showId) return;
-
     try {
-      setLoading(true);
+      const { data, error } = await supabase.rpc('get_user_vote_stats', {
+        show_id_param: showId
+      });
 
-      // Get today's votes
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      if (error) {
+        console.error('Error fetching vote limits:', error);
+        return;
+      }
 
-      const { count: dailyVotes } = await supabase
-        .from('votes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .gte('created_at', today.toISOString());
-
-      // Get votes for this specific show
-      const { count: showVotes } = await supabase
-        .from('votes')
-        .select(`
-          *,
-          setlist_songs!inner(
-            setlists!inner(show_id)
-          )
-        `, { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('setlist_songs.setlists.show_id', showId);
-
-      const votesUsedToday = dailyVotes || 0;
-      const votesUsedThisShow = showVotes || 0;
-      const maxDailyVotes = 50;
-      const maxShowVotes = 10;
-
-      let canVote = true;
-      let reason = '';
-
-      if (votesUsedToday >= maxDailyVotes) {
-        canVote = false;
-        reason = `Daily vote limit reached (${maxDailyVotes})`;
-      } else if (votesUsedThisShow >= maxShowVotes) {
-        canVote = false;
-        reason = `Vote limit for this show reached (${maxShowVotes})`;
+      const stats = data as any;
+      const canVote = stats.authenticated && 
+                     stats.daily_votes_remaining > 0 && 
+                     stats.show_votes_remaining > 0;
+      
+      let reason: string | undefined;
+      if (!stats.authenticated) {
+        reason = 'Please log in to vote';
+      } else if (stats.daily_votes_remaining <= 0) {
+        reason = 'Daily vote limit reached (50/50)';
+      } else if (stats.show_votes_remaining <= 0) {
+        reason = 'Show vote limit reached (10/10)';
       }
 
       setLimits({
-        votesUsedToday,
-        votesUsedThisShow,
-        maxDailyVotes,
-        maxShowVotes,
+        dailyVotesUsed: stats.daily_votes_used || 0,
+        dailyVotesRemaining: stats.daily_votes_remaining || 0,
+        showVotesUsed: stats.show_votes_used || 0,
+        showVotesRemaining: stats.show_votes_remaining || 0,
         canVote,
         reason
       });
     } catch (error) {
-      console.error('Error fetching vote limits:', error);
-      setLimits(prev => ({ ...prev, canVote: false, reason: 'Unable to verify vote eligibility' }));
-    } finally {
-      setLoading(false);
+      console.error('Error in refreshLimits:', error);
     }
-  };
+  }, [user, showId]);
 
-  const refreshLimits = () => {
-    fetchVoteLimits();
-  };
+  useEffect(() => {
+    refreshLimits();
+  }, [refreshLimits]);
 
-  return { ...limits, loading, refreshLimits };
+  return {
+    ...limits,
+    refreshLimits
+  };
 }

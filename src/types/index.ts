@@ -87,3 +87,12 @@ export interface UserArtist {
   rank: number;
   artist?: Artist;
 }
+
+// Vote tracking types
+export interface VoteStats {
+  dailyVotesUsed: number;
+  dailyVotesRemaining: number;
+  showVotesUsed: number;
+  showVotesRemaining: number;
+  userVotedSongs: string[];
+}

@@ -440,6 +440,54 @@ export type Database = {
         }
         Relationships: []
       }
+      vote_limits: {
+        Row: {
+          created_at: string
+          daily_votes: number
+          id: string
+          last_daily_reset: string
+          show_id: string
+          show_votes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_votes?: number
+          id?: string
+          last_daily_reset?: string
+          show_id: string
+          show_votes?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_votes?: number
+          id?: string
+          last_daily_reset?: string
+          show_id?: string
+          show_votes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vote_limits_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vote_limits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       votes: {
         Row: {
           created_at: string
@@ -522,9 +570,17 @@ export type Database = {
           similarity: number
         }[]
       }
+      get_user_vote_stats: {
+        Args: { show_id_param: string }
+        Returns: Json
+      }
       vote_for_song: {
         Args: { setlist_song_id: string }
         Returns: Json
+      }
+      update_trending_shows: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
     }
     Enums: {

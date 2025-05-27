@@ -20,6 +20,7 @@ import Profile from "./pages/Profile";
 import AllArtists from "./pages/AllArtists";
 import SetlistComparison from "./pages/SetlistComparison";
 import DataSyncTestPage from "./pages/DataSyncTestPage";
+import UserFlowTest from "./components/UserFlowTest";
 
 function App() {
   useEffect(() => {
@@ -53,6 +54,7 @@ function App() {
           <Route path="/comparison/:showId/:showSlug" element={<SetlistComparison />} />
           
           <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
+          <Route path="/tests/user-flow" element={<UserFlowTest />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster position="top-center" richColors />

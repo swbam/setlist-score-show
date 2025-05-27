@@ -1,5 +1,5 @@
 
-import { typedSupabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "./spotify";
 
 export interface SetlistCreationResult {
@@ -15,7 +15,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     console.log(`Getting or creating setlist for show: ${showId}`);
 
     // First check if setlist already exists
-    const { data: existingSetlist, error: setlistError } = await typedSupabase
+    const { data: existingSetlist, error: setlistError } = await supabase
       .from('setlists')
       .select('id')
       .eq('show_id', showId)
@@ -23,7 +23,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
 
     if (existingSetlist) {
       // Count existing songs
-      const { count } = await typedSupabase
+      const { count } = await supabase
         .from('setlist_songs')
         .select('id', { count: 'exact' })
         .eq('setlist_id', existingSetlist.id);
@@ -38,7 +38,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     }
 
     // Get show details to find the artist
-    const { data: show, error: showError } = await typedSupabase
+    const { data: show, error: showError } = await supabase
       .from('shows')
       .select('artist_id')
       .eq('id', showId)
@@ -55,7 +55,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     }
 
     // Check if artist has songs in database
-    const { count: songCount } = await typedSupabase
+    const { count: songCount } = await supabase
       .from('songs')
       .select('id', { count: 'exact' })
       .eq('artist_id', show.artist_id);
@@ -77,7 +77,7 @@ export async function getOrCreateSetlistWithSongs(showId: string): Promise<Setli
     }
 
     // Use the database function to create setlist with 5 random songs
-    const { data: result, error: createError } = await typedSupabase.rpc(
+    const { data: result, error: createError } = await supabase.rpc(
       'create_setlist_with_songs',
       { p_show_id: showId }
     );
@@ -131,7 +131,7 @@ export const ensureSetlistExists = async (showId: string): Promise<string | null
 export async function addSongToSetlist(setlistId: string, songId: string): Promise<boolean> {
   try {
     // Get the next position
-    const { count } = await typedSupabase
+    const { count } = await supabase
       .from('setlist_songs')
       .select('id', { count: 'exact' })
       .eq('setlist_id', setlistId);
@@ -139,7 +139,7 @@ export async function addSongToSetlist(setlistId: string, songId: string): Promi
     const position = (count || 0) + 1;
 
     // Add the song
-    const { error } = await typedSupabase
+    const { error } = await supabase
       .from('setlist_songs')
       .insert({
         setlist_id: setlistId,
@@ -164,7 +164,7 @@ export async function addSongToSetlist(setlistId: string, songId: string): Promi
 // Remove a song from a setlist
 export async function removeSongFromSetlist(setlistSongId: string): Promise<boolean> {
   try {
-    const { error } = await typedSupabase
+    const { error } = await supabase
       .from('setlist_songs')
       .delete()
       .eq('id', setlistSongId);

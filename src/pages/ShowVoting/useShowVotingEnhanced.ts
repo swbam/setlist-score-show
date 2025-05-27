@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ensureSetlistExists } from "@/services/setlistCreation";
+import { getOrCreateSetlistWithSongs } from "@/services/setlistCreation";
 import { useEnhancedVoting } from "@/hooks/useEnhancedVoting";
 import { useVoteLimits } from "@/hooks/useVoteLimits";
 import { toast } from "@/components/ui/sonner";
@@ -49,9 +49,10 @@ export function useShowVotingEnhanced(user: any) {
   const [setlist, setSetlist] = useState<SetlistSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [setlistId, setSetlistId] = useState<string | null>(null);
 
-  // Use enhanced voting hooks
-  const voting = useEnhancedVoting(showId || '');
+  // Use enhanced voting hooks with proper parameters
+  const voting = useEnhancedVoting(setlistId, showId || null, user?.id || null);
   const voteLimits = useVoteLimits(showId);
 
   useEffect(() => {
@@ -108,13 +109,19 @@ export function useShowVotingEnhanced(user: any) {
 
         setShow(transformedShow);
 
-        // Ensure setlist exists for this show
-        const setlistId = await ensureSetlistExists(showId);
+        // Increment show views
+        await supabase.rpc('increment_show_views', { show_id: showId });
+
+        // Ensure setlist exists for this show with initial songs
+        const setlistResult = await getOrCreateSetlistWithSongs(showId);
         
-        if (!setlistId) {
-          setError("Failed to create setlist for this show.");
+        if (!setlistResult.success || !setlistResult.setlist_id) {
+          setError(setlistResult.message || "Failed to create setlist for this show.");
           return;
         }
+
+        const newSetlistId = setlistResult.setlist_id;
+        setSetlistId(newSetlistId);
 
         // Fetch setlist songs
         const { data: setlistData, error: setlistError } = await supabase
@@ -123,7 +130,7 @@ export function useShowVotingEnhanced(user: any) {
             *,
             songs!setlist_songs_song_id_fkey(id, name, album, artist_id, spotify_url)
           `)
-          .eq('setlist_id', setlistId)
+          .eq('setlist_id', newSetlistId)
           .order('votes', { ascending: false });
 
         if (setlistError) {
@@ -150,15 +157,8 @@ export function useShowVotingEnhanced(user: any) {
           
           setSetlist(transformedSetlist);
 
-          // Update vote counts in the voting hook
-          const voteCounts = new Map();
-          transformedSetlist.forEach(song => {
-            voteCounts.set(song.id, song.votes);
-          });
-          voting.voteCounts.clear();
-          voteCounts.forEach((votes, id) => {
-            voting.voteCounts.set(id, votes);
-          });
+          // Let the voting hook manage its own vote counts
+          // This ensures real-time updates work correctly
         }
 
       } catch (err) {
@@ -188,9 +188,9 @@ export function useShowVotingEnhanced(user: any) {
     
     if (success) {
       // Update local setlist state
-      setSetlist(prev => prev.map(song => 
-        song.id === setlistSongId 
-          ? { ...song, votes: voting.voteCounts.get(setlistSongId) || song.votes }
+      setSetlist(prev => prev.map(song =>
+        song.id === setlistSongId
+          ? { ...song, votes: voting.getVoteCount(setlistSongId) }
           : song
       ).sort((a, b) => b.votes - a.votes));
       
@@ -208,9 +208,9 @@ export function useShowVotingEnhanced(user: any) {
     error,
     handleVote,
     userVotes: voting.userVotes,
-    submitting: voting.submitting,
-    canVote: voting.canVote,
+    submitting: voting.isVoteSubmitting,
+    canVote: voteLimits.canVote,
     voteLimits,
-    refreshVotes: voting.refreshVotes
+    refreshVotes: voting.refreshUserData
   };
 }

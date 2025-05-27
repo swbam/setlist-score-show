@@ -99,10 +99,9 @@ export async function ensureArtistExists(artistInput: {
             .eq('id', artistInput.id);
         }
 
-        // Import their song catalog in the background (non-blocking)
-        spotifyService.importArtistCatalog(artistInput.id).catch(error => {
-          console.error(`Background catalog import failed for ${artistInput.name}:`, error);
-        });
+        // Import their song catalog synchronously to ensure songs exist
+        console.log(`Importing song catalog for ${artistInput.name}...`);
+        await spotifyService.importArtistCatalog(artistInput.id);
 
         console.log(`✅ Successfully created artist from Spotify: ${artistInput.name}`);
         return {
