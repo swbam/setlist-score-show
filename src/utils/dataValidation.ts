@@ -94,7 +94,8 @@ export function validateEntity<T>(schema: z.ZodSchema<T>, data: unknown): { succ
 
 export function validatePartialEntity<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: Partial<T> } | { success: false; errors: string[] } {
   try {
-    const partialSchema = schema.partial();
+    // Use deepPartial() for recursive partial validation
+    const partialSchema = schema.deepPartial();
     const validatedData = partialSchema.parse(data);
     return { success: true, data: validatedData };
   } catch (error) {
