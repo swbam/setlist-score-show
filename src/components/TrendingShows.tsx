@@ -37,8 +37,8 @@ const TrendingShows = () => {
             name,
             date,
             view_count,
-            venues!shows_venue_id_fkey(name, city, state),
-            artists!shows_artist_id_fkey(id, name, image_url)
+            venues (name, city, state),
+            artists (id, name, image_url)
           `)
           .gte("date", new Date().toISOString())
           .order("view_count", { ascending: false })
