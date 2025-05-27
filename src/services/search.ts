@@ -1,260 +1,316 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import * as spotifyService from "@/services/spotify";
-import * as ticketmasterService from "@/services/ticketmaster";
-import * as dataConsistency from "@/services/dataConsistency";
+import * as ticketmasterService from "./ticketmaster";
+import * as spotifyService from "./spotify";
+import * as dataConsistency from "./dataConsistency";
 
-export interface SearchOptions {
-  query: string;
-  location?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  limit?: number;
-  sortBy?: 'relevance' | 'date' | 'popularity';
-}
-
-export interface SearchResult {
+export interface SearchArtist {
   id: string;
-  type: 'artist' | 'show';
   name: string;
   image_url?: string;
-  date?: string;
-  venue?: string;
-  location?: string;
-  artist_name?: string;
-  ticketmaster_id?: string;
-  spotify_id?: string;
+  popularity?: number;
+  upcomingShowsCount?: number;
+  nextShow?: {
+    id: string;
+    date: string;
+    venue: string;
+    city: string;
+  };
+}
+
+export interface SearchShow {
+  id: string;
+  name: string;
+  date: string;
+  artist: {
+    id: string;
+    name: string;
+    image_url?: string;
+  };
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    state?: string;
+    country: string;
+  };
+  vote_count?: number;
+  view_count: number;
 }
 
 /**
- * MAIN SEARCH FUNCTION - searches both artists and shows
- * Uses the data consistency layer to ensure all results are properly stored
+ * Enhanced search that ensures complete data flow from search to voting
  */
-export async function search(options: SearchOptions): Promise<SearchResult[]> {
-  const { query, limit = 20 } = options;
-  const results: SearchResult[] = [];
-
+export async function searchArtistsAndShows(query: string): Promise<{
+  artists: SearchArtist[];
+  shows: SearchShow[];
+}> {
   try {
-    console.log(`🔍 Unified search for: ${query}`);
+    console.log(`🔍 Starting enhanced search for: "${query}"`);
 
-    // Search artists (database + Spotify)
-    const artistResults = await searchArtists(query, Math.floor(limit / 2));
-    results.push(...artistResults);
+    if (!query || query.trim().length < 2) {
+      return { artists: [], shows: [] };
+    }
 
-    // Search shows (database + Ticketmaster)
-    const showResults = await searchShows(query, Math.floor(limit / 2));
-    results.push(...showResults);
+    // Step 1: Search database first for existing data
+    const [dbArtists, dbShows] = await Promise.all([
+      searchDatabaseArtists(query),
+      searchDatabaseShows(query)
+    ]);
 
-    console.log(`✅ Found ${results.length} total search results for: ${query}`);
-    return results.slice(0, limit);
+    console.log(`📊 Database search found: ${dbArtists.length} artists, ${dbShows.length} shows`);
+
+    // Step 2: Search external APIs and import new data
+    await searchAndImportFromAPIs(query);
+
+    // Step 3: Search database again for newly imported data
+    const [finalArtists, finalShows] = await Promise.all([
+      searchDatabaseArtists(query),
+      searchDatabaseShows(query)
+    ]);
+
+    console.log(`✅ Final search results: ${finalArtists.length} artists, ${finalShows.length} shows`);
+
+    return {
+      artists: finalArtists,
+      shows: finalShows
+    };
   } catch (error) {
-    console.error("❌ Search error:", error);
-    return [];
+    console.error("❌ Error in searchArtistsAndShows:", error);
+    return { artists: [], shows: [] };
   }
 }
 
 /**
- * ARTIST SEARCH - searches database first, then Spotify
- * Uses data consistency layer to ensure all artists are properly imported
+ * Search for artists in the database
  */
-export async function searchArtists(query: string, limit: number = 20): Promise<SearchResult[]> {
+async function searchDatabaseArtists(query: string): Promise<SearchArtist[]> {
   try {
-    console.log(`🎵 Searching artists for: ${query}`);
-    const results: SearchResult[] = [];
-
-    // First search in database
-    const { data: dbArtists, error: dbError } = await supabase
+    const { data: artists, error } = await supabase
       .from('artists')
-      .select('*')
-      .ilike('name', `%${query}%`)
-      .order('popularity', { ascending: false })
-      .limit(limit);
-
-    if (dbError) {
-      console.error("❌ Database search error:", dbError);
-    }
-
-    // Add database results
-    if (dbArtists) {
-      for (const artist of dbArtists) {
-        results.push({
-          id: artist.id,
-          type: 'artist',
-          name: artist.name,
-          image_url: artist.image_url || undefined,
-          spotify_id: artist.id
-        });
-      }
-    }
-
-    // If we need more results, search Spotify and use data consistency layer
-    if (results.length < limit) {
-      const remainingLimit = limit - results.length;
-      console.log(`🔍 Searching Spotify for additional results: ${remainingLimit} needed`);
-      
-      const spotifyArtists = await spotifyService.searchArtists(query);
-      
-      for (const artist of spotifyArtists.slice(0, remainingLimit)) {
-        // Avoid duplicates
-        if (!results.find(r => r.id === artist.id)) {
-          // Use data consistency layer to ensure artist exists with complete data
-          const ensuredArtist = await dataConsistency.ensureArtistExists({
-            id: artist.id,
-            name: artist.name
-          });
-
-          if (ensuredArtist) {
-            // Ensure artist has songs before adding to results
-            const { count: songCount } = await supabase
-              .from('songs')
-              .select('id', { count: 'exact' })
-              .eq('artist_id', ensuredArtist.id);
-
-            if (!songCount || songCount === 0) {
-              console.log(`No songs for artist ${ensuredArtist.name}, importing catalog...`);
-              await spotifyService.importArtistCatalog(ensuredArtist.id);
-            }
-
-            results.push({
-              id: ensuredArtist.id,
-              type: 'artist',
-              name: ensuredArtist.name,
-              image_url: ensuredArtist.image_url,
-              spotify_id: ensuredArtist.id
-            });
-          }
-        }
-      }
-    }
-
-    console.log(`✅ Found ${results.length} artist results for: ${query}`);
-    return results.slice(0, limit);
-  } catch (error) {
-    console.error("❌ Error searching artists:", error);
-    return [];
-  }
-}
-
-/**
- * SHOW SEARCH - searches database first, then Ticketmaster
- * Uses data consistency layer to ensure all shows and related data are properly imported
- */
-export async function searchShows(query: string, limit: number = 20): Promise<SearchResult[]> {
-  try {
-    console.log(`🎤 Searching shows for: ${query}`);
-    const results: SearchResult[] = [];
-
-    // First search in database
-    const { data: dbShows, error: dbError } = await supabase
-      .from('shows')
       .select(`
-        *,
-        artists!shows_artist_id_fkey (
+        id,
+        name,
+        image_url,
+        popularity,
+        shows!shows_artist_id_fkey(
           id,
-          name,
-          image_url
-        ),
-        venues!shows_venue_id_fkey (
-          id,
-          name,
-          city,
-          state,
-          country
+          date,
+          venues!shows_venue_id_fkey(name, city)
         )
       `)
-      .gte('date', new Date().toISOString())
-      .order('date', { ascending: true })
-      .limit(Math.floor(limit / 2));
+      .ilike('name', `%${query}%`)
+      .order('popularity', { ascending: false })
+      .limit(10);
 
-    if (dbError) {
-      console.error("❌ Database shows search error:", dbError);
+    if (error) {
+      console.error("❌ Error searching database artists:", error);
+      return [];
     }
 
-    // Add database results that match the query
-    if (dbShows) {
-      for (const show of dbShows) {
-        const venue = show.venues as any;
-        const artist = show.artists as any;
-        
-        // Check if query matches artist name or show name
-        const matchesArtist = artist?.name?.toLowerCase().includes(query.toLowerCase());
-        const matchesShow = show.name?.toLowerCase().includes(query.toLowerCase());
-        
-        if (matchesArtist || matchesShow) {
-          results.push({
-            id: show.id,
-            type: 'show',
-            name: show.name || `${artist?.name} Concert`,
-            date: show.date,
-            venue: venue?.name,
-            location: `${venue?.city || ''}, ${venue?.country || ''}`,
-            artist_name: artist?.name,
-            ticketmaster_id: show.id
-          });
-        }
-      }
-    }
+    return (artists || []).map(artist => {
+      const shows = (artist.shows as any[]) || [];
+      const upcomingShows = shows.filter(show => 
+        new Date(show.date) >= new Date()
+      ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // If we need more results, search Ticketmaster and use data consistency layer
-    if (results.length < limit) {
-      const remainingLimit = limit - results.length;
-      console.log(`🔍 Searching Ticketmaster for additional results: ${remainingLimit} needed`);
-      
-      const events = await ticketmasterService.searchEvents(query);
-      
-      for (const event of events.slice(0, remainingLimit)) {
-        if (event._embedded?.venues?.[0]) {
-          const eventId = event.id;
-          
-          // Avoid duplicates
-          if (!results.find(r => r.id === eventId)) {
-            // Use data consistency layer to process the entire event
-            const processed = await dataConsistency.processTicketmasterEvent(event);
-            
-            if (processed.artist && processed.venue && processed.show) {
-              results.push({
-                id: processed.show.id,
-                type: 'show',
-                name: processed.show.name || `${processed.artist.name} Concert`,
-                date: processed.show.date,
-                venue: processed.venue.name,
-                location: `${processed.venue.city}, ${processed.venue.country}`,
-                artist_name: processed.artist.name,
-                ticketmaster_id: processed.show.id
-              });
-            }
-          }
-        }
-      }
-    }
+      const nextShow = upcomingShows[0];
+      const venue = nextShow?.venues as any;
 
-    console.log(`✅ Found ${results.length} show results for: ${query}`);
-    return results.slice(0, limit);
+      return {
+        id: artist.id,
+        name: artist.name,
+        image_url: artist.image_url,
+        popularity: artist.popularity,
+        upcomingShowsCount: upcomingShows.length,
+        nextShow: nextShow ? {
+          id: nextShow.id,
+          date: nextShow.date,
+          venue: venue?.name || 'Unknown Venue',
+          city: venue?.city || ''
+        } : undefined
+      };
+    });
   } catch (error) {
-    console.error("❌ Error searching shows:", error);
+    console.error("❌ Error in searchDatabaseArtists:", error);
     return [];
   }
 }
 
 /**
- * Helper function to store search results (for caching)
+ * Search for shows in the database
  */
-export async function storeSearchResults(results: SearchResult[]): Promise<void> {
+async function searchDatabaseShows(query: string): Promise<SearchShow[]> {
   try {
-    console.log(`💾 Caching ${results.length} search results`);
+    const { data: shows, error } = await supabase
+      .from('shows')
+      .select(`
+        id,
+        name,
+        date,
+        view_count,
+        artists!shows_artist_id_fkey(id, name, image_url),
+        venues!shows_venue_id_fkey(id, name, city, state, country)
+      `)
+      .or(`name.ilike.%${query}%,artists.name.ilike.%${query}%`)
+      .gte('date', new Date().toISOString())
+      .order('date', { ascending: true })
+      .limit(20);
+
+    if (error) {
+      console.error("❌ Error searching database shows:", error);
+      return [];
+    }
+
+    return (shows || []).map(show => {
+      const artistData = show.artists as any;
+      const venueData = show.venues as any;
+
+      return {
+        id: show.id,
+        name: show.name || `${artistData?.name || 'Unknown Artist'} Concert`,
+        date: show.date,
+        artist: {
+          id: artistData?.id || '',
+          name: artistData?.name || 'Unknown Artist',
+          image_url: artistData?.image_url
+        },
+        venue: {
+          id: venueData?.id || '',
+          name: venueData?.name || 'Unknown Venue',
+          city: venueData?.city || '',
+          state: venueData?.state,
+          country: venueData?.country || ''
+        },
+        view_count: show.view_count || 0
+      };
+    });
+  } catch (error) {
+    console.error("❌ Error in searchDatabaseShows:", error);
+    return [];
+  }
+}
+
+/**
+ * Search external APIs and import new data
+ */
+async function searchAndImportFromAPIs(query: string): Promise<void> {
+  try {
+    console.log(`🌐 Searching external APIs for: "${query}"`);
+
+    // Search Ticketmaster for events and import complete data
+    const ticketmasterEvents = await ticketmasterService.searchEvents(query, 10);
     
-    for (const result of results) {
-      if (result.type === 'artist' && result.spotify_id) {
-        // Ensure artist exists with complete data
-        await dataConsistency.ensureArtistExists({
-          id: result.spotify_id,
-          name: result.name
-        });
+    if (ticketmasterEvents.length > 0) {
+      console.log(`🎫 Found ${ticketmasterEvents.length} Ticketmaster events`);
+      
+      // Process each event through the data consistency layer
+      for (const event of ticketmasterEvents) {
+        try {
+          await dataConsistency.processTicketmasterEvent(event);
+          
+          // Ensure artist has song catalog
+          if (event._embedded?.attractions?.[0]) {
+            const attraction = event._embedded.attractions[0];
+            const ensuredArtist = await dataConsistency.ensureArtistExists({
+              id: attraction.id,
+              name: attraction.name
+            });
+
+            if (ensuredArtist) {
+              // Check if artist has songs
+              const { count: songCount } = await supabase
+                .from('songs')
+                .select('id', { count: 'exact' })
+                .eq('artist_id', ensuredArtist.id);
+
+              if (!songCount || songCount === 0) {
+                console.log(`📀 Importing song catalog for ${ensuredArtist.name}...`);
+                await spotifyService.importArtistCatalog(ensuredArtist.id);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error processing event ${event.id}:`, error);
+        }
       }
     }
+
+    // Add small delay to prevent rate limiting
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    console.log(`✅ Successfully cached search results`);
   } catch (error) {
-    console.error("❌ Error storing search results:", error);
+    console.error("❌ Error in searchAndImportFromAPIs:", error);
+  }
+}
+
+/**
+ * Get trending artists with upcoming shows
+ */
+export async function getTrendingArtists(limit: number = 10): Promise<SearchArtist[]> {
+  try {
+    const { data: artists, error } = await supabase
+      .from('artists')
+      .select(`
+        id,
+        name,
+        image_url,
+        popularity,
+        shows!shows_artist_id_fkey(
+          id,
+          date,
+          view_count,
+          venues!shows_venue_id_fkey(name, city)
+        )
+      `)
+      .order('popularity', { ascending: false })
+      .limit(limit * 2);
+
+    if (error) {
+      console.error("❌ Error getting trending artists:", error);
+      return [];
+    }
+
+    // Filter artists with upcoming shows and calculate trending score
+    const trendingArtists = (artists || [])
+      .map(artist => {
+        const shows = (artist.shows as any[]) || [];
+        const upcomingShows = shows.filter(show => 
+          new Date(show.date) >= new Date()
+        );
+
+        if (upcomingShows.length === 0) return null;
+
+        const totalViews = upcomingShows.reduce((sum, show) => sum + (show.view_count || 0), 0);
+        const trendingScore = (artist.popularity || 0) + (totalViews * 2) + (upcomingShows.length * 5);
+
+        const nextShow = upcomingShows.sort((a, b) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        )[0];
+        
+        const venue = nextShow?.venues as any;
+
+        return {
+          id: artist.id,
+          name: artist.name,
+          image_url: artist.image_url,
+          popularity: trendingScore,
+          upcomingShowsCount: upcomingShows.length,
+          nextShow: {
+            id: nextShow.id,
+            date: nextShow.date,
+            venue: venue?.name || 'Unknown Venue',
+            city: venue?.city || ''
+          }
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b!.popularity || 0) - (a!.popularity || 0))
+      .slice(0, limit);
+
+    return trendingArtists as SearchArtist[];
+  } catch (error) {
+    console.error("❌ Error in getTrendingArtists:", error);
+    return [];
   }
 }
