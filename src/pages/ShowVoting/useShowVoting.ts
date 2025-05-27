@@ -11,6 +11,7 @@ interface Show {
   date: string;
   start_time?: string | null;
   status: string;
+  view_count: number; // Added missing property
   artist: {
     id: string;
     name: string;
@@ -27,6 +28,7 @@ interface Show {
 
 interface SetlistSong {
   id: string;
+  setlist_id: string; // Added missing property
   song_id: string;
   votes: number;
   position: number;
@@ -86,6 +88,7 @@ const useShowVoting = (user: any) => {
           date: showData.date,
           start_time: showData.start_time,
           status: showData.status,
+          view_count: showData.view_count, // Include view_count
           artist: {
             id: showData.artists?.id || '',
             name: showData.artists?.name || 'Unknown Artist',
@@ -110,7 +113,7 @@ const useShowVoting = (user: any) => {
           return;
         }
 
-        // Fetch setlist songs - fix the UUID validation issue
+        // Fetch setlist songs
         const { data: setlistData, error: setlistError } = await supabase
           .from('setlist_songs')
           .select(`
@@ -129,6 +132,7 @@ const useShowVoting = (user: any) => {
         if (setlistData) {
           const transformedSetlist: SetlistSong[] = setlistData.map(item => ({
             id: item.id,
+            setlist_id: item.setlist_id, // Include setlist_id
             song_id: item.song_id,
             votes: item.votes,
             position: item.position,

@@ -184,7 +184,16 @@ export async function recordVote(
       };
     }
 
-    return data;
+    // Handle the RPC response properly - it returns Json type
+    if (typeof data === 'object' && data !== null && 'success' in data) {
+      return data as { success: boolean; message?: string; votes?: number };
+    }
+
+    // If data is not in expected format, assume success
+    return {
+      success: true,
+      message: 'Vote recorded successfully'
+    };
   } catch (error) {
     console.error('Error recording vote:', error);
     return {

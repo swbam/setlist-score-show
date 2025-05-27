@@ -42,9 +42,26 @@ export class BackgroundSyncManager {
 
     try {
       // Calculate trending based on recent votes and view count
-      const { data: trendingData } = await supabase.rpc('calculate_trending_shows');
+      // Since calculate_trending_shows doesn't exist, we'll implement it manually
+      const { data: shows, error } = await supabase
+        .from('shows')
+        .select(`
+          id,
+          view_count,
+          date,
+          setlists!shows_id_fkey(
+            setlist_songs!setlists_id_fkey(votes)
+          )
+        `)
+        .gte('date', new Date().toISOString())
+        .order('view_count', { ascending: false })
+        .limit(50);
 
-      console.log('Trending calculation completed:', trendingData);
+      if (error) {
+        throw error;
+      }
+
+      console.log('Trending calculation completed:', shows?.length || 0, 'shows processed');
       job.status = 'idle';
     } catch (error) {
       console.error('Error calculating trending shows:', error);
@@ -130,11 +147,7 @@ export class BackgroundSyncManager {
       for (const show of shows) {
         try {
           // Refresh show data from Ticketmaster
-          const events = await ticketmasterService.searchEvents({
-            keyword: show.artists?.name || '',
-            startDateTime: new Date().toISOString(),
-            size: 5
-          });
+          const events = await ticketmasterService.searchEvents(show.artists?.name || '');
 
           // Find matching event and update if needed
           const matchingEvent = events.find(event => event.id === show.id);

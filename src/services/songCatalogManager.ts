@@ -120,7 +120,8 @@ export class SongCatalogManager {
     for (let i = 0; i < tracks.length; i += BATCH_SIZE) {
       const batch = tracks.slice(i, i + BATCH_SIZE);
       
-      const songsToInsert: Partial<Song>[] = batch.map(track => ({
+      // Ensure all required fields are present and properly typed
+      const songsToInsert: Song[] = batch.map(track => ({
         id: track.id,
         artist_id: artistId,
         name: track.name,
