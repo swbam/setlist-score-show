@@ -1,15 +1,26 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Connection pool manager for optimizing database connections
+ * Enhanced connection pool manager with health monitoring and timeouts
  */
 class ConnectionPoolManager {
   private static instance: ConnectionPoolManager;
-  private activeConnections: Set<string> = new Set();
+  private activeConnections: Map<string, { createdAt: number; lastUsed: number }> = new Map();
   private maxConnections: number = 10;
-  private connectionQueue: Array<() => void> = [];
+  private connectionQueue: Array<{ 
+    connectionId: string; 
+    resolve: (value: boolean) => void; 
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+  }> = [];
+  private connectionTimeoutMs: number = 30000; // 30 seconds
+  private queueTimeoutMs: number = 10000; // 10 seconds max wait in queue
+  private healthCheckInterval?: NodeJS.Timeout;
 
-  private constructor() {}
+  private constructor() {
+    // Start health monitoring
+    this.startHealthMonitoring();
+  }
 
   static getInstance(): ConnectionPoolManager {
     if (!ConnectionPoolManager.instance) {
@@ -18,15 +29,78 @@ class ConnectionPoolManager {
     return ConnectionPoolManager.instance;
   }
 
+  private startHealthMonitoring(): void {
+    this.healthCheckInterval = setInterval(() => {
+      this.cleanupStaleConnections();
+      this.cleanupStaleQueue();
+    }, 60000); // Check every minute
+  }
+
+  private cleanupStaleConnections(): void {
+    const now = Date.now();
+    const staleConnections: string[] = [];
+
+    this.activeConnections.forEach((info, connectionId) => {
+      if (now - info.lastUsed > this.connectionTimeoutMs) {
+        staleConnections.push(connectionId);
+      }
+    });
+
+    staleConnections.forEach(connectionId => {
+      console.log(`Cleaning up stale connection: ${connectionId}`);
+      this.releaseConnection(connectionId);
+    });
+  }
+
+  private cleanupStaleQueue(): void {
+    const now = Date.now();
+    this.connectionQueue = this.connectionQueue.filter(item => {
+      const elapsed = now - (item as any).queuedAt;
+      if (elapsed > this.queueTimeoutMs) {
+        clearTimeout(item.timeout);
+        item.reject(new Error('Connection request timed out in queue'));
+        return false;
+      }
+      return true;
+    });
+  }
+
   async acquireConnection(connectionId: string): Promise<boolean> {
-    if (this.activeConnections.size >= this.maxConnections) {
-      return new Promise((resolve) => {
-        this.connectionQueue.push(() => resolve(this.acquireConnection(connectionId)));
-      });
+    const now = Date.now();
+
+    // Check if we can immediately acquire
+    if (this.activeConnections.size < this.maxConnections) {
+      this.activeConnections.set(connectionId, { createdAt: now, lastUsed: now });
+      return true;
     }
 
-    this.activeConnections.add(connectionId);
-    return true;
+    // Queue the request with timeout
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        // Remove from queue if still there
+        const index = this.connectionQueue.findIndex(item => item.connectionId === connectionId);
+        if (index !== -1) {
+          this.connectionQueue.splice(index, 1);
+        }
+        reject(new Error('Connection acquisition timed out'));
+      }, this.queueTimeoutMs);
+
+      const queueItem = {
+        connectionId,
+        resolve: (value: boolean) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (error: Error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+        timeout,
+        queuedAt: now
+      } as any;
+
+      this.connectionQueue.push(queueItem);
+    });
   }
 
   releaseConnection(connectionId: string): void {
@@ -34,10 +108,22 @@ class ConnectionPoolManager {
     
     // Process queued connections
     if (this.connectionQueue.length > 0) {
-      const nextConnection = this.connectionQueue.shift();
-      if (nextConnection) {
-        nextConnection();
+      const nextItem = this.connectionQueue.shift();
+      if (nextItem) {
+        const now = Date.now();
+        this.activeConnections.set(nextItem.connectionId, { 
+          createdAt: now, 
+          lastUsed: now 
+        });
+        nextItem.resolve(true);
       }
+    }
+  }
+
+  updateConnectionActivity(connectionId: string): void {
+    const connection = this.activeConnections.get(connectionId);
+    if (connection) {
+      connection.lastUsed = Date.now();
     }
   }
 
@@ -45,8 +131,50 @@ class ConnectionPoolManager {
     return this.activeConnections.size;
   }
 
+  getQueueLength(): number {
+    return this.connectionQueue.length;
+  }
+
   isConnectionActive(connectionId: string): boolean {
     return this.activeConnections.has(connectionId);
+  }
+
+  getConnectionStats(): { 
+    active: number; 
+    queued: number; 
+    maxConnections: number;
+    oldestConnection?: number;
+  } {
+    let oldestConnection: number | undefined;
+    
+    if (this.activeConnections.size > 0) {
+      oldestConnection = Math.min(
+        ...Array.from(this.activeConnections.values()).map(info => info.createdAt)
+      );
+    }
+
+    return {
+      active: this.activeConnections.size,
+      queued: this.connectionQueue.length,
+      maxConnections: this.maxConnections,
+      oldestConnection
+    };
+  }
+
+  destroy(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = undefined;
+    }
+
+    // Reject all queued requests
+    this.connectionQueue.forEach(item => {
+      clearTimeout(item.timeout);
+      item.reject(new Error('Connection manager is being destroyed'));
+    });
+
+    this.connectionQueue.length = 0; // Clear array
+    this.activeConnections.clear();
   }
 }
 

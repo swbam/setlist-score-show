@@ -6,6 +6,124 @@ const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
 const SPOTIFY_CLIENT_ID = "2946864dc822469b9c672292ead45f43";
 const SPOTIFY_CLIENT_SECRET = "feaf0fc901124b839b11e02f97d18a8d";
 
+// Rate limiting configuration
+const RATE_LIMIT_CONFIG = {
+  requestsPerSecond: 10, // Conservative limit to avoid hitting 429s
+  burstLimit: 50, // Max burst requests
+  retryDelayMs: 1000, // Initial retry delay
+  maxRetryDelayMs: 30000, // Max retry delay
+  maxRetries: 3
+};
+
+// Rate limiter class for Spotify API
+class SpotifyRateLimiter {
+  private requestQueue: Array<{
+    request: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (reason: any) => void;
+    retryCount: number;
+  }> = [];
+  private isProcessing = false;
+  private lastRequestTime = 0;
+  private requestCount = 0;
+  private windowStart = Date.now();
+  private readonly minInterval = 1000 / RATE_LIMIT_CONFIG.requestsPerSecond;
+
+  async enqueue<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push({
+        request,
+        resolve,
+        reject,
+        retryCount: 0
+      });
+      this.processQueue();
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isProcessing || this.requestQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+
+    while (this.requestQueue.length > 0) {
+      const queueItem = this.requestQueue.shift()!;
+      
+      try {
+        // Check rate limits
+        await this.enforceRateLimit();
+        
+        // Execute request
+        const result = await queueItem.request();
+        queueItem.resolve(result);
+        
+        this.requestCount++;
+        this.lastRequestTime = Date.now();
+        
+      } catch (error: any) {
+        // Handle rate limit errors with exponential backoff
+        if (error.status === 429 || error.message?.includes('rate limit')) {
+          if (queueItem.retryCount < RATE_LIMIT_CONFIG.maxRetries) {
+            const retryDelay = Math.min(
+              RATE_LIMIT_CONFIG.retryDelayMs * Math.pow(2, queueItem.retryCount),
+              RATE_LIMIT_CONFIG.maxRetryDelayMs
+            );
+            
+            console.warn(`Rate limit hit, retrying in ${retryDelay}ms (attempt ${queueItem.retryCount + 1})`);
+            
+            setTimeout(() => {
+              queueItem.retryCount++;
+              this.requestQueue.unshift(queueItem);
+              this.processQueue();
+            }, retryDelay);
+            
+            continue;
+          } else {
+            console.error('Max retries exceeded for Spotify API request');
+            queueItem.reject(new Error('Rate limit exceeded, max retries reached'));
+          }
+        } else {
+          queueItem.reject(error);
+        }
+      }
+    }
+
+    this.isProcessing = false;
+  }
+
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceWindowStart = now - this.windowStart;
+    
+    // Reset window if more than 1 second has passed
+    if (timeSinceWindowStart >= 1000) {
+      this.windowStart = now;
+      this.requestCount = 0;
+    }
+    
+    // Check if we've hit the burst limit
+    if (this.requestCount >= RATE_LIMIT_CONFIG.burstLimit) {
+      const waitTime = 1000 - timeSinceWindowStart;
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        this.windowStart = Date.now();
+        this.requestCount = 0;
+      }
+    }
+    
+    // Ensure minimum interval between requests
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minInterval) {
+      await new Promise(resolve => setTimeout(resolve, this.minInterval - timeSinceLastRequest));
+    }
+  }
+}
+
+// Global rate limiter instance
+const rateLimiter = new SpotifyRateLimiter();
+
 // Types for Spotify API responses
 export interface SpotifyArtist {
   id: string;
@@ -82,30 +200,37 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
-// Helper function to make API calls to Spotify
+// Helper function to make API calls to Spotify with rate limiting
 async function spotifyApiCall<T>(endpoint: string): Promise<T | null> {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      throw new Error("Could not get access token");
-    }
-    
-    const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`
+  return rateLimiter.enqueue(async () => {
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error("Could not get access token");
       }
-    });
-    
-    if (!response.ok) {
-      console.error("Spotify API error:", response.status, await response.text());
-      throw new Error(`Failed to fetch from Spotify API: ${response.status}`);
+      
+      const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Spotify API error:", response.status, errorText);
+        
+        // Throw error with status for rate limiter to handle
+        const error = new Error(`Failed to fetch from Spotify API: ${response.status}`);
+        (error as any).status = response.status;
+        throw error;
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching from Spotify API:", error);
+      throw error; // Re-throw for rate limiter to handle
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching from Spotify API:", error);
-    return null;
-  }
+  });
 }
 
 // Paginated API call helper that handles fetching all pages
