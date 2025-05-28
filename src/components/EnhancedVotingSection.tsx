@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import { useEnhancedVoting } from '@/hooks/useEnhancedVoting';
 import { useAuth } from '@/context/AuthContext';
 import { SetlistSong } from '@/pages/ShowVoting/types';
 import AddSongToSetlist from '@/components/AddSongToSetlist';
-import { addSongToSetlist } from '@/services/setlistCreation';
+import * as setlistManager from '@/services/setlistManager';
 
 interface EnhancedVotingSectionProps {
   songs: SetlistSong[];
@@ -31,7 +32,7 @@ export function EnhancedVotingSection({ songs, setlistId, showId, artistId, onSo
 
   const handleAddSong = async (songId: string): Promise<boolean> => {
     try {
-      const success = await addSongToSetlist(setlistId, songId);
+      const success = await setlistManager.addSongToSetlist(setlistId, songId);
       if (success && onSongAdded) {
         onSongAdded();
       }

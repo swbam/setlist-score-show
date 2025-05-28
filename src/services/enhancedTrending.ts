@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -51,7 +52,7 @@ export interface TrendingSong {
 }
 
 /**
- * Calculate trending artists using enhanced algorithm
+ * Calculate trending artists using basic algorithm (fallback)
  */
 export async function calculateTrendingArtists(
   timeWindowHours: number = 24,
@@ -61,18 +62,57 @@ export async function calculateTrendingArtists(
     const timeWindowStart = new Date();
     timeWindowStart.setHours(timeWindowStart.getHours() - timeWindowHours);
 
-    // Get artists with recent activity
-    const { data: artistsData, error } = await supabase.rpc('get_trending_artists_enhanced', {
-      time_window_start: timeWindowStart.toISOString(),
-      result_limit: limit
-    });
+    // Get artists with recent voting activity
+    const { data: artistsData, error } = await supabase
+      .from('artists')
+      .select(`
+        id,
+        name,
+        image_url,
+        popularity,
+        shows!shows_artist_id_fkey(
+          id,
+          date,
+          setlists(
+            setlist_songs(
+              votes(created_at)
+            )
+          )
+        )
+      `)
+      .gte('shows.date', new Date().toISOString())
+      .limit(limit);
 
     if (error) {
       console.error('Error calculating trending artists:', error);
       return [];
     }
 
-    return artistsData || [];
+    // Calculate trending scores
+    const trendingArtists: TrendingArtist[] = (artistsData || []).map(artist => {
+      const recentVotes = countRecentVotes(artist.shows, timeWindowStart);
+      const upcomingShows = artist.shows?.length || 0;
+      const voteVelocity = calculateVoteVelocity(recentVotes, timeWindowHours);
+      const popularityBoost = (artist.popularity || 0) / 100;
+      
+      const trendingScore = (recentVotes * 2) + (voteVelocity * 3) + (upcomingShows * 1) + popularityBoost;
+
+      return {
+        id: artist.id,
+        name: artist.name,
+        image_url: artist.image_url,
+        trending_score: trendingScore,
+        vote_velocity: voteVelocity,
+        recent_votes: recentVotes,
+        upcoming_shows: upcomingShows,
+        popularity_boost: popularityBoost,
+        total_engagement: recentVotes + upcomingShows
+      };
+    })
+    .filter(artist => artist.trending_score > 0)
+    .sort((a, b) => b.trending_score - a.trending_score);
+
+    return trendingArtists;
   } catch (error) {
     console.error('Error in calculateTrendingArtists:', error);
     return [];
@@ -80,7 +120,7 @@ export async function calculateTrendingArtists(
 }
 
 /**
- * Calculate trending shows using enhanced algorithm
+ * Calculate trending shows using basic algorithm (fallback)
  */
 export async function calculateTrendingShows(
   timeWindowHours: number = 48,
@@ -91,17 +131,59 @@ export async function calculateTrendingShows(
     timeWindowStart.setHours(timeWindowStart.getHours() - timeWindowHours);
 
     // Get shows with recent activity
-    const { data: showsData, error } = await supabase.rpc('get_trending_shows_enhanced', {
-      time_window_start: timeWindowStart.toISOString(),
-      result_limit: limit
-    });
+    const { data: showsData, error } = await supabase
+      .from('shows')
+      .select(`
+        id,
+        name,
+        date,
+        artist:artists!shows_artist_id_fkey(id, name, image_url),
+        venue:venues!shows_venue_id_fkey(name, city, state),
+        setlists(
+          setlist_songs(
+            votes(created_at)
+          )
+        )
+      `)
+      .gte('date', new Date().toISOString())
+      .order('date')
+      .limit(limit * 2); // Get more to filter better results
 
     if (error) {
       console.error('Error calculating trending shows:', error);
       return [];
     }
 
-    return showsData || [];
+    // Calculate trending scores for shows
+    const trendingShows: TrendingShow[] = (showsData || []).map(show => {
+      const recentVotes = countRecentVotes(show.setlists, timeWindowStart);
+      const timeUntilShow = getTimeUntilShow(show.date);
+      const voteVelocity = calculateVoteVelocity(recentVotes, timeWindowHours);
+      
+      // Time decay factor (closer shows get higher scores)
+      const timeDecayFactor = Math.max(0.1, 1 / (1 + timeUntilShow / (24 * 7))); // Week-based decay
+      
+      const trendingScore = (recentVotes * voteVelocity * timeDecayFactor) + 
+                           (timeUntilShow < 7 ? 50 : 0); // Boost for shows within a week
+
+      return {
+        id: show.id,
+        name: show.name || 'Concert',
+        date: show.date,
+        trending_score: trendingScore,
+        vote_velocity: voteVelocity,
+        recent_votes: recentVotes,
+        time_until_show: timeUntilShow,
+        artist: show.artist,
+        venue: show.venue
+      };
+    })
+    .filter(show => show.trending_score > 0)
+    .sort((a, b) => b.trending_score - a.trending_score)
+    .slice(0, limit);
+
+    return trendingShows;
+
   } catch (error) {
     console.error('Error in calculateTrendingShows:', error);
     return [];
@@ -109,7 +191,7 @@ export async function calculateTrendingShows(
 }
 
 /**
- * Calculate trending songs using enhanced algorithm
+ * Calculate trending songs using basic algorithm (fallback)
  */
 export async function calculateTrendingSongs(
   timeWindowHours: number = 12,
@@ -120,17 +202,50 @@ export async function calculateTrendingSongs(
     timeWindowStart.setHours(timeWindowStart.getHours() - timeWindowHours);
 
     // Get songs with recent voting activity
-    const { data: songsData, error } = await supabase.rpc('get_trending_songs_enhanced', {
-      time_window_start: timeWindowStart.toISOString(),
-      result_limit: limit
-    });
+    const { data: songsData, error } = await supabase
+      .from('songs')
+      .select(`
+        id,
+        name,
+        artist:artists!songs_artist_id_fkey(id, name),
+        setlist_songs(
+          votes(created_at)
+        )
+      `)
+      .limit(limit * 3); // Get more to filter better results
 
     if (error) {
       console.error('Error calculating trending songs:', error);
       return [];
     }
 
-    return songsData || [];
+    // Calculate trending scores for songs
+    const trendingSongs: TrendingSong[] = (songsData || []).map(song => {
+      const allVotes = song.setlist_songs?.flatMap(ss => ss.votes || []) || [];
+      const recentVotes = allVotes.filter(vote => 
+        new Date(vote.created_at) >= timeWindowStart
+      ).length;
+      
+      const totalVotes = allVotes.length;
+      const voteVelocity = calculateVoteVelocity(recentVotes, timeWindowHours);
+      const trendingScore = recentVotes * voteVelocity + (totalVotes * 0.1);
+
+      return {
+        id: song.id,
+        name: song.name,
+        trending_score: trendingScore,
+        vote_velocity: voteVelocity,
+        recent_votes: recentVotes,
+        total_votes: totalVotes,
+        artist: song.artist
+      };
+    })
+    .filter(song => song.trending_score > 0)
+    .sort((a, b) => b.trending_score - a.trending_score)
+    .slice(0, limit);
+
+    return trendingSongs;
+
   } catch (error) {
     console.error('Error in calculateTrendingSongs:', error);
     return [];
@@ -221,7 +336,7 @@ async function getPersonalizedTrendingShows(
 
     // Calculate trending scores for personalized shows
     const trendingShows: TrendingShow[] = (data || []).map(show => {
-      const recentVotes = countRecentVotes(show.setlists, timeWindowStart);
+      const recentVotes = countRecentVotes(show.setlists || [], timeWindowStart);
       const timeUntilShow = getTimeUntilShow(show.date);
       const voteVelocity = calculateVoteVelocity(recentVotes, 24);
       
@@ -315,15 +430,21 @@ async function getPersonalizedTrendingSongs(
  */
 function countRecentVotes(setlists: any[], timeWindowStart: Date): number {
   let count = 0;
-  setlists?.forEach(setlist => {
-    setlist.setlist_songs?.forEach((setlistSong: any) => {
-      setlistSong.votes?.forEach((vote: any) => {
-        if (new Date(vote.created_at) >= timeWindowStart) {
-          count++;
-        }
-      });
+  if (Array.isArray(setlists)) {
+    setlists.forEach(setlist => {
+      if (setlist.setlist_songs && Array.isArray(setlist.setlist_songs)) {
+        setlist.setlist_songs.forEach((setlistSong: any) => {
+          if (setlistSong.votes && Array.isArray(setlistSong.votes)) {
+            setlistSong.votes.forEach((vote: any) => {
+              if (new Date(vote.created_at) >= timeWindowStart) {
+                count++;
+              }
+            });
+          }
+        });
+      }
     });
-  });
+  }
   return count;
 }
 
@@ -357,24 +478,14 @@ export async function updateTrendingCache(): Promise<void> {
       calculateTrendingSongs(12, 30)
     ]);
 
-    // Store in cache (using a simple cache table or Redis if available)
-    await Promise.all([
-      supabase.from('trending_cache').upsert({
-        cache_key: 'trending_artists',
-        data: trendingArtists,
-        updated_at: new Date().toISOString()
-      }),
-      supabase.from('trending_cache').upsert({
-        cache_key: 'trending_shows',
-        data: trendingShows,
-        updated_at: new Date().toISOString()
-      }),
-      supabase.from('trending_cache').upsert({
-        cache_key: 'trending_songs',
-        data: trendingSongs,
-        updated_at: new Date().toISOString()
-      })
-    ]);
+    // Store results in memory or local storage as cache
+    // Note: We're not using a database table since it doesn't exist
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('trending_artists', JSON.stringify(trendingArtists));
+      localStorage.setItem('trending_shows', JSON.stringify(trendingShows));
+      localStorage.setItem('trending_songs', JSON.stringify(trendingSongs));
+      localStorage.setItem('trending_updated_at', new Date().toISOString());
+    }
 
     console.log('Trending cache updated successfully');
 
@@ -390,19 +501,18 @@ export async function getCachedTrending(
   type: 'artists' | 'shows' | 'songs'
 ): Promise<TrendingArtist[] | TrendingShow[] | TrendingSong[]> {
   try {
-    const { data: cached } = await supabase
-      .from('trending_cache')
-      .select('data, updated_at')
-      .eq('cache_key', `trending_${type}`)
-      .single();
-
-    // Check if cache is fresh (less than 30 minutes old)
-    if (cached && cached.updated_at) {
-      const cacheAge = Date.now() - new Date(cached.updated_at).getTime();
-      const thirtyMinutes = 30 * 60 * 1000;
+    // Check cache in localStorage
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`trending_${type}`);
+      const updatedAt = localStorage.getItem('trending_updated_at');
       
-      if (cacheAge < thirtyMinutes) {
-        return cached.data || [];
+      if (cached && updatedAt) {
+        const cacheAge = Date.now() - new Date(updatedAt).getTime();
+        const thirtyMinutes = 30 * 60 * 1000;
+        
+        if (cacheAge < thirtyMinutes) {
+          return JSON.parse(cached);
+        }
       }
     }
 

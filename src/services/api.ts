@@ -47,7 +47,7 @@ export async function processShow(ticketmasterEvent: any) {
  */
 export async function searchWithConsistency(query: string, options: any = {}) {
   const results = await search.search({ query, ...options });
-  await search.storeSearchResults(results);
+  // Store results would need to be implemented in search service
   return results;
 }
 
@@ -71,14 +71,7 @@ export async function getTrendingData(limit: number = 10) {
 export const operations = {
   search: {
     // Main search function
-    search: search.search,
-    
-    // Specific searches
-    searchArtists: search.searchArtists,
-    searchShows: search.searchShows,
-    
-    // Cache search results
-    storeResults: search.storeSearchResults
+    search: search.search
   },
 
   artist: {
