@@ -9,9 +9,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
-import { supabase } from '@/integrations/supabase/client'; // Added for Supabase
-import { PostgrestFilterBuilder } from '@supabase/postgrest-js'; // Added for type
-import { Show, Artist, Venue } from '@/types'; // Assuming these types exist
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { PostgrestFilterBuilder } from '@supabase/postgrest-js';
+import { Show, Artist, Venue } from '@/types';
+import { searchQueryKeys, invalidateSearchQueries } from '@/services/reactQueryOptimization';
 
 interface SearchFilters {
   location?: string;
@@ -37,8 +39,80 @@ export default function SearchWithFilters({
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
   const debouncedQuery = useDebounce(query, 300);
+
+  // Use React Query for search suggestions
+  const { data: suggestions, isLoading: loadingSuggestions } = useQuery({
+    queryKey: searchQueryKeys.suggestions(debouncedQuery),
+    queryFn: () => fetchSearchSuggestions(debouncedQuery),
+    enabled: debouncedQuery.length > 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Use React Query for available genres
+  const { data: availableGenres } = useQuery({
+    queryKey: searchQueryKeys.genres(),
+    queryFn: fetchAvailableGenres,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  // Fetch available genres from the database
+  async function fetchAvailableGenres(): Promise<string[]> {
+    try {
+      const { data } = await supabase
+        .from('artists')
+        .select('genres')
+        .not('genres', 'is', null);
+
+      const allGenres = new Set<string>();
+      data?.forEach(artist => {
+        if (artist.genres && Array.isArray(artist.genres)) {
+          artist.genres.forEach(genre => allGenres.add(genre));
+        }
+      });
+
+      return Array.from(allGenres).sort();
+    } catch (error) {
+      console.error('Error fetching genres:', error);
+      return ['rock', 'pop', 'hip-hop', 'electronic', 'country', 'jazz', 'classical'];
+    }
+  }
+
+  // Fetch search suggestions
+  async function fetchSearchSuggestions(searchQuery: string): Promise<string[]> {
+    if (!searchQuery || searchQuery.length < 3) return [];
+
+    try {
+      const { data: artistSuggestions } = await supabase
+        .from('artists')
+        .select('name')
+        .ilike('name', `%${searchQuery}%`)
+        .limit(5);
+
+      const { data: venueSuggestions } = await supabase
+        .from('venues')
+        .select('name, city')
+        .or(`name.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%`)
+        .limit(5);
+
+      const suggestions: string[] = [];
+      
+      artistSuggestions?.forEach(artist => suggestions.push(artist.name));
+      venueSuggestions?.forEach(venue => {
+        suggestions.push(venue.name);
+        if (venue.city && !suggestions.includes(venue.city)) {
+          suggestions.push(venue.city);
+        }
+      });
+
+      return suggestions.slice(0, 8);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      return [];
+    }
+  }
 
   // Function to convert string dateRange to actual dates
   const getDateRangeValues = (dateRangeString?: string): { start?: string; end?: string } => {
@@ -102,12 +176,8 @@ export default function SearchWithFilters({
     }
     
     if (searchFilters.genre) {
-      // Assuming artists table has a genres array/column that can be filtered.
-      // This might require a different approach like `contains` or `overlaps` if genres is an array.
-      // queryBuilder = queryBuilder.contains('artist.genres', [searchFilters.genre]);
-      // For simplicity, if genre is a direct column on artist or show, it would be:
-      // queryBuilder = queryBuilder.eq('artist.genre_column_name', searchFilters.genre);
-      // Placeholder: Actual genre filtering depends on DB schema.
+      // Filter by genre using overlap operator for array fields
+      queryBuilder = queryBuilder.overlaps('artist.genres', [searchFilters.genre]);
     }
     
     if (searchFilters.sortBy) {
@@ -125,34 +195,23 @@ export default function SearchWithFilters({
   };
 
   const handleSearch = useCallback(async (searchQuery: string, searchFilters: SearchFilters) => {
+    // Invalidate previous search results
+    await invalidateSearchQueries(queryClient);
+
     if (onSearch) {
       // If onSearch prop is provided, it's responsible for handling the query.
-      // We can pass the built query or just params.
-      // For now, let's assume onSearch expects query and filters.
       onSearch(searchQuery, searchFilters);
     } else {
-      // Default behavior: navigate or fetch and display results here
-      const queryBuilderInstance = buildSupabaseQuery(searchQuery, searchFilters);
-      console.log('Supabase query built. Implement fetching & display or navigation.');
-      // Example navigation (current behavior):
+      // Default behavior: navigate with search parameters
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set('q', searchQuery.trim());
       if (searchFilters.location) params.set('location', searchFilters.location);
-      if (searchFilters.dateRange) params.set('date', searchFilters.dateRange); // Keep string for URL
+      if (searchFilters.dateRange) params.set('date', searchFilters.dateRange);
       if (searchFilters.genre) params.set('genre', searchFilters.genre);
       if (searchFilters.sortBy) params.set('sort', searchFilters.sortBy);
       navigate(`/search?${params.toString()}`);
-
-      // OR: If this component should fetch and display results:
-      // try {
-      //   const { data, error } = await queryBuilderInstance;
-      //   if (error) throw error;
-      //   // process and display data
-      // } catch (error) {
-      //   console.error("Error fetching search results:", error);
-      // }
     }
-  }, [onSearch, navigate]);
+  }, [onSearch, navigate, queryClient]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +253,25 @@ export default function SearchWithFilters({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+            
+            {/* Search Suggestions Dropdown */}
+            {suggestions && suggestions.length > 0 && debouncedQuery.length > 2 && (
+              <div className="absolute top-full mt-1 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-800 text-white text-sm border-b border-gray-800 last:border-b-0"
+                    onClick={() => {
+                      setQuery(suggestion);
+                      handleSearch(suggestion, filters);
+                    }}
+                  >
+                    <Search className="h-3 w-3 mr-2 inline text-gray-400" />
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Filter Toggle */}
@@ -282,13 +360,11 @@ export default function SearchWithFilters({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">Any genre</SelectItem>
-                        <SelectItem value="rock">Rock</SelectItem>
-                        <SelectItem value="pop">Pop</SelectItem>
-                        <SelectItem value="hip-hop">Hip Hop</SelectItem>
-                        <SelectItem value="electronic">Electronic</SelectItem>
-                        <SelectItem value="country">Country</SelectItem>
-                        <SelectItem value="jazz">Jazz</SelectItem>
-                        <SelectItem value="classical">Classical</SelectItem>
+                        {availableGenres?.slice(0, 20).map(genre => (
+                          <SelectItem key={genre} value={genre}>
+                            {genre.charAt(0).toUpperCase() + genre.slice(1)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

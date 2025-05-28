@@ -2,9 +2,11 @@
 import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthProvider } from "@/context/AuthContext";
 import { MobileProvider } from "@/context/MobileContext";
 import { initBackgroundUpdates } from "@/services/scheduler";
+import { prefetchStrategies, backgroundSync } from "@/services/reactQueryOptimization";
 import "./App.css";
 
 // Import pages
@@ -23,10 +25,31 @@ import DataSyncTestPage from "./pages/DataSyncTestPage";
 import UserFlowTest from "./components/UserFlowTest";
 
 function App() {
+  const queryClient = useQueryClient();
+
   useEffect(() => {
     // Initialize background data synchronization
     initBackgroundUpdates();
-  }, []);
+    
+    // Prefetch trending data on app load
+    prefetchStrategies.prefetchTrendingData(queryClient);
+    
+    // Set up periodic background sync
+    const syncInterval = setInterval(() => {
+      backgroundSync.syncTrendingData(queryClient);
+      backgroundSync.syncVoteCounts(queryClient);
+    }, 5 * 60 * 1000); // Every 5 minutes
+    
+    // Clean up cache periodically
+    const cleanupInterval = setInterval(() => {
+      backgroundSync.cleanupCache(queryClient);
+    }, 30 * 60 * 1000); // Every 30 minutes
+    
+    return () => {
+      clearInterval(syncInterval);
+      clearInterval(cleanupInterval);
+    };
+  }, [queryClient]);
 
   return (
     <AuthProvider>

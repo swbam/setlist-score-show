@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/import-setlists",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/calculate-trending",
+      "schedule": "0 */4 * * *"
     }
   ]
 }

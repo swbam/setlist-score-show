@@ -33,8 +33,8 @@ export interface SearchShow {
     state?: string;
     country: string;
   };
-  vote_count?: number;
-  view_count: number;
+  voteCount?: number;
+  view_count?: number;
 }
 
 export interface SearchResult {
@@ -369,4 +369,208 @@ export async function search({ query, limit = 10 }: { query: string; limit?: num
     console.error("❌ Error in unified search:", error);
     return [];
   }
+}
+
+/**
+ * Advanced search with filters, sorting, and enhanced results
+ */
+export async function advancedSearch({
+  query,
+  filters = {},
+  sortBy = 'relevance',
+  limit = 20,
+  offset = 0
+}: {
+  query: string;
+  filters?: {
+    location?: string;
+    dateRange?: string;
+    genre?: string;
+    artistType?: string;
+    hasUpcomingShows?: boolean;
+  };
+  sortBy?: 'relevance' | 'popularity' | 'date' | 'votes' | 'alphabetical';
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  artists: SearchArtist[];
+  shows: SearchShow[];
+  total: number;
+  hasMore: boolean;
+}> {
+  try {
+    console.log(`🔍 Advanced search for: "${query}" with filters:`, filters);
+
+    if (!query || query.trim().length < 2) {
+      return { artists: [], shows: [], total: 0, hasMore: false };
+    }
+
+    const searchTerm = query.trim();
+    let artistQuery = supabase
+      .from('artists')
+      .select(`
+        id,
+        name,
+        image_url,
+        popularity,
+        genres,
+        upcoming_shows:shows!shows_artist_id_fkey(count)
+      `)
+      .ilike('name', `%${searchTerm}%`);
+
+    let showQuery = supabase
+      .from('shows')
+      .select(`
+        id,
+        name,
+        date,
+        view_count,
+        artists!shows_artist_id_fkey(id, name, image_url),
+        venues!shows_venue_id_fkey(id, name, city, state, country),
+        setlists(
+          setlist_songs(votes)
+        )
+      `)
+      .or(`name.ilike.%${searchTerm}%,artists.name.ilike.%${searchTerm}%,venues.name.ilike.%${searchTerm}%`);
+
+    // Apply filters
+    if (filters.location) {
+      showQuery = showQuery.or(
+        `venues.city.ilike.%${filters.location}%,venues.state.ilike.%${filters.location}%,venues.country.ilike.%${filters.location}%`
+      );
+    }
+
+    if (filters.genre) {
+      artistQuery = artistQuery.contains('genres', [filters.genre]);
+    }
+
+    if (filters.hasUpcomingShows) {
+      artistQuery = artistQuery.gte('upcoming_shows', 1);
+    }
+
+    if (filters.dateRange) {
+      const { start, end } = getDateRangeValues(filters.dateRange);
+      if (start) showQuery = showQuery.gte('date', start);
+      if (end) showQuery = showQuery.lte('date', end);
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'popularity':
+        artistQuery = artistQuery.order('popularity', { ascending: false });
+        showQuery = showQuery.order('view_count', { ascending: false });
+        break;
+      case 'date':
+        showQuery = showQuery.order('date', { ascending: true });
+        break;
+      case 'votes':
+        // For now, order by view_count as a proxy for engagement
+        showQuery = showQuery.order('view_count', { ascending: false });
+        break;
+      case 'alphabetical':
+        artistQuery = artistQuery.order('name', { ascending: true });
+        showQuery = showQuery.order('name', { ascending: true });
+        break;
+      case 'relevance':
+      default:
+        // Default relevance sorting (by popularity/view_count)
+        artistQuery = artistQuery.order('popularity', { ascending: false });
+        showQuery = showQuery.order('view_count', { ascending: false });
+        break;
+    }
+
+    // Apply pagination
+    const [artistsData, showsData] = await Promise.all([
+      artistQuery.range(offset, offset + Math.ceil(limit / 2) - 1),
+      showQuery.range(offset, offset + Math.floor(limit / 2) - 1)
+    ]);
+
+    if (artistsData.error) {
+      console.error('Error searching artists:', artistsData.error);
+    }
+
+    if (showsData.error) {
+      console.error('Error searching shows:', showsData.error);
+    }
+
+    const artists: SearchArtist[] = (artistsData.data || []).map(artist => ({
+      id: artist.id,
+      name: artist.name,
+      image_url: artist.image_url,
+      popularity: artist.popularity,
+      upcomingShowsCount: artist.upcoming_shows?.[0]?.count || 0
+    }));
+
+    const shows: SearchShow[] = (showsData.data || []).map(show => ({
+      id: show.id,
+      name: show.name,
+      date: show.date,
+      artist: {
+        id: show.artists.id,
+        name: show.artists.name,
+        image_url: show.artists.image_url
+      },
+      venue: {
+        id: show.venues.id,
+        name: show.venues.name,
+        city: show.venues.city,
+        state: show.venues.state,
+        country: show.venues.country
+      },
+      voteCount: Array.isArray(show.setlists) ? show.setlists.reduce((total, setlist) => {
+        const setlistSongs = Array.isArray(setlist.setlist_songs) ? setlist.setlist_songs : [];
+        return total + setlistSongs.reduce((votes, song) => votes + (song.votes || 0), 0);
+      }, 0) : 0
+    }));
+
+    const total = artists.length + shows.length;
+    const hasMore = total >= limit;
+
+    return {
+      artists,
+      shows,
+      total,
+      hasMore
+    };
+
+  } catch (error) {
+    console.error("❌ Error in advanced search:", error);
+    return { artists: [], shows: [], total: 0, hasMore: false };
+  }
+}
+
+/**
+ * Helper function to convert date range strings to actual dates
+ */
+function getDateRangeValues(dateRange: string): { start?: string; end?: string } {
+  const now = new Date();
+  let start: Date | undefined;
+  let end: Date | undefined;
+
+  switch (dateRange) {
+    case 'this-week':
+      start = new Date(now);
+      start.setDate(now.getDate() - now.getDay()); // Start of week
+      end = new Date(start);
+      end.setDate(start.getDate() + 6); // End of week
+      break;
+    case 'this-month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      break;
+    case 'next-month':
+      start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+      break;
+    case 'next-3-months':
+      start = now;
+      end = new Date(now);
+      end.setMonth(now.getMonth() + 3);
+      break;
+  }
+
+  return {
+    start: start?.toISOString(),
+    end: end?.toISOString()
+  };
 }
