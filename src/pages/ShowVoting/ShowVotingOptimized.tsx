@@ -226,7 +226,7 @@ const ShowVotingOptimized = () => {
             <VotingSectionEnhanced
               songs={enhancedSetlist}
               onVote={handleVote}
-              submitting={false}
+              submitting={null}
               onAddSong={() => {}}
             />
           </div>

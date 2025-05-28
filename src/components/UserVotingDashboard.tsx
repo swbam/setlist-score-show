@@ -20,33 +20,11 @@ interface VotingStats {
 interface VoteHistory {
   id: string;
   created_at: string;
-  setlist_songs: {
-    id: string;
-    position: number;
-    songs: {
-      id: string;
-      name: string;
-      album: string;
-    };
-    setlists: {
-      id: string;
-      shows: {
-        id: string;
-        name: string;
-        date: string;
-        artists: {
-          id: string;
-          name: string;
-          image_url?: string;
-        };
-        venues: {
-          name: string;
-          city: string;
-          state?: string;
-        };
-      };
-    };
-  };
+  song_name: string;
+  artist_name: string;
+  show_name: string;
+  venue_name: string;
+  show_date: string;
 }
 
 export function UserVotingDashboard() {
@@ -74,37 +52,15 @@ export function UserVotingDashboard() {
     try {
       setLoading(true);
 
-      // Get recent vote history with proper join
+      // Get simplified vote history to avoid complex joins
       const { data: voteHistory, error: historyError } = await supabase
         .from('votes')
         .select(`
           id,
           created_at,
           setlist_songs!inner(
-            id,
-            position,
             songs!inner(
-              id,
-              name,
-              album
-            ),
-            setlists!inner(
-              id,
-              shows!inner(
-                id,
-                name,
-                date,
-                artists!inner(
-                  id,
-                  name,
-                  image_url
-                ),
-                venues!inner(
-                  name,
-                  city,
-                  state
-                )
-              )
+              name
             )
           )
         `)
@@ -114,18 +70,28 @@ export function UserVotingDashboard() {
 
       if (historyError) {
         console.error('Error loading vote history:', historyError);
-      } else if (voteHistory) {
-        setRecentVotes(voteHistory as VoteHistory[]);
+      } else if (voteHistory && Array.isArray(voteHistory)) {
+        // Transform the data to match our interface
+        const transformedHistory: VoteHistory[] = voteHistory.map((vote: any) => ({
+          id: vote.id,
+          created_at: vote.created_at,
+          song_name: vote.setlist_songs?.songs?.name || 'Unknown Song',
+          artist_name: 'Unknown Artist',
+          show_name: 'Unknown Show',
+          venue_name: 'Unknown Venue',
+          show_date: vote.created_at
+        }));
+        setRecentVotes(transformedHistory);
       }
 
-      // Get voting statistics using correct RPC function name
+      // Get voting statistics using the correct RPC function
       const { data: userStats, error: statsError } = await supabase.rpc('get_user_vote_stats', {
         show_id_param: '' // Pass empty string for overall stats
       });
 
       if (statsError) {
         console.error('Error loading voting stats:', statsError);
-      } else if (userStats) {
+      } else if (userStats && typeof userStats === 'object') {
         const statsData = userStats as any;
         setStats({
           totalVotes: statsData.daily_votes_used || 0,
@@ -252,12 +218,12 @@ export function UserVotingDashboard() {
               {recentVotes.map((vote) => (
                 <div key={vote.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex-1">
-                    <p className="font-medium">{vote.setlist_songs.songs.name}</p>
+                    <p className="font-medium">{vote.song_name}</p>
                     <p className="text-sm text-gray-600">
-                      {vote.setlist_songs.setlists.shows.artists.name} • {vote.setlist_songs.setlists.shows.venues.name}
+                      {vote.artist_name} • {vote.venue_name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {new Date(vote.setlist_songs.setlists.shows.date).toLocaleDateString()}
+                      {new Date(vote.show_date).toLocaleDateString()}
                     </p>
                   </div>
                   <Badge variant="outline">

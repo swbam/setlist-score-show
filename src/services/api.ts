@@ -47,7 +47,6 @@ export async function processShow(ticketmasterEvent: any) {
  */
 export async function searchWithConsistency(query: string, options: any = {}) {
   const results = await search.search({ query, ...options });
-  // Store results would need to be implemented in search service
   return results;
 }
 
