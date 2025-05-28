@@ -7,14 +7,53 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-// Test component for data sync operations
+interface TestLog {
+  timestamp: string;
+  type: 'info' | 'success' | 'error' | 'warning';
+  operation: string;
+  message: string;
+  data?: any;
+}
+
+// Enhanced test component for data sync operations with comprehensive logging
 const DataSyncTests = () => {
   const [loading, setLoading] = useState<string | null>(null);
   const [results, setResults] = useState<any>({});
+  const [logs, setLogs] = useState<TestLog[]>([]);
+
+  // Enhanced logging function
+  const addLog = (type: TestLog['type'], operation: string, message: string, data?: any) => {
+    const logEntry: TestLog = {
+      timestamp: new Date().toISOString(),
+      type,
+      operation,
+      message,
+      data
+    };
+    
+    setLogs(prev => [...prev, logEntry]);
+    console.log(`[${type.toUpperCase()}] ${operation}: ${message}`, data || '');
+    
+    // Also show important logs as toasts
+    if (type === 'error') {
+      toast.error(`${operation}: ${message}`);
+    } else if (type === 'success') {
+      toast.success(`${operation}: ${message}`);
+    }
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+    setResults({});
+  };
 
   const testShowsQuery = async () => {
     setLoading('shows');
+    addLog('info', 'Shows Query', 'Starting shows database query test');
+    
     try {
+      addLog('info', 'Shows Query', 'Executing Supabase query with joins to artists and venues');
+      
       const { data, error } = await supabase
         .from('shows')
         .select(`
@@ -33,22 +72,38 @@ const DataSyncTests = () => {
         `)
         .limit(5);
 
-      if (error) throw error;
+      if (error) {
+        addLog('error', 'Shows Query', `Database query failed: ${error.message}`, error);
+        throw error;
+      }
 
-      const formattedShows = (data || []).map(show => ({
-        id: show.id,
-        name: show.name,
-        date: show.date,
-        artist_name: show.artists?.name || 'Unknown Artist',
-        venue_name: show.venues?.name || 'Unknown Venue',
-        venue_city: show.venues?.city || 'Unknown City'
-      }));
+      addLog('info', 'Shows Query', `Raw database response received`, { 
+        rowCount: data?.length || 0,
+        sample: data?.[0] || null 
+      });
+
+      const formattedShows = (data || []).map((show, index) => {
+        const formatted = {
+          id: show.id,
+          name: show.name,
+          date: show.date,
+          artist_name: show.artists?.name || 'Unknown Artist',
+          venue_name: show.venues?.name || 'Unknown Venue',
+          venue_city: show.venues?.city || 'Unknown City'
+        };
+        
+        if (index === 0) {
+          addLog('info', 'Shows Query', 'Sample formatted show data', formatted);
+        }
+        
+        return formatted;
+      });
 
       setResults(prev => ({ ...prev, shows: formattedShows }));
-      toast.success(`Found ${formattedShows.length} shows`);
+      addLog('success', 'Shows Query', `Successfully processed ${formattedShows.length} shows`);
+      
     } catch (error) {
-      console.error('Shows test error:', error);
-      toast.error('Shows test failed');
+      addLog('error', 'Shows Query', `Query execution failed`, error);
     } finally {
       setLoading(null);
     }

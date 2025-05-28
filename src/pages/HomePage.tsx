@@ -1,15 +1,31 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Music, Users, TrendingUp } from "lucide-react";
+import { Search, Music, Users, TrendingUp, TestTube, Database, Activity, Shield } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import SearchBar from "@/components/SearchBar";
 import TrendingShows from "@/components/TrendingShows";
 import UserFlowTest from "@/components/UserFlowTest";
+import UserFlowTestEnhanced from "@/components/UserFlowTestEnhanced";
+import DataSyncTestsEnhanced from "@/tests/DataSyncTestsEnhanced";
+import ProductionMonitor from "@/components/ProductionMonitor";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const HomePage = () => {
   const [showTest, setShowTest] = useState(false);
+  const [showMonitor, setShowMonitor] = useState(false);
+  const [isDevelopment, setIsDevelopment] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    // Check if we're in development mode
+    setIsDevelopment(process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost');
+    
+    // Check for admin access (you can implement your own admin check logic)
+    const adminKey = localStorage.getItem('admin_access');
+    setIsAdmin(adminKey === 'theset_admin_2025' || isDevelopment);
+  }, [isDevelopment]);
 
   return (
     <div className="min-h-screen bg-black">
@@ -36,25 +52,136 @@ const HomePage = () => {
               Compare fan predictions with actual setlists after the show.
             </p>
 
-            {/* Test Button */}
-            <div className="mb-8">
-              <Button 
-                onClick={() => setShowTest(!showTest)}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 text-lg"
-              >
-                {showTest ? 'Hide' : 'Show'} End-to-End Test
-              </Button>
-            </div>
+            {/* Development Testing Interface */}
+            {isDevelopment && (
+              <div className="mb-8">
+                <Button 
+                  onClick={() => setShowTest(!showTest)}
+                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 text-lg mr-4"
+                >
+                  <TestTube className="h-5 w-5 mr-2" />
+                  {showTest ? 'Hide' : 'Show'} Testing Suite
+                </Button>
+                <span className="text-sm text-gray-400">Development Mode</span>
+              </div>
+            )}
 
-            {/* Test Component */}
-            {showTest && (
+            {/* Production Monitoring Interface */}
+            {isAdmin && (
+              <div className="mb-8">
+                <Button 
+                  onClick={() => setShowMonitor(!showMonitor)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-lg mr-4"
+                >
+                  <Shield className="h-5 w-5 mr-2" />
+                  {showMonitor ? 'Hide' : 'Show'} System Monitor
+                </Button>
+                <span className="text-sm text-gray-400">
+                  {isDevelopment ? 'Development Mode' : 'Admin Access'}
+                </span>
+              </div>
+            )}
+
+            {/* Production System Monitor */}
+            {showMonitor && isAdmin && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mb-12"
+                className="mb-12 max-w-7xl mx-auto"
               >
-                <UserFlowTest />
+                <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg border border-blue-700 p-6">
+                  <div className="flex items-center mb-6">
+                    <Shield className="h-6 w-6 text-blue-400 mr-3" />
+                    <h3 className="text-2xl font-bold text-white">Production System Monitor</h3>
+                    <div className="ml-auto text-sm text-gray-400">
+                      Real-time system health and performance monitoring
+                    </div>
+                  </div>
+                  
+                  <ProductionMonitor />
+                </div>
+              </motion.div>
+            )}
+
+            {/* Enhanced Testing Suite */}
+            {showTest && isDevelopment && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-12 max-w-7xl mx-auto"
+              >
+                <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-700 p-6">
+                  <div className="flex items-center mb-6">
+                    <Activity className="h-6 w-6 text-yellow-metal-300 mr-3" />
+                    <h3 className="text-2xl font-bold text-white">Development Testing Suite</h3>
+                  </div>
+                  
+                  <Tabs defaultValue="user-flow" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 bg-gray-800">
+                      <TabsTrigger value="user-flow" className="data-[state=active]:bg-yellow-metal-600">
+                        <Users className="h-4 w-4 mr-2" />
+                        User Flow Tests
+                      </TabsTrigger>
+                      <TabsTrigger value="data-sync" className="data-[state=active]:bg-yellow-metal-600">
+                        <Database className="h-4 w-4 mr-2" />
+                        Data Sync Tests
+                      </TabsTrigger>
+                      <TabsTrigger value="legacy" className="data-[state=active]:bg-yellow-metal-600">
+                        <TestTube className="h-4 w-4 mr-2" />
+                        Legacy Tests
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="user-flow" className="mt-6">
+                      <div className="space-y-4">
+                        <div className="text-sm text-gray-300">
+                          <p className="mb-2">
+                            <strong>Enhanced User Flow Testing:</strong> Comprehensive end-to-end testing with performance monitoring, 
+                            real-time subscription validation, and data consistency checks.
+                          </p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-400">
+                            <li>7-step testing pipeline from search to voting</li>
+                            <li>Real-time WebSocket connection testing</li>
+                            <li>Performance timing and bottleneck identification</li>
+                            <li>Data consistency validation across the entire pipeline</li>
+                          </ul>
+                        </div>
+                        <UserFlowTestEnhanced />
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="data-sync" className="mt-6">
+                      <div className="space-y-4">
+                        <div className="text-sm text-gray-300">
+                          <p className="mb-2">
+                            <strong>Enhanced Database Testing:</strong> Comprehensive database operations testing with 
+                            relationship validation, performance monitoring, and data quality analysis.
+                          </p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-400">
+                            <li>Artist, show, and user relationship testing</li>
+                            <li>Foreign key constraint validation</li>
+                            <li>Performance monitoring with timing metrics</li>
+                            <li>Interactive data inspection and debugging</li>
+                          </ul>
+                        </div>
+                        <DataSyncTestsEnhanced />
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="legacy" className="mt-6">
+                      <div className="space-y-4">
+                        <div className="text-sm text-gray-300">
+                          <p className="mb-2">
+                            <strong>Legacy Testing Component:</strong> Original user flow test for comparison and fallback testing.
+                          </p>
+                        </div>
+                        <UserFlowTest />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
               </motion.div>
             )}
             
