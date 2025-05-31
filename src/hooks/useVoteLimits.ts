@@ -44,7 +44,13 @@ export function useVoteLimits(showId?: string) {
         return;
       }
 
-      const stats = data as any;
+      const stats = data as {
+        authenticated: boolean;
+        daily_votes_remaining: number;
+        show_votes_remaining: number;
+        daily_vote_count: number;
+        show_vote_count: number;
+      };
       const canVote = stats.authenticated && 
                      stats.daily_votes_remaining > 0 && 
                      stats.show_votes_remaining > 0;

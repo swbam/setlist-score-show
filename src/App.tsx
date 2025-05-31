@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { AuthProvider } from "@/context/AuthContext";
 import { MobileProvider } from "@/context/MobileContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initBackgroundUpdates } from "@/services/scheduler";
 import { prefetchStrategies, backgroundSync } from "@/services/reactQueryOptimization";
 import "./App.css";
@@ -52,9 +53,10 @@ function App() {
   }, [queryClient]);
 
   return (
-    <AuthProvider>
-      <MobileProvider>
-        <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <MobileProvider>
+          <Routes>
           <Route path="/" element={<IndexPage />} />
           <Route path="/search" element={<SearchResults />} />
           
@@ -79,10 +81,11 @@ function App() {
           <Route path="/tests/data-sync" element={<DataSyncTestPage />} />
           <Route path="/tests/user-flow" element={<UserFlowTest />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-        <Toaster position="top-center" richColors />
-      </MobileProvider>
-    </AuthProvider>
+          </Routes>
+          <Toaster position="top-center" richColors />
+        </MobileProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

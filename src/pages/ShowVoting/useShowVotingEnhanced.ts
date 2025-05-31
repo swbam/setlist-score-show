@@ -41,7 +41,7 @@ interface SetlistSong {
   };
 }
 
-export function useShowVotingEnhanced(user: any) {
+export function useShowVotingEnhanced(user: { id: string; email?: string } | null) {
   const { showId } = useParams<{ showId: string }>();
   const [show, setShow] = useState<Show | null>(null);
   const [setlist, setSetlist] = useState<SetlistSong[]>([]);
@@ -85,8 +85,8 @@ export function useShowVotingEnhanced(user: any) {
         }
 
         // Transform the data to match expected format
-        const artistData = showData.artists as any;
-        const venueData = showData.venues as any;
+        const artistData = showData.artists as Artist;
+        const venueData = showData.venues as Venue;
 
         const transformedShow: Show = {
           id: showData.id,
@@ -148,7 +148,7 @@ export function useShowVotingEnhanced(user: any) {
 
         if (setlistData) {
           const transformedSetlist: SetlistSong[] = setlistData.map(item => {
-            const songData = item.songs as any;
+            const songData = item.songs as Song;
             
             return {
               id: item.id,
@@ -198,7 +198,7 @@ export function useShowVotingEnhanced(user: any) {
         return false;
       }
 
-      const result = data as any;
+      const result = data as { success: boolean; message: string; vote_count: number; user_vote_count: number; daily_vote_count: number; };
       
       if (!result?.success) {
         toast.error(result?.error || "Vote failed");

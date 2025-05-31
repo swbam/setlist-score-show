@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import * as spotifyService from "@/services/spotify";
 import * as ticketmasterService from "@/services/ticketmaster";
 import { SpotifyArtist } from "@/services/spotify";
+import { Show } from "@/types/database";
 import { toast } from "@/components/ui/sonner";
 
 export function useArtistData(artistId: string | undefined) {
   const [artist, setArtist] = useState<SpotifyArtist | null>(null);
-  const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
-  const [pastShows, setPastShows] = useState<any[]>([]);
+  const [upcomingShows, setUpcomingShows] = useState<Show[]>([]);
+  const [pastShows, setPastShows] = useState<Show[]>([]);
   const [loading, setLoading] = useState(true);
   const [setlistId, setSetlistId] = useState<string | null>(null);
 
@@ -70,7 +71,7 @@ export function useArtistData(artistId: string | undefined) {
     try {
       console.log(`Fetching and storing shows for ${artistName}`);
       const events = await ticketmasterService.getArtistEvents(artistName);
-      const shows: any[] = [];
+      const shows: Show[] = [];
       
       for (const event of events) {
         try {
@@ -185,8 +186,8 @@ export function useArtistData(artistId: string | undefined) {
           
           // Split into upcoming and past shows
           const now = new Date();
-          const upcoming: any[] = [];
-          const past: any[] = [];
+          const upcoming: Show[] = [];
+          const past: Show[] = [];
           
           artistShows.forEach(show => {
             const showDate = new Date(show.date);

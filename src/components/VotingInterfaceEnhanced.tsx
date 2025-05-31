@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,38 +6,10 @@ import { Progress } from '@/components/ui/progress';
 import { Heart, HeartOff, Users, Clock, AlertCircle, Music } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useRealtimeVoting } from '@/hooks/useRealtimeVoting';
+import { useRealtimeVotingEnhanced } from '@/hooks/useRealtimeVotingEnhanced';
+import type { VoteResponse, VoteLimits, SetlistSong, Song } from '@/types/database';
 
-interface VoteResponse {
-  success: boolean;
-  error?: string;
-  votes?: number;
-  daily_votes_used?: number;
-  daily_votes_remaining?: number;
-  show_votes_used?: number;
-  show_votes_remaining?: number;
-}
-
-interface Song {
-  id: string;
-  name: string;
-  artist_id: string;
-}
-
-interface SetlistSong {
-  id: string;
-  song_id: string;
-  votes: number;
-  position: number;
-  songs: Song;
-}
-
-interface VoteLimits {
-  dailyVotesUsed: number;
-  dailyVotesRemaining: number;
-  showVotesUsed: number;
-  showVotesRemaining: number;
-}
+// Types imported from @/types/database
 
 interface VotingInterfaceEnhancedProps {
   setlistId: string;
@@ -46,12 +18,12 @@ interface VotingInterfaceEnhancedProps {
   onVoteUpdate?: (songId: string, newVoteCount: number) => void;
 }
 
-export function VotingInterfaceEnhanced({ 
+export const VotingInterfaceEnhanced = React.memo(({ 
   setlistId, 
   showId, 
   songs, 
   onVoteUpdate 
-}: VotingInterfaceEnhancedProps) {
+}: VotingInterfaceEnhancedProps) => {
   const [userVotes, setUserVotes] = useState<Set<string>>(new Set());
   const [voteLimits, setVoteLimits] = useState<VoteLimits>({
     dailyVotesUsed: 0,
@@ -67,7 +39,7 @@ export function VotingInterfaceEnhanced({
     isConnected, 
     optimisticVoteUpdate, 
     revertVoteUpdate 
-  } = useRealtimeVoting(setlistId);
+  } = useRealtimeVotingEnhanced(setlistId);
 
   useEffect(() => {
     loadUserVotes();
@@ -196,14 +168,16 @@ export function VotingInterfaceEnhanced({
 
       // Call database function
       const { data, error } = await supabase.rpc('vote_for_song', {
-        setlist_song_id: setlistSongId
+        p_user_id: user.id,
+        p_setlist_song_id: setlistSongId
       });
 
       if (error) throw error;
 
-      const response = data as unknown as VoteResponse;
+      // Parse JSON response from database function
+      const response = typeof data === 'string' ? JSON.parse(data) : data;
 
-      if (!response.success) {
+      if (!response || !response.success) {
         // Revert optimistic update
         revertVoteUpdate(setlistSongId);
         setUserVotes(prev => {
@@ -278,11 +252,13 @@ export function VotingInterfaceEnhanced({
     );
   }
 
-  const sortedSongs = [...songs].sort((a, b) => {
-    const aVotes = voteCounts[a.id] || a.votes;
-    const bVotes = voteCounts[b.id] || b.votes;
-    return bVotes - aVotes;
-  });
+  const sortedSongs = useMemo(() => {
+    return [...songs].sort((a, b) => {
+      const aVotes = voteCounts[a.id] || a.votes;
+      const bVotes = voteCounts[b.id] || b.votes;
+      return bVotes - aVotes;
+    });
+  }, [songs, voteCounts]);
 
   return (
     <div className="space-y-6">
@@ -415,4 +391,4 @@ export function VotingInterfaceEnhanced({
       </Card>
     </div>
   );
-}
+});

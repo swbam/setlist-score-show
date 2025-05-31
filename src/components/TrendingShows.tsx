@@ -1,4 +1,5 @@
 
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,7 +22,7 @@ interface TrendingShow {
   view_count: number;
 }
 
-const TrendingShows = () => {
+const TrendingShows = React.memo(() => {
   const navigate = useNavigate();
 
   const { data: shows, isLoading, error } = useQuery({
@@ -56,9 +57,9 @@ const TrendingShows = () => {
 
         console.log(`✅ Found ${data.length} shows`);
 
-        return data.map((show: any) => {
-          const venueData = show.venues as any;
-          const artistData = show.artists as any;
+        return data.map((show: Show) => {
+    const venueData = show.venues as Venue;
+    const artistData = show.artists as Artist;
           
           return {
             id: show.id,
@@ -232,6 +233,6 @@ const TrendingShows = () => {
       </div>
     </section>
   );
-};
+});
 
 export default TrendingShows;

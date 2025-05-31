@@ -148,7 +148,7 @@ export default function SearchWithFilters({
   };
   
   // Build Supabase query based on plan
-  const buildSupabaseQuery = (searchQuery: string, searchFilters: SearchFilters): PostgrestFilterBuilder<any, any, any[], "shows", unknown>  => {
+  const buildSupabaseQuery = (searchQuery: string, searchFilters: SearchFilters) => {
     let queryBuilder = supabase
       .from('shows')
       .select(`

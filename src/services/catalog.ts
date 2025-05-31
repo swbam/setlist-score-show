@@ -118,7 +118,7 @@ async function checkArtistExists(artistId: string): Promise<boolean> {
  * Gets the song catalog for an artist from the database
  * If not found, synchronizes with Spotify first
  */
-export async function getArtistSongCatalog(artistId: string): Promise<any[]> {
+export async function getArtistSongCatalog(artistId: string): Promise<Song[]> {
   try {
     // First, try to get songs from our database
     const { data: dbSongs, error: dbError } = await supabase
@@ -169,7 +169,7 @@ export async function getArtistSongCatalog(artistId: string): Promise<any[]> {
 /**
  * Gets random songs from an artist's catalog to seed a setlist
  */
-export async function getRandomSongsForSetlist(artistId: string, count: number = 5): Promise<any[]> {
+export async function getRandomSongsForSetlist(artistId: string, count: number = 5): Promise<Song[]> {
   try {
     // First ensure we have the artist's catalog
     await syncArtistCatalog(artistId);
@@ -193,7 +193,7 @@ export async function getRandomSongsForSetlist(artistId: string, count: number =
     }
     
     // Otherwise, select random songs
-    const selectedSongs: any[] = [];
+    const selectedSongs: Song[] = [];
     const usedIndices = new Set<number>();
     
     // First, try to include some popular songs (top 20%)

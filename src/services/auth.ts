@@ -328,7 +328,7 @@ export async function fetchUserTopArtistsFromSpotify(timeRange: string = 'medium
 }
 
 // Get user's top artists from database
-export async function getUserTopArtists(userId?: string): Promise<any[]> {
+export async function getUserTopArtists(userId?: string): Promise<Artist[]> {
   try {
     if (!userId) {
       const { data: userData, error: userError } = await supabase.auth.getUser();

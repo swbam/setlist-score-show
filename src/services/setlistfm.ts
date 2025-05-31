@@ -100,6 +100,182 @@ export function flattenSetlistSongs(setlist: SetlistFmSetlist): SetlistFmSong[] 
   }
 }
 
+// Match or create a song in the database
+async function matchOrCreateSong(artistId: string, songName: string): Promise<string | null> {
+  try {
+    // First, try to find an exact match
+    const { data: exactMatch } = await supabase
+      .from('songs')
+      .select('id')
+      .eq('artist_id', artistId)
+      .ilike('name', songName)
+      .limit(1)
+      .single();
+
+    if (exactMatch) {
+      return exactMatch.id;
+    }
+
+    // Try fuzzy matching using similarity
+    const { data: fuzzyMatches } = await supabase
+      .rpc('match_song_similarity', {
+        p_artist_id: artistId,
+        p_song_name: songName,
+        p_similarity_threshold: 0.7
+      });
+
+    if (fuzzyMatches && fuzzyMatches.length > 0) {
+      return fuzzyMatches[0].id;
+    }
+
+    // If no match found, create a new song entry
+    const songId = crypto.randomUUID();
+    const { data: newSong, error } = await supabase
+      .from('songs')
+      .insert({
+        id: songId,
+        artist_id: artistId,
+        name: songName,
+        album: 'Unknown',
+        duration_ms: 0,
+        popularity: 0,
+        spotify_url: ''
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error creating new song:', error);
+      return null;
+    }
+
+    return newSong.id;
+  } catch (error) {
+    console.error('Error matching/creating song:', error);
+    return null;
+  }
+}
+
+// Import a played setlist from setlist.fm
+export async function importPlayedSetlist(showId: string): Promise<boolean> {
+  try {
+    // Get show details with artist information
+    const { data: show, error: showError } = await supabase
+      .from('shows')
+      .select(`
+        *,
+        artist:artists!artist_id(*)
+      `)
+      .eq('id', showId)
+      .single();
+
+    if (showError || !show || !show.artist) {
+      console.error('Error fetching show or artist details:', showError);
+      return false;
+    }
+
+    // Format date for setlist.fm API (DD-MM-YYYY)
+    const eventDate = format(new Date(show.date), 'dd-MM-yyyy');
+
+    // Search for setlists on setlist.fm
+    const setlists = await searchSetlists(show.artist.name, eventDate);
+
+    if (setlists.length === 0) {
+      console.log('No setlists found for this show');
+      return false;
+    }
+
+    // Use the first (most relevant) setlist found
+    const setlist = setlists[0];
+    const songs = flattenSetlistSongs(setlist);
+
+    if (songs.length === 0) {
+      console.log('No songs found in setlist');
+      return false;
+    }
+
+    // Check if this setlist has already been imported
+    const { data: existingSetlist } = await supabase
+      .from('played_setlists')
+      .select('id')
+      .eq('show_id', showId)
+      .eq('setlist_fm_id', setlist.id)
+      .single();
+
+    if (existingSetlist) {
+      console.log('This setlist has already been imported');
+      return true;
+    }
+
+    // Create the played setlist record
+    const { data: playedSetlist, error: setlistError } = await supabase
+      .from('played_setlists')
+      .insert({
+        show_id: showId,
+        setlist_fm_id: setlist.id,
+        played_date: new Date(show.date),
+        imported_at: new Date()
+      })
+      .select()
+      .single();
+
+    if (setlistError || !playedSetlist) {
+      console.error('Error creating played setlist:', setlistError);
+      return false;
+    }
+
+    // Process and insert songs
+    for (let i = 0; i < songs.length; i++) {
+      const songId = await matchOrCreateSong(show.artist.id, songs[i].name);
+      
+      if (songId) {
+        await supabase
+          .from('played_setlist_songs')
+          .insert({
+            played_setlist_id: playedSetlist.id,
+            song_id: songId,
+            position: i + 1
+          });
+      }
+    }
+
+    console.log(`Successfully imported setlist with ${songs.length} songs`);
+    return true;
+  } catch (error) {
+    console.error('Error importing played setlist:', error);
+    return false;
+  }
+}
+
+// Get played setlist for a show
+export async function getPlayedSetlistForShow(showId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('played_setlists')
+      .select(`
+        *,
+        played_setlist_songs(
+          position,
+          song:songs(*)
+        )
+      `)
+      .eq('show_id', showId)
+      .order('imported_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Error fetching played setlist:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error getting played setlist:', error);
+    return null;
+  }
+}
+
 // Store played setlist in database
 export async function storePlayedSetlist(
   showId: string, 
@@ -198,71 +374,4 @@ export async function matchSongToDatabase(
   }
 }
 
-/**
- * Imports a played setlist from setlist.fm for a given show.
- * Fetches show details, queries setlist.fm, and stores the played setlist and songs.
- */
-export async function importPlayedSetlist(showId: string): Promise<void> {
-  try {
-    // Get show details including the artist
-    const { data: show, error: showError } = await supabase
-      .from('shows')
-      .select(`
-        date,
-        artist:artists!artist_id(id, name)
-      `)
-      .eq('id', showId)
-      .single();
 
-    if (showError || !show || !show.artist) {
-      console.error(`Error fetching show or artist details for showId ${showId}:`, showError);
-      return;
-    }
-
-    // Format date for setlist.fm API (dd-MM-yyyy)
-    const eventDate = format(new Date(show.date), 'dd-MM-yyyy');
-
-    // Query setlist.fm
-    // Note: This searches for setlists. If multiple are found, it takes the first.
-    // A more robust solution might involve matching venue details if available.
-    const setlistFmResults = await searchSetlists(show.artist.name, eventDate);
-
-    if (!setlistFmResults || setlistFmResults.length === 0) {
-      console.log(`No setlist found on setlist.fm for artist "${show.artist.name}" on date ${eventDate}.`);
-      return;
-    }
-
-    const setlistData = setlistFmResults[0]; // Take the first matching setlist
-
-    // Store the played setlist header
-    const playedSetlistId = await storePlayedSetlist(showId, setlistData.id, setlistData.eventDate);
-
-    if (!playedSetlistId) {
-      console.error(`Failed to store played setlist header for showId ${showId}, setlist.fm ID ${setlistData.id}`);
-      return;
-    }
-
-    // Process and insert songs
-    const songNames = flattenSetlistSongs(setlistData).map(s => s.name);
-
-    console.log(`Found ${songNames.length} songs in setlist.fm data for show ${showId}.`);
-
-    for (let i = 0; i < songNames.length; i++) {
-      const songName = songNames[i];
-      // Try to match the song by name for the given artist
-      const songId = await matchSongToDatabase(show.artist.id, songName);
-
-      if (songId) {
-        await storePlayedSetlistSongs(playedSetlistId, songId, i + 1);
-      } else {
-        // TODO: Implement matchOrCreateSong logic if song creation is desired here.
-        // This might involve looking up the song on Spotify and adding it to our 'songs' table.
-        console.warn(`Song "${songName}" by artist "${show.artist.name}" not found in database and not created. Skipping.`);
-      }
-    }
-    console.log(`Successfully imported played setlist ${setlistData.id} for show ${showId}.`);
-
-  } catch (error) {
-    console.error(`Error in importPlayedSetlist for showId ${showId}:`, error);
-  }
-}

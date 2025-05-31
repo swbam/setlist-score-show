@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "./ticketmaster";
 import * as spotifyService from "./spotify";
 import * as dataConsistency from "./dataConsistency";
+import { Show, Artist, Venue } from "@/types/database";
 
 export interface SearchArtist {
   id: string;
@@ -122,13 +123,13 @@ async function searchDatabaseArtists(query: string): Promise<SearchArtist[]> {
     }
 
     return (artists || []).map(artist => {
-      const shows = (artist.shows as any[]) || [];
+      const shows = (artist.shows as Show[]) || [];
       const upcomingShows = shows.filter(show => 
         new Date(show.date) >= new Date()
       ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       const nextShow = upcomingShows[0];
-      const venue = nextShow?.venues as any;
+      const venue = nextShow?.venues as Venue;
 
       return {
         id: artist.id,
@@ -176,8 +177,8 @@ async function searchDatabaseShows(query: string): Promise<SearchShow[]> {
     }
 
     return (shows || []).map(show => {
-      const artistData = show.artists as any;
-      const venueData = show.venues as any;
+      const artistData = show.artists as Artist;
+      const venueData = show.venues as Venue;
 
       return {
         id: show.id,
@@ -287,7 +288,7 @@ export async function getTrendingArtists(limit: number = 10): Promise<SearchArti
     // Filter artists with upcoming shows and calculate trending score
     const trendingArtists = (artists || [])
       .map(artist => {
-        const shows = (artist.shows as any[]) || [];
+        const shows = (artist.shows as Show[]) || [];
         const upcomingShows = shows.filter(show => 
           new Date(show.date) >= new Date()
         );
@@ -301,7 +302,7 @@ export async function getTrendingArtists(limit: number = 10): Promise<SearchArti
           new Date(a.date).getTime() - new Date(b.date).getTime()
         )[0];
         
-        const venue = nextShow?.venues as any;
+        const venue = nextShow?.venues as Venue;
 
         return {
           id: artist.id,
