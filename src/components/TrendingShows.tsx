@@ -8,6 +8,28 @@ import { Calendar, MapPin, Users, TrendingUp, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
+// Define proper types
+interface Show {
+  id: string;
+  name: string | null;
+  date: string;
+  view_count: number;
+  venues: Venue | null;
+  artists: Artist | null;
+}
+
+interface Venue {
+  name: string;
+  city: string | null;
+  state: string | null;
+}
+
+interface Artist {
+  id: string;
+  name: string;
+  image_url: string | null;
+}
+
 interface TrendingShow {
   id: string;
   date: string;
@@ -38,10 +60,10 @@ const TrendingShows = React.memo(() => {
             name,
             date,
             view_count,
-            venues (name, city, state),
-            artists (id, name, image_url)
+            venues!inner (name, city, state),
+            artists!inner (id, name, image_url)
           `)
-          .gte("date", new Date().toISOString())
+          .gte("date", new Date().toISOString().split('T')[0])
           .order("view_count", { ascending: false })
           .limit(8);
 
@@ -58,8 +80,8 @@ const TrendingShows = React.memo(() => {
         console.log(`✅ Found ${data.length} shows`);
 
         return data.map((show: Show) => {
-    const venueData = show.venues as Venue;
-    const artistData = show.artists as Artist;
+          const venueData = show.venues as Venue;
+          const artistData = show.artists as Artist;
           
           return {
             id: show.id,
@@ -71,7 +93,7 @@ const TrendingShows = React.memo(() => {
             artist_id: artistData?.id || '',
             artist_name: artistData?.name || 'Unknown Artist',
             artist_image_url: artistData?.image_url || '/placeholder.svg',
-            total_votes: 0, // Will calculate separately
+            total_votes: 0,
             view_count: show.view_count || 0,
           };
         }) as TrendingShow[];

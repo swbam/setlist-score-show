@@ -25,7 +25,8 @@ const SearchBar = () => {
           placeholder="Search for artists or shows..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-yellow-metal-400"
+          className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-yellow-metal-400 focus:ring-yellow-metal-400"
+          style={{ color: 'white' }}
         />
       </div>
       <Button 
