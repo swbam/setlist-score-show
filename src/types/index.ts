@@ -1,4 +1,3 @@
-
 // User profile from database
 export interface UserProfile {
   id: string;
@@ -12,7 +11,7 @@ export interface UserProfile {
 // Song types
 export interface Song {
   id: string;
-  artist_id: string;
+  artist_id: string; // Add missing property
   name: string;
   album: string;
   duration_ms: number;
@@ -26,8 +25,8 @@ export interface SetlistSong {
   song_id: string;
   position: number;
   votes: number;
-  song: Song;
-  userVoted?: boolean;
+  song?: Song;
+  user_voted?: boolean; // Add for tracking user votes
 }
 
 export interface Setlist {

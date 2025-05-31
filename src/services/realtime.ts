@@ -476,5 +476,42 @@ export const realtimeService = new RealtimeService();
 
 // Legacy function for backward compatibility
 export function subscribeToSetlistVotes(setlistId: string, onUpdate: (payload: any) => void) {
-  return realtimeService.subscribeToSetlistVotes(setlistId, onUpdate);
+  const channel = supabase
+    .channel(`setlist:${setlistId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'setlist_songs',
+        filter: `setlist_id=eq.${setlistId}`
+      },
+      (payload) => onUpdate(payload)
+    )
+    .subscribe();
+
+  return () => channel.unsubscribe();
+}
+
+export function subscribeToShowVotes(
+  showId: string,
+  onUpdate: (payload: any) => void
+): () => void {
+  const channel = supabase
+    .channel(`show:${showId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public', 
+        table: 'votes',
+        filter: `show_id=eq.${showId}`
+      },
+      (payload) => onUpdate(payload)
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
 }

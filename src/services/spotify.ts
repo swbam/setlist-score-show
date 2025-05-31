@@ -1,128 +1,13 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { EnhancedSpotifyRateLimiter } from "./spotifyRateLimiterEnhanced";
 
 // Spotify API endpoints
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
 const SPOTIFY_CLIENT_ID = "2946864dc822469b9c672292ead45f43";
 const SPOTIFY_CLIENT_SECRET = "feaf0fc901124b839b11e02f97d18a8d";
 
-// Rate limiting configuration
-const RATE_LIMIT_CONFIG = {
-  requestsPerSecond: 10, // Conservative limit to avoid hitting 429s
-  burstLimit: 50, // Max burst requests
-  retryDelayMs: 1000, // Initial retry delay
-  maxRetryDelayMs: 30000, // Max retry delay
-  maxRetries: 3
-};
-
-// Rate limiter class for Spotify API
-class SpotifyRateLimiter {
-  private requestQueue: Array<{
-    request: () => Promise<any>;
-    resolve: (value: any) => void;
-    reject: (reason: any) => void;
-    retryCount: number;
-  }> = [];
-  private isProcessing = false;
-  private lastRequestTime = 0;
-  private requestCount = 0;
-  private windowStart = Date.now();
-  private readonly minInterval = 1000 / RATE_LIMIT_CONFIG.requestsPerSecond;
-
-  async enqueue<T>(request: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({
-        request,
-        resolve,
-        reject,
-        retryCount: 0
-      });
-      this.processQueue();
-    });
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.isProcessing || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-
-    while (this.requestQueue.length > 0) {
-      const queueItem = this.requestQueue.shift()!;
-      
-      try {
-        // Check rate limits
-        await this.enforceRateLimit();
-        
-        // Execute request
-        const result = await queueItem.request();
-        queueItem.resolve(result);
-        
-        this.requestCount++;
-        this.lastRequestTime = Date.now();
-        
-      } catch (error: any) {
-        // Handle rate limit errors with exponential backoff
-        if (error.status === 429 || error.message?.includes('rate limit')) {
-          if (queueItem.retryCount < RATE_LIMIT_CONFIG.maxRetries) {
-            const retryDelay = Math.min(
-              RATE_LIMIT_CONFIG.retryDelayMs * Math.pow(2, queueItem.retryCount),
-              RATE_LIMIT_CONFIG.maxRetryDelayMs
-            );
-            
-            console.warn(`Rate limit hit, retrying in ${retryDelay}ms (attempt ${queueItem.retryCount + 1})`);
-            
-            setTimeout(() => {
-              queueItem.retryCount++;
-              this.requestQueue.unshift(queueItem);
-              this.processQueue();
-            }, retryDelay);
-            
-            continue;
-          } else {
-            console.error('Max retries exceeded for Spotify API request');
-            queueItem.reject(new Error('Rate limit exceeded, max retries reached'));
-          }
-        } else {
-          queueItem.reject(error);
-        }
-      }
-    }
-
-    this.isProcessing = false;
-  }
-
-  private async enforceRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceWindowStart = now - this.windowStart;
-    
-    // Reset window if more than 1 second has passed
-    if (timeSinceWindowStart >= 1000) {
-      this.windowStart = now;
-      this.requestCount = 0;
-    }
-    
-    // Check if we've hit the burst limit
-    if (this.requestCount >= RATE_LIMIT_CONFIG.burstLimit) {
-      const waitTime = 1000 - timeSinceWindowStart;
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        this.windowStart = Date.now();
-        this.requestCount = 0;
-      }
-    }
-    
-    // Ensure minimum interval between requests
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.minInterval) {
-      await new Promise(resolve => setTimeout(resolve, this.minInterval - timeSinceLastRequest));
-    }
-  }
-}
-
-// Global rate limiter instance
-const rateLimiter = new SpotifyRateLimiter();
+// Initialize the enhanced rate limiter
+const rateLimiter = new EnhancedSpotifyRateLimiter();
 
 // Types for Spotify API responses
 export interface SpotifyArtist {
@@ -314,257 +199,102 @@ export async function getArtistAlbums(artistId: string): Promise<SpotifyAlbum[]>
   }
 }
 
-// Get tracks for a specific album
-export async function getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
-  try {
-    console.log("Fetching tracks for album:", albumId);
-    const tracksUrl = `/albums/${albumId}/tracks?market=US&limit=50`;
-    const tracks = await fetchAllPages<SpotifyTrack>(SPOTIFY_API_BASE + tracksUrl);
-    
-    // Get full track details for each track to include popularity
-    const fullTracks = await Promise.all(
-      tracks.map(track => spotifyApiCall<SpotifyTrack>(`/tracks/${track.id}`))
-    );
-    
-    return fullTracks.filter(track => track !== null) as SpotifyTrack[];
-  } catch (error) {
-    console.error("Error fetching album tracks:", error);
-    return [];
-  }
-}
+// Get all artist albums (manual pagination)
+export async function getAllArtistAlbums(artistId: string, accessToken: string) {
+  const albums = [];
+  let offset = 0;
+  const limit = 50;
+  let hasMore = true;
 
-// Get all tracks for an artist across all their albums
-export async function getArtistAllTracks(artistId: string): Promise<SpotifyTrack[]> {
-  console.log("Fetching all tracks for artist:", artistId);
-  
-  try {
-    // First get all albums
-    const albums = await getArtistAlbums(artistId);
-    console.log(`Found ${albums.length} albums for artist ${artistId}`);
-    
-    if (albums.length === 0) {
-      // If no albums, try getting top tracks instead
-      console.log("No albums found, falling back to top tracks");
-      return await getArtistTopTracks(artistId);
-    }
-    
-    // Then get all tracks for each album (limit to first 5 albums to avoid rate limits)
-    const limitedAlbums = albums.slice(0, 5);
-    const allTracksPromises = limitedAlbums.map(album => getAlbumTracks(album.id));
-    const allTracksArrays = await Promise.all(allTracksPromises);
-    
-    // Flatten the array of arrays and deduplicate by track ID
-    const allTracks = allTracksArrays.flat();
-    const uniqueTracks = Array.from(
-      new Map(allTracks.map(track => [track.id, track])).values()
-    );
-    
-    console.log(`Found ${uniqueTracks.length} unique tracks for artist ${artistId}`);
-    return uniqueTracks;
-  } catch (error) {
-    console.error("Error fetching all artist tracks:", error);
-    // Fall back to top tracks if full catalog fetch fails
-    console.log("Falling back to top tracks");
-    return await getArtistTopTracks(artistId);
-  }
-}
-
-// Get user's top artists (requires user authentication)
-export async function getUserTopArtists(): Promise<SpotifyArtist[]> {
-  try {
-    // This would normally be implemented with proper Spotify user auth
-    // For now, we'll just return an empty array
-    return [];
-  } catch (error) {
-    console.error("Error fetching user's top artists:", error);
-    return [];
-  }
-}
-
-// Store artist data in Supabase
-export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<boolean> {
-  try {
-    console.log("Storing artist in database:", artist.name);
-    
-    const artistData = {
-      id: artist.id,
-      name: artist.name,
-      image_url: artist.images?.[0]?.url || null,
-      popularity: artist.popularity || 0,
-      genres: artist.genres || [],
-      spotify_url: artist.external_urls?.spotify || '',
-      last_synced_at: new Date().toISOString()
-    };
-    
-    console.log("Artist data to store:", artistData);
-    
-    // First check if artist with this ID already exists
-    const { data: existingArtist } = await supabase
-      .from('artists')
-      .select('id')
-      .eq('id', artist.id)
-      .maybeSingle();
-    
-    if (existingArtist) {
-      // Artist exists, update their data
-      const { error } = await supabase
-        .from('artists')
-        .update(artistData)
-        .eq('id', artist.id);
-      
-      if (error) {
-        console.error("Error updating artist in database:", error);
-        return false;
+  while (hasMore) {
+    const response = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?` +
+      `include_groups=album,single&limit=${limit}&offset=${offset}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
       }
-      
-      console.log("Successfully updated artist:", artist.name);
-    } else {
-      // Artist doesn't exist, insert them
-      const { error } = await supabase
-        .from('artists')
-        .insert(artistData);
-      
-      if (error) {
-        console.error("Error storing artist in database:", error);
-        return false;
-      }
-      
-      console.log("Successfully stored artist:", artist.name);
-    }
+    );
+
+    if (!response.ok) throw new Error('Failed to fetch albums');
     
-    return true;
-  } catch (error) {
-    console.error("Error storing artist in database:", error);
-    return false;
+    const data = await response.json();
+    albums.push(...data.items);
+    
+    hasMore = data.next !== null;
+    offset += limit;
   }
+
+  return albums;
 }
 
-// Store tracks in Supabase
-export async function storeTracksInDatabase(artistId: string, tracks: SpotifyTrack[]): Promise<boolean> {
-  try {
-    console.log(`Storing ${tracks.length} tracks for artist ${artistId}`);
+// Get tracks for a specific album (manual pagination)
+export async function getAlbumTracks(albumId: string, accessToken: string) {
+  const tracks = [];
+  let offset = 0;
+  const limit = 50;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await fetch(
+      `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+
+    if (!response.ok) throw new Error('Failed to fetch tracks');
     
-    // Convert tracks to database format
-    const songsToInsert = tracks.map(track => ({
+    const data = await response.json();
+    tracks.push(...data.items);
+    
+    hasMore = data.next !== null;
+    offset += limit;
+  }
+
+  return tracks;
+}
+
+// Import full artist catalog (albums + tracks)
+export async function importFullArtistCatalog(artistId: string) {
+  const accessToken = await getSpotifyAccessToken();
+  const albums = await getAllArtistAlbums(artistId, accessToken);
+  const songs = [];
+
+  for (const album of albums) {
+    const tracks = await getAlbumTracks(album.id, accessToken);
+    
+    songs.push(...tracks.map(track => ({
       id: track.id,
       artist_id: artistId,
       name: track.name,
-      album: track.album?.name || 'Unknown Album',
-      duration_ms: track.duration_ms || 0,
-      popularity: track.popularity || 0,
+      album: album.name,
+      duration_ms: track.duration_ms,
+      popularity: 0, // Will be updated separately
       spotify_url: track.external_urls?.spotify || ''
-    }));
-    
-    // Process in batches to avoid hitting request size limits
-    const batchSize = 50;
-    let successCount = 0;
-    
-    for (let i = 0; i < songsToInsert.length; i += batchSize) {
-      const batch = songsToInsert.slice(i, i + batchSize);
-      console.log(`Processing batch ${i}-${i+batch.length} for artist ${artistId}`);
-      
-      const { error } = await supabase
-        .from('songs')
-        .upsert(batch, { onConflict: 'id' });
-      
-      if (error) {
-        console.error(`Error storing tracks batch ${i}-${i+batch.length} in database:`, error);
-        continue;
-      }
-      
-      successCount += batch.length;
-      console.log(`Successfully stored tracks batch ${i}-${i+batch.length} for artist ${artistId}`);
-    }
-    
-    console.log(`Successfully stored ${successCount} of ${tracks.length} tracks for artist ${artistId}`);
-    return successCount > 0;
-  } catch (error) {
-    console.error("Error storing tracks in database:", error);
-    return false;
+    })));
   }
-}
 
-// Import the entire song catalog for an artist
-export async function importArtistCatalog(artistId: string, forceFullCatalog: boolean = false): Promise<boolean> {
-  console.log(`Importing catalog for artist: ${artistId} (full: ${forceFullCatalog})`);
-  
-  try {
-    // Check if we've already imported this artist's catalog recently
-    const { data: artist, error: artistError } = await supabase
-      .from('artists')
-      .select('last_synced_at')
-      .eq('id', artistId)
-      .single();
-    
-    // If we have this artist and they were synced less than 7 days ago, skip (unless forced)
-    if (artist && artist.last_synced_at && !forceFullCatalog) {
-      const lastSynced = new Date(artist.last_synced_at);
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      if (lastSynced > sevenDaysAgo) {
-        console.log(`Artist ${artistId} was synced recently (${lastSynced.toISOString()}), skipping catalog import`);
-        return true;
-      }
-    }
-    
-    if (artistError && artistError.code !== 'PGRST116') { // PGRST116 is "not found"
-      console.error(`Error checking artist sync status: ${artistId}`, artistError);
-    }
-    
-    let tracks: SpotifyTrack[] = [];
-    
-    if (forceFullCatalog) {
-      // Import full catalog (albums + singles)
-      console.log("Getting full catalog for artist:", artistId);
-      tracks = await getArtistAllTracks(artistId);
-      
-      // If full catalog fails or is empty, fall back to top tracks
-      if (tracks.length === 0) {
-        console.log("Full catalog empty, falling back to top tracks");
-        tracks = await getArtistTopTracks(artistId);
-      }
-    } else {
-      // Get top tracks for the artist - faster and more reliable for setlist creation
-      console.log("Getting top tracks for artist:", artistId);
-      tracks = await getArtistTopTracks(artistId);
-    }
-    
-    if (tracks.length === 0) {
-      console.warn(`No tracks found for artist: ${artistId}`);
-      
-      // If no tracks found, try to update last_synced_at anyway
-      await supabase
-        .from('artists')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('id', artistId);
-      
-      return false;
-    }
-    
-    // Store tracks in database
-    const tracksStored = await storeTracksInDatabase(artistId, tracks);
-    if (!tracksStored) {
-      console.error(`Failed to store tracks for artist: ${artistId}`);
-      return false;
-    }
-    
-    // Update last_synced_at for the artist
-    const { error: updateError } = await supabase
-      .from('artists')
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq('id', artistId);
-    
-    if (updateError) {
-      console.error(`Failed to update last_synced_at for artist: ${artistId}`, updateError);
-    }
-    
-    console.log(`Successfully imported ${tracks.length} tracks for artist: ${artistId}`);
-    return true;
-  } catch (error) {
-    console.error(`Error importing catalog for artist: ${artistId}`, error);
-    return false;
-  }
+  // Batch insert songs
+  const { error } = await supabase
+    .from('songs')
+    .upsert(songs, { 
+      onConflict: 'id',
+      ignoreDuplicates: true 
+    });
+
+  if (error) throw error;
+
+  // Update artist sync timestamp
+  await supabase
+    .from('artists')
+    .update({ last_synced_at: new Date().toISOString() })
+    .eq('id', artistId);
+
+  return songs;
 }
 
 // Enhanced function to import full catalog with progress tracking

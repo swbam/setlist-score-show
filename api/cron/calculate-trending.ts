@@ -1,45 +1,44 @@
-import { supabase } from '../../src/integrations/supabase/client';
-import { runTrendingCalculation } from '../../src/services/backgroundJobs';
+import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req: Request): Promise<Response> {
-  // Verify cron secret
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
+
+export default async function handler(req: Request) {
+  // Calculate trending score based on views and votes in last 7 days
+  const { data: shows } = await supabase
+    .from('shows')
+    .select(`
+      *,
+      setlist:setlists(
+        setlist_songs(votes)
+      )
+    `)
+    .gte('date', new Date())
+    .order('date', { ascending: true })
+    .limit(100);
+
+  const trending = (shows || []).map(show => {
+    const totalVotes = show.setlist?.setlist_songs?.reduce(
+      (sum, song) => sum + song.votes, 0
+    ) || 0;
+
+    const trending_score = (show.view_count * 0.3 + totalVotes * 0.7);
+    
+    return {
+      id: show.id,
+      trending_score
+    };
+  });
+
+  // Update trending scores in database
+  for (const show of trending) {
+    await supabase
+      .from('shows')
+      .update({ trending_score: show.trending_score })
+      .eq('id', show.id);
   }
 
-  if (req.method === 'POST') {
-    try {
-      console.log('Cron job: calculate-trending started');
-      
-      // Use our enhanced background job system
-      const result = await runTrendingCalculation();
-      
-      if (result.success) {
-        console.log(`Cron job: calculate-trending finished. ${result.message}`);
-        return new Response(JSON.stringify({ 
-          message: result.message,
-          processingTime: result.processingTime,
-          recordsProcessed: result.recordsProcessed
-        }), { 
-          status: 200, 
-          headers: { 'Content-Type': 'application/json' } 
-        });
-      } else {
-        console.error('Cron job: calculate-trending failed:', result.errorDetails);
-        return new Response(JSON.stringify({ 
-          message: 'Trending calculation failed', 
-          error: result.errorDetails 
-        }), { 
-          status: 500, 
-          headers: { 'Content-Type': 'application/json' } 
-        });
-      }
-    } catch (error: any) {
-      console.error('Error in calculate-trending cron job:', error);
-      return new Response(JSON.stringify({ message: 'Cron job failed', error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-    }
-  } else {
-    return new Response(JSON.stringify({ message: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json', 'Allow': 'POST' } });
-  }
+  return new Response('OK');
 }
