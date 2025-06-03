@@ -4,23 +4,34 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
-    "sync:setlists": "tsx src/jobs/sync-setlists.ts"
+    "test": "jest",
+    "sync:setlists": "tsx src/jobs/sync-setlists.ts",
+    "sync:spotify": "tsx src/jobs/sync-spotify.ts",
+    "calculate:trending": "tsx src/jobs/calculate-trending.ts"
   },
   "dependencies": {
     "@setlist/database": "workspace:*",
     "@setlist/types": "workspace:*",
     "@supabase/supabase-js": "^2.49.0",
     "@trpc/server": "^10.45.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "axios": "^1.7.2",
     "fastify": "^4.28.0",
+    "fastify-plugin": "^4.5.1",
+    "graphql": "^16.9.0",
     "mercurius": "^14.1.0",
     "ioredis": "^5.4.0",
+    "jsonwebtoken": "^9.0.2",
     "p-limit": "^5.0.0",
     "pino": "^9.3.0",
     "pino-pretty": "^11.2.0",
+    "spotify-web-api-node": "^5.0.2",
     "zod": "^3.23.0"
   },
   "devDependencies": {

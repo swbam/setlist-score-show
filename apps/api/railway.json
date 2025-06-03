@@ -1,0 +1,33 @@
+{
+  "build": {
+    "builder": "nixpacks",
+    "buildCommand": "cd ../.. && pnpm install && pnpm turbo build --filter=api"
+  },
+  "deploy": {
+    "startCommand": "cd apps/api && node dist/index.js",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "on-failure",
+    "restartPolicyMaxRetries": 3
+  },
+  "services": [
+    {
+      "name": "api",
+      "envVars": {
+        "NODE_ENV": "production",
+        "PORT": "${{PORT}}",
+        "DATABASE_URL": "${{DATABASE_URL}}",
+        "REDIS_URL": "${{REDIS_URL}}",
+        "SUPABASE_URL": "${{SUPABASE_URL}}",
+        "SUPABASE_ANON_KEY": "${{SUPABASE_ANON_KEY}}",
+        "SUPABASE_SERVICE_ROLE_KEY": "${{SUPABASE_SERVICE_ROLE_KEY}}",
+        "JWT_SECRET": "${{JWT_SECRET}}",
+        "SPOTIFY_CLIENT_ID": "${{SPOTIFY_CLIENT_ID}}",
+        "SPOTIFY_CLIENT_SECRET": "${{SPOTIFY_CLIENT_SECRET}}",
+        "SETLIST_FM_API_KEY": "${{SETLIST_FM_API_KEY}}",
+        "TICKETMASTER_API_KEY": "${{TICKETMASTER_API_KEY}}",
+        "FRONTEND_URL": "${{FRONTEND_URL}}"
+      }
+    }
+  ]
+}
