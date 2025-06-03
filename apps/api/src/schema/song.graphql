@@ -1,0 +1,148 @@
+# Song type definitions
+
+type Song {
+  id: ID!
+  artistId: ID!
+  spotifyId: String
+  musicbrainzId: String
+  title: String!
+  album: String
+  albumImageUrl: String
+  durationMs: Int
+  popularity: Int!
+  previewUrl: String
+  spotifyUrl: String
+  audioFeatures: AudioFeatures
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  artist: Artist!
+  
+  # Computed fields for voting context
+  currentVoteCount(showId: ID!): Int
+  voteRank(showId: ID!): Int
+  hasVoted(showId: ID!): Boolean
+}
+
+type AudioFeatures {
+  acousticness: Float
+  danceability: Float
+  energy: Float
+  instrumentalness: Float
+  key: Int
+  liveness: Float
+  loudness: Float
+  mode: Int
+  speechiness: Float
+  tempo: Float
+  timeSignature: Int
+  valence: Float
+}
+
+type SongConnection {
+  edges: [SongEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type SongEdge {
+  node: Song!
+  cursor: String!
+}
+
+input SongFilter {
+  artistId: ID
+  search: String
+  album: String
+  minPopularity: Int
+  maxDurationMs: Int
+  hasPreview: Boolean
+}
+
+enum SongOrderBy {
+  TITLE_ASC
+  TITLE_DESC
+  POPULARITY_ASC
+  POPULARITY_DESC
+  ALBUM_ASC
+  ALBUM_DESC
+  DURATION_ASC
+  DURATION_DESC
+}
+
+# Queries
+extend type Query {
+  # Get a single song by ID
+  song(id: ID!): Song
+  
+  # List songs with filtering and pagination
+  songs(
+    filter: SongFilter
+    orderBy: SongOrderBy = POPULARITY_DESC
+    limit: Int = 50
+    offset: Int = 0
+  ): SongConnection!
+  
+  # Search songs across all artists
+  searchSongs(
+    query: String!
+    artistId: ID
+    limit: Int = 20
+  ): [Song!]!
+  
+  # Get top voted songs for a show
+  topVotedSongs(
+    showId: ID!
+    limit: Int = 20
+  ): [SetlistSong!]!
+  
+  # Get songs by multiple IDs (for batch loading)
+  songsByIds(ids: [ID!]!): [Song!]!
+}
+
+# Mutations
+extend type Mutation {
+  # Import songs from Spotify for an artist
+  importArtistCatalog(
+    artistId: ID!
+    includeAlbums: Boolean = true
+    includeSingles: Boolean = true
+  ): ImportResult!
+  
+  # Update song metadata
+  updateSong(
+    id: ID!
+    audioFeatures: AudioFeaturesInput
+  ): Song!
+  
+  # Add a custom song not in Spotify
+  createCustomSong(
+    artistId: ID!
+    title: String!
+    album: String
+    durationMs: Int
+  ): Song!
+}
+
+input AudioFeaturesInput {
+  acousticness: Float
+  danceability: Float
+  energy: Float
+  instrumentalness: Float
+  key: Int
+  liveness: Float
+  loudness: Float
+  mode: Int
+  speechiness: Float
+  tempo: Float
+  timeSignature: Int
+  valence: Float
+}
+
+type ImportResult {
+  success: Boolean!
+  itemsImported: Int!
+  itemsFailed: Int!
+  errors: [String!]
+}

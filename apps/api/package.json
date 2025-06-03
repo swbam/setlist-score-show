@@ -1,0 +1,31 @@
+{
+  "name": "@setlist/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src",
+    "type-check": "tsc --noEmit",
+    "sync:setlists": "tsx src/jobs/sync-setlists.ts"
+  },
+  "dependencies": {
+    "@setlist/database": "workspace:*",
+    "@setlist/types": "workspace:*",
+    "@supabase/supabase-js": "^2.49.0",
+    "@trpc/server": "^10.45.0",
+    "fastify": "^4.28.0",
+    "mercurius": "^14.1.0",
+    "ioredis": "^5.4.0",
+    "p-limit": "^5.0.0",
+    "pino": "^9.3.0",
+    "pino-pretty": "^11.2.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0"
+  }
+}

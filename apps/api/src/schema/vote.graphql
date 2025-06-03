@@ -1,0 +1,144 @@
+# Vote type definitions
+
+type Vote {
+  id: ID!
+  userId: ID!
+  setlistSongId: ID!
+  showId: ID!
+  voteType: VoteType!
+  createdAt: DateTime!
+  
+  # Relations
+  user: User!
+  setlistSong: SetlistSong!
+  show: Show!
+}
+
+type VoteAnalytics {
+  id: ID!
+  userId: ID!
+  showId: ID!
+  dailyVotes: Int!
+  showVotes: Int!
+  lastVoteAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  user: User!
+  show: Show!
+}
+
+type VoteResult {
+  success: Boolean!
+  voteId: ID
+  newVoteCount: Int!
+  dailyVotesRemaining: Int!
+  showVotesRemaining: Int!
+  message: String
+}
+
+type VoteLimits {
+  dailyLimit: Int!
+  dailyUsed: Int!
+  dailyRemaining: Int!
+  showLimit: Int!
+  showUsed: Int!
+  showRemaining: Int!
+}
+
+type UserVoteStats {
+  totalVotes: Int!
+  todayVotes: Int!
+  favoriteArtists: [ArtistVoteStats!]!
+  recentVotes: [Vote!]!
+  votingStreak: Int!
+  achievements: [VotingAchievement!]!
+}
+
+type ArtistVoteStats {
+  artist: Artist!
+  voteCount: Int!
+  lastVotedAt: DateTime!
+}
+
+type VotingAchievement {
+  id: String!
+  name: String!
+  description: String!
+  unlockedAt: DateTime!
+  icon: String!
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+input VoteInput {
+  showId: ID!
+  songId: ID!
+  setlistSongId: ID!
+}
+
+# Queries
+extend type Query {
+  # Get vote limits for current user
+  voteLimits(showId: ID!): VoteLimits!
+  
+  # Get user's vote history
+  myVotes(
+    showId: ID
+    limit: Int = 50
+    offset: Int = 0
+  ): [Vote!]!
+  
+  # Get voting stats for current user
+  myVoteStats: UserVoteStats!
+  
+  # Get votes for a specific setlist song
+  votesForSong(
+    setlistSongId: ID!
+    limit: Int = 100
+    offset: Int = 0
+  ): [Vote!]!
+  
+  # Check if user has voted for specific songs
+  hasVoted(setlistSongIds: [ID!]!): [Boolean!]!
+}
+
+# Mutations
+extend type Mutation {
+  # Cast a vote for a song
+  vote(input: VoteInput!): VoteResult!
+  
+  # Remove a vote (if within time limit)
+  unvote(voteId: ID!): VoteResult!
+  
+  # Batch vote for multiple songs
+  batchVote(votes: [VoteInput!]!): [VoteResult!]!
+}
+
+# Subscriptions
+extend type Subscription {
+  # Subscribe to vote updates for a show
+  voteUpdates(showId: ID!): VoteUpdate!
+  
+  # Subscribe to live voting activity
+  votingActivity(showId: ID!): VotingActivity!
+}
+
+type VoteUpdate {
+  setlistSongId: ID!
+  songId: ID!
+  newVoteCount: Int!
+  songTitle: String!
+  voterId: ID!
+  timestamp: DateTime!
+}
+
+type VotingActivity {
+  activeUsers: Int!
+  recentVotes: [VoteUpdate!]!
+  topMovers: [SetlistSong!]!
+}

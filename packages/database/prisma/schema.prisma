@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Artist {
+  id              String   @id @default(uuid())
+  spotifyId       String?  @unique @map("spotify_id")
+  ticketmasterId  String?  @map("ticketmaster_id")
+  setlistfmMbid   String?  @unique @map("setlistfm_mbid")
+  name            String
+  slug            String   @unique
+  imageUrl        String?  @map("image_url")
+  genres          String[]
+  popularity      Int      @default(0)
+  followers       Int      @default(0)
+  lastSyncedAt    DateTime @default(now()) @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  shows Show[]
+  songs Song[]
+
+  @@unique([spotifyId, ticketmasterId])
+  @@map("artists")
+}
+
+model Venue {
+  id              String   @id @default(uuid())
+  ticketmasterId  String?  @unique @map("ticketmaster_id")
+  setlistfmId     String?  @unique @map("setlistfm_id")
+  name            String
+  address         String?
+  city            String
+  state           String?
+  country         String
+  postalCode      String?  @map("postal_code")
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  timezone        String?
+  capacity        Int?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  shows Show[]
+
+  @@map("venues")
+}
+
+model Show {
+  id              String   @id @default(uuid())
+  artistId        String   @map("artist_id")
+  venueId         String   @map("venue_id")
+  ticketmasterId  String?  @unique @map("ticketmaster_id")
+  setlistfmId     String?  @unique @map("setlistfm_id")
+  date            DateTime @db.Date
+  startTime       DateTime? @map("start_time") @db.Time
+  doorsTime       DateTime? @map("doors_time") @db.Time
+  title           String?
+  tourName        String?  @map("tour_name")
+  status          String   @default("upcoming")
+  ticketmasterUrl String?  @map("ticketmaster_url")
+  viewCount       Int      @default(0) @map("view_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  artist        Artist         @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  venue         Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  setlists      Setlist[]
+  votes         Vote[]
+  voteAnalytics VoteAnalytics[]
+
+  @@unique([artistId, venueId, date])
+  @@index([date, status])
+  @@index([artistId, date(sort: Desc)])
+  @@map("shows")
+}
+
+model Song {
+  id             String   @id @default(uuid())
+  artistId       String   @map("artist_id")
+  spotifyId      String?  @unique @map("spotify_id")
+  musicbrainzId  String?  @unique @map("musicbrainz_id")
+  title          String
+  album          String?
+  albumImageUrl  String?  @map("album_image_url")
+  durationMs     Int?     @map("duration_ms")
+  popularity     Int      @default(0)
+  previewUrl     String?  @map("preview_url")
+  spotifyUrl     String?  @map("spotify_url")
+  audioFeatures  Json?    @map("audio_features")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  artist       Artist         @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  setlistSongs SetlistSong[]
+
+  @@unique([artistId, title, album])
+  @@index([artistId, title])
+  @@map("songs")
+}
+
+model Setlist {
+  id         String   @id @default(uuid())
+  showId     String   @map("show_id")
+  name       String   @default("Main Set")
+  orderIndex Int      @default(0) @map("order_index")
+  isEncore   Boolean  @default(false) @map("is_encore")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  show         Show          @relation(fields: [showId], references: [id], onDelete: Cascade)
+  setlistSongs SetlistSong[]
+
+  @@unique([showId, orderIndex])
+  @@map("setlists")
+}
+
+model SetlistSong {
+  id        String   @id @default(uuid())
+  setlistId String   @map("setlist_id")
+  songId    String   @map("song_id")
+  position  Int
+  voteCount Int      @default(0) @map("vote_count")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  setlist Setlist @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+  song    Song    @relation(fields: [songId], references: [id], onDelete: Cascade)
+  votes   Vote[]
+
+  @@unique([setlistId, position])
+  @@unique([setlistId, songId])
+  @@index([voteCount(sort: Desc)])
+  @@map("setlist_songs")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String?
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  spotifyId   String?  @unique @map("spotify_id")
+  preferences Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  votes         Vote[]
+  voteAnalytics VoteAnalytics[]
+
+  @@map("users")
+}
+
+model Vote {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  setlistSongId String   @map("setlist_song_id")
+  showId        String   @map("show_id")
+  voteType      String   @default("up") @map("vote_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setlistSong SetlistSong @relation(fields: [setlistSongId], references: [id], onDelete: Cascade)
+  show        Show        @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, setlistSongId], name: "unique_user_song_vote")
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([showId])
+  @@index([userId, showId])
+  @@map("votes")
+}
+
+model VoteAnalytics {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  showId     String    @map("show_id")
+  dailyVotes Int       @default(0) @map("daily_votes")
+  showVotes  Int       @default(0) @map("show_votes")
+  lastVoteAt DateTime? @map("last_vote_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  show Show @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, showId], name: "unique_user_show_analytics")
+  @@map("vote_analytics")
+}
+
+model SyncHistory {
+  id             String    @id @default(uuid())
+  syncType       String    @map("sync_type")
+  entityType     String    @map("entity_type")
+  entityId       String?   @map("entity_id")
+  externalId     String?   @map("external_id")
+  status         String
+  errorMessage   String?   @map("error_message")
+  itemsProcessed Int       @default(0) @map("items_processed")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@map("sync_history")
+}

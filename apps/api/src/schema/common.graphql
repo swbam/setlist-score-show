@@ -1,0 +1,136 @@
+# Common type definitions used across the schema
+
+# Scalar types
+scalar DateTime
+scalar Date
+scalar Time
+scalar JSON
+
+# Pagination types
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+  totalPages: Int!
+  currentPage: Int!
+}
+
+# Sync and import types
+type SyncResult {
+  success: Boolean!
+  syncType: SyncType!
+  entityType: EntityType!
+  itemsProcessed: Int!
+  itemsFailed: Int!
+  errors: [String!]
+  startedAt: DateTime!
+  completedAt: DateTime
+}
+
+enum SyncType {
+  SETLISTFM
+  SPOTIFY
+  TICKETMASTER
+}
+
+enum EntityType {
+  ARTIST
+  SHOW
+  SONG
+  SETLIST
+}
+
+# Error types
+type Error {
+  code: String!
+  message: String!
+  field: String
+}
+
+type MutationResponse {
+  success: Boolean!
+  errors: [Error!]
+}
+
+# Search types
+type SearchResult {
+  artists: [Artist!]!
+  shows: [Show!]!
+  songs: [Song!]!
+  venues: [Venue!]!
+  totalResults: Int!
+}
+
+input SearchInput {
+  query: String!
+  types: [SearchType!]
+  limit: Int = 10
+}
+
+enum SearchType {
+  ARTIST
+  SHOW
+  SONG
+  VENUE
+}
+
+# Analytics types
+type Analytics {
+  totalUsers: Int!
+  totalVotes: Int!
+  totalShows: Int!
+  totalArtists: Int!
+  activeUsers: Int!
+  popularShows: [Show!]!
+  topVoters: [User!]!
+}
+
+# System health
+type HealthCheck {
+  status: HealthStatus!
+  timestamp: DateTime!
+  uptime: Int!
+  version: String!
+  services: [ServiceHealth!]!
+}
+
+type ServiceHealth {
+  name: String!
+  status: HealthStatus!
+  responseTime: Int
+  message: String
+}
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+}
+
+# Root Query type
+type Query {
+  # Search across all entities
+  search(input: SearchInput!): SearchResult!
+  
+  # Get system analytics (admin only)
+  analytics(
+    startDate: Date
+    endDate: Date
+  ): Analytics!
+  
+  # Health check endpoint
+  health: HealthCheck!
+}
+
+# Root Mutation type
+type Mutation {
+  # Placeholder to be extended
+  _empty: String
+}
+
+# Root Subscription type
+type Subscription {
+  # Placeholder to be extended
+  _empty: String
+}

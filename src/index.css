@@ -6,47 +6,52 @@
  
 @layer base {
   :root {
-    /* Dark theme with sophisticated greys */
-    --background: 220 20% 8%;
-    --foreground: 0 0% 95%;
+    /* Dark theme base */
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
  
-    --card: 220 15% 12%;
-    --card-foreground: 0 0% 95%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
  
-    --popover: 220 15% 12%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
  
-    /* Teal accent color */
-    --primary: 174 72% 56%;
-    --primary-foreground: 220 20% 8%;
+    /* Teal gradient theme colors */
+    --primary: 173 80% 40%;
+    --primary-foreground: 0 0% 98%;
  
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
  
-    --muted: 220 15% 25%;
-    --muted-foreground: 220 10% 65%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
  
-    --accent: 174 72% 56%;
-    --accent-foreground: 220 20% 8%;
+    --accent: 172 66% 50%;
+    --accent-foreground: 0 0% 9%;
  
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 0 0% 98%;
  
-    --border: 220 15% 20%;
-    --input: 220 15% 15%;
-    --ring: 174 72% 56%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 173 80% 40%;
  
-    --radius: 0.75rem;
+    --radius: 0.5rem;
+
+    /* Gradient definitions */
+    --gradient-primary: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+    --gradient-hover: linear-gradient(135deg, #0f766e 0%, #0891b2 100%);
+    --gradient-active: linear-gradient(135deg, #134e4a 0%, #0c4a6e 100%);
 
     /* Sidebar theme */
-    --sidebar-background: 220 20% 8%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 174 72% 56%; 
-    --sidebar-primary-foreground: 220 20% 8%;
-    --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 220 15% 20%;
-    --sidebar-ring: 174 72% 56%;
+    --sidebar-background: 0 0% 3.9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 173 80% 40%; 
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 14.9%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 14.9%;
+    --sidebar-ring: 173 80% 40%;
 
     /* Mobile viewport height fix */
     --vh: 1vh;
@@ -74,19 +79,44 @@
 
 /* Gradient backgrounds */
 .gradient-bg {
-  background: linear-gradient(135deg, hsl(220 20% 8%) 0%, hsl(220 20% 12%) 100%);
+  background: linear-gradient(135deg, hsl(0 0% 3.9%) 0%, hsl(0 0% 7%) 100%);
 }
 
 .gradient-card {
-  background: linear-gradient(135deg, hsl(220 15% 12%) 0%, hsl(220 15% 15%) 100%);
+  background: linear-gradient(135deg, hsl(0 0% 7%) 0%, hsl(0 0% 10%) 100%);
 }
 
 .gradient-accent {
-  background: linear-gradient(135deg, hsl(174 72% 56%) 0%, hsl(174 72% 46%) 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
 }
 
 .gradient-text {
-  @apply bg-gradient-to-r from-teal-400 to-teal-500 bg-clip-text text-transparent;
+  @apply bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent;
+}
+
+/* Enhanced gradient components */
+.gradient-border {
+  @apply relative;
+  background: linear-gradient(var(--background), var(--background)) padding-box,
+              var(--gradient-primary) border-box;
+  border: 2px solid transparent;
+}
+
+.gradient-button {
+  @apply relative overflow-hidden;
+  background: var(--gradient-primary);
+  transition: all 0.3s ease;
+}
+
+.gradient-button:hover {
+  background: var(--gradient-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(20, 184, 166, 0.3);
+}
+
+.gradient-button:active {
+  background: var(--gradient-active);
+  transform: translateY(0);
 }
 
 /* Subtle gradient overlays */

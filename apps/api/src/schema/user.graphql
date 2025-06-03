@@ -1,0 +1,123 @@
+# User type definitions
+
+type User {
+  id: ID!
+  email: String
+  displayName: String
+  avatarUrl: String
+  spotifyId: String
+  preferences: UserPreferences!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  votes(
+    limit: Int = 50
+    offset: Int = 0
+  ): [Vote!]!
+  
+  voteAnalytics(
+    showId: ID
+  ): [VoteAnalytics!]!
+  
+  # Computed fields
+  totalVotes: Int!
+  joinedDaysAgo: Int!
+  isActive: Boolean!
+}
+
+type UserPreferences {
+  emailNotifications: Boolean!
+  pushNotifications: Boolean!
+  showCompletedShows: Boolean!
+  defaultLocation: Location
+  favoriteGenres: [String!]!
+  theme: Theme!
+}
+
+type Location {
+  city: String!
+  state: String
+  country: String!
+  latitude: Float!
+  longitude: Float!
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+input UserPreferencesInput {
+  emailNotifications: Boolean
+  pushNotifications: Boolean
+  showCompletedShows: Boolean
+  defaultLocation: LocationInput
+  favoriteGenres: [String!]
+  theme: Theme
+}
+
+input LocationInput {
+  city: String!
+  state: String
+  country: String!
+  latitude: Float!
+  longitude: Float!
+}
+
+# Authentication types
+type AuthPayload {
+  user: User!
+  token: String!
+  refreshToken: String!
+}
+
+type AuthResult {
+  success: Boolean!
+  user: User
+  message: String
+}
+
+# Queries
+extend type Query {
+  # Get current authenticated user
+  me: User
+  
+  # Get a user by ID (admin only)
+  user(id: ID!): User
+  
+  # Check if email is available
+  isEmailAvailable(email: String!): Boolean!
+  
+  # Get user's notification settings
+  notificationSettings: UserPreferences!
+}
+
+# Mutations
+extend type Mutation {
+  # Update user profile
+  updateProfile(
+    displayName: String
+    avatarUrl: String
+  ): User!
+  
+  # Update user preferences
+  updatePreferences(
+    preferences: UserPreferencesInput!
+  ): User!
+  
+  # Connect Spotify account
+  connectSpotify(
+    code: String!
+    redirectUri: String!
+  ): User!
+  
+  # Disconnect Spotify account
+  disconnectSpotify: User!
+  
+  # Delete user account
+  deleteAccount(
+    confirmation: String!
+  ): AuthResult!
+}

@@ -1,0 +1,102 @@
+# Artist type definitions
+
+type Artist {
+  id: ID!
+  spotifyId: String
+  ticketmasterId: String
+  setlistfmMbid: String
+  name: String!
+  slug: String!
+  imageUrl: String
+  genres: [String!]!
+  popularity: Int!
+  followers: Int!
+  lastSyncedAt: DateTime!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  shows(
+    status: ShowStatus
+    startDate: Date
+    endDate: Date
+    limit: Int = 20
+    offset: Int = 0
+  ): ShowConnection!
+  
+  songs(
+    limit: Int = 50
+    offset: Int = 0
+    orderBy: SongOrderBy = POPULARITY_DESC
+  ): SongConnection!
+  
+  # Computed fields
+  upcomingShowsCount: Int!
+  totalSongs: Int!
+}
+
+type ArtistConnection {
+  edges: [ArtistEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ArtistEdge {
+  node: Artist!
+  cursor: String!
+}
+
+input ArtistFilter {
+  search: String
+  genres: [String!]
+  hasUpcomingShows: Boolean
+  minFollowers: Int
+}
+
+enum ArtistOrderBy {
+  NAME_ASC
+  NAME_DESC
+  POPULARITY_ASC
+  POPULARITY_DESC
+  FOLLOWERS_ASC
+  FOLLOWERS_DESC
+  RECENTLY_SYNCED
+}
+
+# Queries
+extend type Query {
+  # Get a single artist by ID or slug
+  artist(id: ID, slug: String): Artist
+  
+  # List all artists with filtering and pagination
+  artists(
+    filter: ArtistFilter
+    orderBy: ArtistOrderBy = POPULARITY_DESC
+    limit: Int = 20
+    offset: Int = 0
+  ): ArtistConnection!
+  
+  # Search artists by name (uses fuzzy search)
+  searchArtists(
+    query: String!
+    limit: Int = 10
+  ): [Artist!]!
+  
+  # Get trending artists based on recent activity
+  trendingArtists(
+    limit: Int = 10
+  ): [Artist!]!
+}
+
+# Mutations
+extend type Mutation {
+  # Sync artist data from external APIs
+  syncArtist(artistId: ID!): SyncResult!
+  
+  # Add new artist to track
+  trackArtist(
+    spotifyId: String
+    ticketmasterId: String
+    setlistfmMbid: String
+  ): Artist!
+}

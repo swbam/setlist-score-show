@@ -1,0 +1,188 @@
+type Setlist {
+  id: ID!
+  showId: ID!
+  name: String!
+  orderIndex: Int!
+  isEncore: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  show: Show!
+  songs: [SetlistSong!]!
+  
+  # Computed fields
+  songCount: Int!
+  totalVotes: Int!
+  duration: Int # in minutes
+}
+
+type SetlistSong {
+  id: ID!
+  setlistId: ID!
+  songId: ID!
+  position: Int!
+  voteCount: Int!
+  notes: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  setlist: Setlist!
+  song: Song!
+  votes: [Vote!]!
+  
+  # Computed fields
+  votePercentage: Float!
+  rank: Int!
+  hasUserVoted: Boolean!
+}
+
+type SetlistConnection {
+  edges: [SetlistEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type SetlistEdge {
+  node: Setlist!
+  cursor: String!
+}
+
+type SetlistComparison {
+  setlist1: Setlist!
+  setlist2: Setlist!
+  
+  # Comparison metrics
+  commonSongs: [Song!]!
+  uniqueToSetlist1: [Song!]!
+  uniqueToSetlist2: [Song!]!
+  similarityScore: Float! # 0-1
+  
+  # Vote comparison
+  voteDifferences: [VoteDifference!]!
+}
+
+type VoteDifference {
+  song: Song!
+  setlist1Votes: Int!
+  setlist2Votes: Int!
+  difference: Int!
+  percentageDifference: Float!
+}
+
+input CreateSetlistInput {
+  showId: ID!
+  name: String!
+  orderIndex: Int = 0
+  isEncore: Boolean = false
+  songs: [AddSongToSetlistInput!]!
+}
+
+input AddSongToSetlistInput {
+  songId: ID!
+  position: Int!
+  notes: String
+}
+
+input UpdateSetlistInput {
+  id: ID!
+  name: String
+  orderIndex: Int
+  isEncore: Boolean
+}
+
+input ReorderSetlistSongsInput {
+  setlistId: ID!
+  songOrders: [SongOrderInput!]!
+}
+
+input SongOrderInput {
+  setlistSongId: ID!
+  position: Int!
+}
+
+extend type Query {
+  # Get a single setlist
+  setlist(id: ID!): Setlist
+  
+  # Get setlists for a show
+  showSetlists(showId: ID!): [Setlist!]!
+  
+  # Compare two setlists
+  compareSetlists(
+    setlistId1: ID!
+    setlistId2: ID!
+  ): SetlistComparison!
+  
+  # Get user's created setlists
+  mySetlists(
+    limit: Int = 20
+    cursor: String
+  ): SetlistConnection! @auth
+  
+  # Get popular setlist templates
+  popularSetlistTemplates(
+    artistId: ID
+    limit: Int = 10
+  ): [Setlist!]!
+}
+
+extend type Mutation {
+  # Create a custom setlist
+  createSetlist(input: CreateSetlistInput!): Setlist! @auth
+  
+  # Update setlist metadata
+  updateSetlist(input: UpdateSetlistInput!): Setlist! @auth
+  
+  # Add song to setlist
+  addSongToSetlist(
+    setlistId: ID!
+    input: AddSongToSetlistInput!
+  ): SetlistSong! @auth
+  
+  # Remove song from setlist
+  removeSongFromSetlist(
+    setlistSongId: ID!
+  ): Boolean! @auth
+  
+  # Reorder songs in setlist
+  reorderSetlistSongs(
+    input: ReorderSetlistSongsInput!
+  ): Setlist! @auth
+  
+  # Import setlist from Setlist.fm
+  importSetlistFromExternal(
+    showId: ID!
+    source: ExternalSource!
+    externalId: String!
+  ): Setlist! @auth(requires: ADMIN)
+  
+  # Clone an existing setlist
+  cloneSetlist(
+    setlistId: ID!
+    targetShowId: ID!
+  ): Setlist! @auth
+}
+
+extend type Subscription {
+  # Subscribe to setlist updates
+  setlistUpdated(setlistId: ID!): Setlist!
+  
+  # Subscribe to vote changes on setlist songs
+  setlistVotesUpdated(setlistId: ID!): SetlistVoteUpdate!
+}
+
+type SetlistVoteUpdate {
+  setlistId: ID!
+  updates: [SongVoteUpdate!]!
+  totalVotes: Int!
+}
+
+type SongVoteUpdate {
+  setlistSongId: ID!
+  songId: ID!
+  oldVoteCount: Int!
+  newVoteCount: Int!
+  rank: Int!
+}

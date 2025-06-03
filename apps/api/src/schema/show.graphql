@@ -1,0 +1,188 @@
+# Show type definitions
+
+type Show {
+  id: ID!
+  artistId: ID!
+  venueId: ID!
+  ticketmasterId: String
+  setlistfmId: String
+  date: Date!
+  startTime: Time
+  doorsTime: Time
+  title: String
+  tourName: String
+  status: ShowStatus!
+  ticketmasterUrl: String
+  viewCount: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  artist: Artist!
+  venue: Venue!
+  setlists: [Setlist!]!
+  
+  # Computed fields
+  totalVotes: Int!
+  uniqueVoters: Int!
+  avgVotesPerSong: Float!
+  trendingScore: Float!
+  isToday: Boolean!
+  daysUntil: Int
+}
+
+type Venue {
+  id: ID!
+  ticketmasterId: String
+  setlistfmId: String
+  name: String!
+  address: String
+  city: String!
+  state: String
+  country: String!
+  postalCode: String
+  latitude: Float
+  longitude: Float
+  timezone: String
+  capacity: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  shows(
+    status: ShowStatus
+    limit: Int = 20
+    offset: Int = 0
+  ): ShowConnection!
+}
+
+type ShowConnection {
+  edges: [ShowEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ShowEdge {
+  node: Show!
+  cursor: String!
+}
+
+type Setlist {
+  id: ID!
+  showId: ID!
+  name: String!
+  orderIndex: Int!
+  isEncore: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  show: Show!
+  songs: [SetlistSong!]!
+}
+
+type SetlistSong {
+  id: ID!
+  setlistId: ID!
+  songId: ID!
+  position: Int!
+  voteCount: Int!
+  notes: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relations
+  setlist: Setlist!
+  song: Song!
+  
+  # Computed fields
+  hasVoted: Boolean!
+  votePercentage: Float!
+}
+
+input ShowFilter {
+  artistId: ID
+  artistSlug: String
+  venueId: ID
+  status: ShowStatus
+  startDate: Date
+  endDate: Date
+  city: String
+  state: String
+  country: String
+  search: String
+}
+
+enum ShowStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum ShowOrderBy {
+  DATE_ASC
+  DATE_DESC
+  TRENDING_SCORE_DESC
+  TOTAL_VOTES_DESC
+  VIEW_COUNT_DESC
+}
+
+# Queries
+extend type Query {
+  # Get a single show by ID
+  show(id: ID!): Show
+  
+  # List shows with filtering and pagination
+  shows(
+    filter: ShowFilter
+    orderBy: ShowOrderBy = DATE_ASC
+    limit: Int = 20
+    offset: Int = 0
+  ): ShowConnection!
+  
+  # Get trending shows
+  trendingShows(
+    limit: Int = 10
+    timeframe: TrendingTimeframe = WEEK
+  ): [Show!]!
+  
+  # Get shows near a location
+  showsNearLocation(
+    latitude: Float!
+    longitude: Float!
+    radiusMiles: Int = 50
+    limit: Int = 20
+  ): [Show!]!
+}
+
+# Mutations
+extend type Mutation {
+  # Increment view count for a show
+  viewShow(showId: ID!): Show!
+  
+  # Create a custom setlist for a show
+  createSetlist(
+    showId: ID!
+    name: String!
+    songIds: [ID!]!
+  ): Setlist!
+  
+  # Update setlist song order
+  updateSetlistOrder(
+    setlistId: ID!
+    songPositions: [SongPositionInput!]!
+  ): Setlist!
+}
+
+input SongPositionInput {
+  songId: ID!
+  position: Int!
+}
+
+enum TrendingTimeframe {
+  DAY
+  WEEK
+  MONTH
+  ALL_TIME
+}

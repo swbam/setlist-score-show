@@ -78,16 +78,6 @@ export async function upsertUser(
     return false;
   }
 }
-      console.error("Error upserting user:", error);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("Error upserting user:", error);
-    return false;
-  }
-}
 
 // Get user's followed artists
 export async function getUserArtists(): Promise<UserArtist[]> {
