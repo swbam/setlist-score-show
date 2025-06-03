@@ -19,7 +19,11 @@ messages:
       task is to write a new very detailed plan. Like 5x more detailed than
       these md files and actual code for each ciritical fix. This new outline
       should still include the app overview and purpose, the data flow, db
-      architecutre, functions, cron jobs and all
+      architecutre, functions, cron jobs and all. dont add any new architecures
+      unless explcoictly needed. write this as if youre giving the new outline
+      to a devleloper who knows nothing about this app and needs to finalize it
+      and get it 100% working with the data flow, sync etc 
+
 
 model: openai/o3
 modelParameters:
