@@ -1,119 +1,78 @@
 
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Filter, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useDebounce } from '@/hooks/use-debounce';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { PostgrestFilterBuilder } from '@supabase/postgrest-js';
-import { Show, Artist, Venue } from '@/types';
-import { searchQueryKeys, invalidateSearchQueries } from '@/services/reactQueryOptimization';
+import { Card, CardContent } from '@/components/ui/card';
+import { Search, Filter, MapPin, Calendar } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import * as search from '@/services/search';
 
 interface SearchFilters {
+  query: string;
+  type: 'all' | 'artists' | 'shows';
   location?: string;
   dateRange?: string;
-  genre?: string;
-  sortBy?: string;
+  limit?: number;
 }
 
 interface SearchWithFiltersProps {
-  placeholder?: string;
-  showFilters?: boolean;
-  onSearch?: (query: string, filters: SearchFilters) => void;
-  className?: string;
+  onResults: (results: any[]) => void;
+  onLoading: (loading: boolean) => void;
 }
 
-export default function SearchWithFilters({ 
-  placeholder = "Search for artists, venues, or cities...",
-  showFilters = true,
-  onSearch,
-  className = ""
-}: SearchWithFiltersProps) {
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<SearchFilters>({});
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  
-  const debouncedQuery = useDebounce(query, 300);
-
-  // Use React Query for search suggestions
-  const { data: suggestions, isLoading: loadingSuggestions } = useQuery({
-    queryKey: searchQueryKeys.suggestions(debouncedQuery),
-    queryFn: () => fetchSearchSuggestions(debouncedQuery),
-    enabled: debouncedQuery.length > 2,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+export function SearchWithFilters({ onResults, onLoading }: SearchWithFiltersProps) {
+  const [filters, setFilters] = useState<SearchFilters>({
+    query: '',
+    type: 'all',
+    limit: 20
   });
 
-  // Use React Query for available genres
-  const { data: availableGenres } = useQuery({
-    queryKey: searchQueryKeys.genres(),
-    queryFn: fetchAvailableGenres,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-  });
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Fetch available genres from the database
-  async function fetchAvailableGenres(): Promise<string[]> {
-    try {
-      const { data } = await supabase
-        .from('artists')
-        .select('genres')
-        .not('genres', 'is', null);
-
-      const allGenres = new Set<string>();
-      data?.forEach(artist => {
-        if (artist.genres && Array.isArray(artist.genres)) {
-          artist.genres.forEach(genre => allGenres.add(genre));
-        }
-      });
-
-      return Array.from(allGenres).sort();
-    } catch (error) {
-      console.error('Error fetching genres:', error);
-      return ['rock', 'pop', 'hip-hop', 'electronic', 'country', 'jazz', 'classical'];
-    }
-  }
-
-  // Fetch search suggestions
-  async function fetchSearchSuggestions(searchQuery: string): Promise<string[]> {
-    if (!searchQuery || searchQuery.length < 3) return [];
-
-    try {
-      const { data: artistSuggestions } = await supabase
-        .from('artists')
-        .select('name')
-        .ilike('name', `%${searchQuery}%`)
-        .limit(5);
-
-      const { data: venueSuggestions } = await supabase
-        .from('venues')
-        .select('name, city')
-        .or(`name.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%`)
-        .limit(5);
-
-      const suggestions: string[] = [];
+  const { data: results, isLoading, refetch } = useQuery({
+    queryKey: ['search', filters],
+    queryFn: async () => {
+      if (!filters.query.trim()) return [];
       
-      artistSuggestions?.forEach(artist => suggestions.push(artist.name));
-      venueSuggestions?.forEach(venue => {
-        suggestions.push(venue.name);
-        if (venue.city && !suggestions.includes(venue.city)) {
-          suggestions.push(venue.city);
-        }
-      });
+      console.log('[Search] Executing search with filters:', filters);
+      
+      const searchOptions = {
+        query: filters.query,
+        limit: filters.limit || 20
+      };
+      
+      const searchResults = await search.search(searchOptions);
+      console.log('[Search] Results:', searchResults);
+      
+      return searchResults;
+    },
+    enabled: false
+  });
 
-      return suggestions.slice(0, 8);
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      return [];
+  React.useEffect(() => {
+    onLoading(isLoading);
+  }, [isLoading, onLoading]);
+
+  React.useEffect(() => {
+    if (results) {
+      // Filter results by type if not 'all'
+      let filteredResults = results;
+      if (filters.type !== 'all') {
+        filteredResults = results.filter(result => {
+          if (filters.type === 'artists') {
+            return result.type === 'artist';
+          } else if (filters.type === 'shows') {
+            return result.type === 'show';
+          }
+          return true;
+        });
+      }
+      onResults(filteredResults);
     }
-  }
+  }, [results, filters.type, onResults]);
 
+<<<<<<< HEAD
   // Function to convert string dateRange to actual dates
   const getDateRangeValues = (dateRangeString?: string): { start?: string; end?: string } => {
     if (!dateRangeString) return {};
@@ -230,221 +189,117 @@ export default function SearchWithFilters({
     // Auto-search when filters change
     if (debouncedQuery || Object.keys(newFilters).length > 0) {
       handleSearch(debouncedQuery, newFilters);
+=======
+  const handleSearch = () => {
+    if (filters.query.trim()) {
+      refetch();
+>>>>>>> origin/main
     }
   };
 
-  const clearFilters = () => {
-    setFilters({});
-    handleSearch(query, {});
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
   };
 
-  const activeFilterCount = Object.keys(filters).length;
-
   return (
-    <div className={`w-full max-w-4xl mx-auto ${className}`}>
-      <form onSubmit={handleSubmit} className="relative">
-        <div className="flex gap-2">
-          {/* Main Search Input */}
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder={placeholder}
-              className="w-full pl-12 pr-4 py-3 text-lg bg-yellow-metal-950/80 border-yellow-metal-700 focus:border-yellow-metal-400 rounded-xl"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            
-            {/* Search Suggestions Dropdown */}
-            {suggestions && suggestions.length > 0 && debouncedQuery.length > 2 && (
-              <div className="absolute top-full mt-1 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-800 text-white text-sm border-b border-gray-800 last:border-b-0"
-                    onClick={() => {
-                      setQuery(suggestion);
-                      handleSearch(suggestion, filters);
-                    }}
-                  >
-                    <Search className="h-3 w-3 mr-2 inline text-gray-400" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
+    <Card className="mb-6">
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          {/* Main Search Bar */}
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search for artists or shows..."
+                value={filters.query}
+                onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
+                onKeyPress={handleKeyPress}
+                className="pl-10"
+              />
+            </div>
+            <Select value={filters.type} onValueChange={(value: 'all' | 'artists' | 'shows') => setFilters(prev => ({ ...prev, type: value }))}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="artists">Artists</SelectItem>
+                <SelectItem value="shows">Shows</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleSearch} disabled={!filters.query.trim() || isLoading}>
+              {isLoading ? 'Searching...' : 'Search'}
+            </Button>
           </div>
 
-          {/* Filter Toggle */}
-          {showFilters && (
-            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-yellow-metal-700 text-gray-300 hover:bg-yellow-metal-900/50 px-4 py-3 rounded-xl relative"
-                >
-                  <Filter className="h-5 w-5" />
-                  {activeFilterCount > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                    >
-                      {activeFilterCount}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 bg-gray-900 border-gray-700">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-white font-medium">Filters</h4>
-                    {activeFilterCount > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearFilters}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Location Filter */}
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-300 flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      Location
-                    </label>
-                    <Input
-                      placeholder="City, State, Country"
-                      value={filters.location || ''}
-                      onChange={(e) => updateFilter('location', e.target.value || undefined)}
-                      className="bg-gray-800 border-gray-600"
-                    />
-                  </div>
-
-                  {/* Date Range Filter */}
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-300 flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Date Range
-                    </label>
-                    <Select
-                      value={filters.dateRange || ''}
-                      onValueChange={(value) => updateFilter('dateRange', value || undefined)}
-                    >
-                      <SelectTrigger className="bg-gray-800 border-gray-600">
-                        <SelectValue placeholder="Any time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Any time</SelectItem>
-                        <SelectItem value="this-week">This week</SelectItem>
-                        <SelectItem value="this-month">This month</SelectItem>
-                        <SelectItem value="next-month">Next month</SelectItem>
-                        <SelectItem value="this-year">This year</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Genre Filter */}
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-300">Genre</label>
-                    <Select
-                      value={filters.genre || ''}
-                      onValueChange={(value) => updateFilter('genre', value || undefined)}
-                    >
-                      <SelectTrigger className="bg-gray-800 border-gray-600">
-                        <SelectValue placeholder="Any genre" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Any genre</SelectItem>
-                        {availableGenres?.slice(0, 20).map(genre => (
-                          <SelectItem key={genre} value={genre}>
-                            {genre.charAt(0).toUpperCase() + genre.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sort By */}
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-300">Sort by</label>
-                    <Select
-                      value={filters.sortBy || 'relevance'}
-                      onValueChange={(value) => updateFilter('sortBy', value)}
-                    >
-                      <SelectTrigger className="bg-gray-800 border-gray-600">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="relevance">Relevance</SelectItem>
-                        <SelectItem value="date">Date</SelectItem>
-                        <SelectItem value="popularity">Popularity</SelectItem>
-                        <SelectItem value="votes">Most Voted</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-
-          {/* Search Button */}
-          <Button 
-            type="submit"
-            className="bg-yellow-metal-400 hover:bg-yellow-metal-500 text-black px-6 py-3 rounded-xl"
-          >
-            Search
-          </Button>
-        </div>
-      </form>
-
-      {/* Active Filters Display */}
-      {activeFilterCount > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {filters.location && (
-            <Badge 
-              variant="secondary" 
-              className="bg-yellow-metal-800 text-yellow-metal-200 hover:bg-yellow-metal-700"
+          {/* Advanced Filters Toggle */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-gray-600 hover:text-gray-900"
             >
-              <MapPin className="h-3 w-3 mr-1" />
-              {filters.location}
-              <X 
-                className="h-3 w-3 ml-1 cursor-pointer" 
-                onClick={() => updateFilter('location', undefined)}
-              />
-            </Badge>
-          )}
-          {filters.dateRange && (
-            <Badge 
-              variant="secondary" 
-              className="bg-yellow-metal-800 text-yellow-metal-200 hover:bg-yellow-metal-700"
-            >
-              <Calendar className="h-3 w-3 mr-1" />
-              {filters.dateRange.replace('-', ' ')}
-              <X 
-                className="h-3 w-3 ml-1 cursor-pointer" 
-                onClick={() => updateFilter('dateRange', undefined)}
-              />
-            </Badge>
-          )}
-          {filters.genre && (
-            <Badge 
-              variant="secondary" 
-              className="bg-yellow-metal-800 text-yellow-metal-200 hover:bg-yellow-metal-700"
-            >
-              {filters.genre}
-              <X 
-                className="h-3 w-3 ml-1 cursor-pointer" 
-                onClick={() => updateFilter('genre', undefined)}
-              />
-            </Badge>
+              <Filter className="h-4 w-4 mr-2" />
+              {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
+            </Button>
+          </div>
+
+          {/* Advanced Filters */}
+          {showAdvanced && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <MapPin className="h-4 w-4 inline mr-1" />
+                  Location
+                </label>
+                <Input
+                  placeholder="City, State, or Country"
+                  value={filters.location || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="h-4 w-4 inline mr-1" />
+                  Date Range
+                </label>
+                <Select value={filters.dateRange || ''} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Any time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Any time</SelectItem>
+                    <SelectItem value="week">This week</SelectItem>
+                    <SelectItem value="month">This month</SelectItem>
+                    <SelectItem value="quarter">Next 3 months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Results Limit
+                </label>
+                <Select value={filters.limit?.toString() || '20'} onValueChange={(value) => setFilters(prev => ({ ...prev, limit: parseInt(value) }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 results</SelectItem>
+                    <SelectItem value="20">20 results</SelectItem>
+                    <SelectItem value="50">50 results</SelectItem>
+                    <SelectItem value="100">100 results</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           )}
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

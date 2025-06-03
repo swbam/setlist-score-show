@@ -19,6 +19,7 @@ export type Database = {
           popularity: number | null
           spotify_url: string | null
           ticketmaster_id: string | null
+          ticketmaster_name: string | null
         }
         Insert: {
           genres?: string[] | null
@@ -29,6 +30,7 @@ export type Database = {
           popularity?: number | null
           spotify_url?: string | null
           ticketmaster_id?: string | null
+          ticketmaster_name?: string | null
         }
         Update: {
           genres?: string[] | null
@@ -39,6 +41,7 @@ export type Database = {
           popularity?: number | null
           spotify_url?: string | null
           ticketmaster_id?: string | null
+          ticketmaster_name?: string | null
         }
         Relationships: []
       }
@@ -123,11 +126,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fk_played_setlists_show_id"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "trending_shows"
+            referencedColumns: ["show_id"]
+          },
+          {
             foreignKeyName: "played_setlists_show_id_fkey"
             columns: ["show_id"]
             isOneToOne: true
             referencedRelation: "shows"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "played_setlists_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "trending_shows"
+            referencedColumns: ["show_id"]
           },
         ]
       }
@@ -212,11 +229,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fk_setlists_show_id"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "trending_shows"
+            referencedColumns: ["show_id"]
+          },
+          {
             foreignKeyName: "setlists_show_id_fkey"
             columns: ["show_id"]
             isOneToOne: true
             referencedRelation: "shows"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setlists_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "trending_shows"
+            referencedColumns: ["show_id"]
           },
         ]
       }
@@ -477,6 +508,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vote_limits_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "trending_shows"
+            referencedColumns: ["show_id"]
+          },
+          {
             foreignKeyName: "vote_limits_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -537,7 +575,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      trending_shows: {
+        Row: {
+          artist_id: string | null
+          show_date: string | null
+          show_id: string | null
+          show_name: string | null
+          show_status: string | null
+          total_votes: number | null
+          trending_score: number | null
+          unique_voters: number | null
+          venue_id: string | null
+          view_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_shows_artist_id"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shows_venue_id"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shows_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shows_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_setlist_with_songs: {
@@ -575,9 +656,15 @@ export type Database = {
           similarity: number
         }[]
       }
+      refresh_trending_shows_materialized_view: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       vote_for_song: {
-        Args: { setlist_song_id: string }
-        Returns: Json
+        Args:
+          | { p_user_id: string; p_setlist_song_id: string }
+          | { setlist_song_id: string }
+        Returns: undefined
       }
     }
     Enums: {
