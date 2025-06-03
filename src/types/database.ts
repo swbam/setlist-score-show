@@ -33,8 +33,12 @@ export interface Show {
   venue_id: string;
   name: string;
   date: string;
-  status: 'upcoming' | 'completed' | 'cancelled';
-  ticketmaster_id?: string;
+  start_time?: string | null;
+  status?: 'upcoming' | 'completed' | 'cancelled' | null;
+  ticketmaster_url?: string | null;
+  image_url?: string | null;
+  min_price?: number | null;
+  max_price?: number | null;
   view_count: number;
   trending_score: number;
   created_at: string;
@@ -303,4 +307,171 @@ export interface SetlistFmSetlist {
       }>;
     }>;
   };
+}
+
+export interface Database {
+  public: {
+    Tables: {
+      artists: {
+        Row: {
+          id: string
+          name: string
+          spotify_id: string | null
+          image_url: string | null
+          popularity: number | null
+          genres: string[] | null
+          followers: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          spotify_id?: string
+          image_url?: string
+          popularity?: number
+          genres?: string[]
+          followers?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          spotify_id?: string
+          image_url?: string
+          popularity?: number
+          genres?: string[]
+          followers?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      
+      venues: {
+        Row: {
+          id: string
+          name: string
+          city: string
+          state: string | null
+          country: string
+          address: string | null
+          latitude: number | null
+          longitude: number | null
+          capacity: number | null
+          ticketmaster_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          city: string
+          state?: string
+          country: string
+          address?: string
+          latitude?: number
+          longitude?: number
+          capacity?: number
+          ticketmaster_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          city?: string
+          state?: string
+          country?: string
+          address?: string
+          latitude?: number
+          longitude?: number
+          capacity?: number
+          ticketmaster_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      
+      shows: {
+        Row: {
+          id: string
+          artist_id: string
+          venue_id: string
+          name: string
+          date: string
+          start_time: string | null
+          status: string | null
+          ticketmaster_url: string | null
+          image_url: string | null
+          min_price: number | null
+          max_price: number | null
+          view_count: number
+          trending_score: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          artist_id: string
+          venue_id: string
+          name: string
+          date: string
+          start_time?: string
+          status?: string
+          ticketmaster_url?: string
+          image_url?: string
+          min_price?: number
+          max_price?: number
+          view_count?: number
+          trending_score?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          artist_id?: string
+          venue_id?: string
+          name?: string
+          date?: string
+          start_time?: string
+          status?: string
+          ticketmaster_url?: string
+          image_url?: string
+          min_price?: number
+          max_price?: number
+          view_count?: number
+          trending_score?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      
+      unmapped_artists: {
+        Row: {
+          id: string
+          ticketmaster_name: string
+          event_count: number
+          first_seen_at: string
+          last_seen_at: string
+        }
+        Insert: {
+          id?: string
+          ticketmaster_name: string
+          event_count?: number
+          first_seen_at?: string
+          last_seen_at?: string
+        }
+        Update: {
+          id?: string
+          ticketmaster_name?: string
+          event_count?: number
+          first_seen_at?: string
+          last_seen_at?: string
+        }
+      }
+      
+      // ...existing code...
+    }
+  }
 }

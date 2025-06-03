@@ -57,7 +57,7 @@ const Hero = () => {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search artists, venues, or cities..."
+                placeholder="Search for artists or shows..."
                 className="w-full pl-14 pr-6 py-6 text-lg bg-dark-800/80 backdrop-blur-sm border-dark-700 focus:border-teal-500 rounded-2xl text-white placeholder:text-gray-500 transition-all"
               />
               <Button 

@@ -1,260 +1,182 @@
-
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2, TrendingUp, Calendar, MapPin, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Users, TrendingUp, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
-// Define proper types
 interface Show {
   id: string;
-  name: string | null;
+  name: string;
   date: string;
+  image_url?: string;
   view_count: number;
-  venues: Venue | null;
-  artists: Artist | null;
+  trending_score: number;
+  totalVotes?: number;
+  artist?: {
+    name: string;
+    image_url?: string;
+  };
+  venue?: {
+    name: string;
+    city: string;
+    state?: string;
+  };
+  setlists?: Array<{
+    setlist_songs?: Array<{
+      votes: number;
+    }>;
+  }>;
 }
 
-interface Venue {
-  name: string;
-  city: string | null;
-  state: string | null;
-}
-
-interface Artist {
-  id: string;
-  name: string;
-  image_url: string | null;
-}
-
-interface TrendingShow {
-  id: string;
-  date: string;
-  name: string;
-  venue_name: string;
-  city: string;
-  state: string;
-  artist_id: string;
-  artist_name: string;
-  artist_image_url: string;
-  total_votes: number;
-  view_count: number;
-}
-
-const TrendingShows = React.memo(() => {
+function TrendingShows() {
   const navigate = useNavigate();
 
   const { data: shows, isLoading, error } = useQuery({
     queryKey: ["trending-shows"],
     queryFn: async () => {
-      console.log("🔥 Fetching trending shows...");
-      
-      try {
-        const { data, error } = await supabase
-          .from("shows")
-          .select(`
-            id,
-            name,
-            date,
-            view_count,
-            venues!inner (name, city, state),
-            artists!inner (id, name, image_url)
-          `)
-          .gte("date", new Date().toISOString().split('T')[0])
-          .order("view_count", { ascending: false })
-          .limit(8);
+      const { data, error } = await supabase
+        .from("shows")
+        .select(`
+          *,
+          artist:artists(name, image_url),
+          venue:venues(name, city, state),
+          setlists(
+            setlist_songs(votes)
+          )
+        `)
+        .gte("date", new Date().toISOString().split('T')[0])
+        .order("trending_score", { ascending: false })
+        .order("view_count", { ascending: false })
+        .limit(12);
 
-        if (error) {
-          console.error("❌ Error fetching trending shows:", error);
-          throw error;
-        }
-
-        if (!data || data.length === 0) {
-          console.log("⚠️ No shows found");
-          return [];
-        }
-
-        console.log(`✅ Found ${data.length} shows`);
-
-        return data.map((show: Show) => {
-          const venueData = show.venues as Venue;
-          const artistData = show.artists as Artist;
-          
-          return {
-            id: show.id,
-            date: show.date,
-            name: show.name || `${artistData?.name || 'Unknown Artist'} Concert`,
-            venue_name: venueData?.name || 'Unknown Venue',
-            city: venueData?.city || '',
-            state: venueData?.state || '',
-            artist_id: artistData?.id || '',
-            artist_name: artistData?.name || 'Unknown Artist',
-            artist_image_url: artistData?.image_url || '/placeholder.svg',
-            total_votes: 0,
-            view_count: show.view_count || 0,
-          };
-        }) as TrendingShow[];
-      } catch (err) {
-        console.error("❌ Error in trending shows query:", err);
-        throw err;
+      if (error) {
+        console.error("TrendingShows query error:", error);
+        throw error;
       }
+
+      // Calculate total votes for each show
+      const showsWithVotes: Show[] = data?.map((show: any) => ({
+        ...show,
+        totalVotes:
+          show.setlists?.reduce(
+            (total: number, setlist: any) =>
+              total +
+              (setlist.setlist_songs?.reduce(
+                (setlistTotal: number, song: any) =>
+                  setlistTotal + (song.votes || 0),
+                0
+              ) || 0),
+            0
+          ) || 0,
+      })) || [];
+
+      return showsWithVotes;
     },
-    retry: 3,
-    retryDelay: 1000,
+    refetchInterval: 60000, // Refetch every minute
   });
 
   if (isLoading) {
     return (
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-4xl font-bold text-white mb-2">Trending Shows</h2>
-              <p className="text-gray-400">Most voted upcoming concerts</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <Card key={i} className="bg-gray-800 border-gray-700">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-                <div className="p-6 space-y-3">
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (error) {
-    console.error("❌ TrendingShows error:", error);
+    console.error("TrendingShows error:", error);
     return (
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <h2 className="text-4xl font-bold text-white mb-4">Trending Shows</h2>
-            <p className="text-gray-400 mb-8">Unable to load trending shows. Please try again later.</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-medium"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </section>
+      <div className="text-center py-12 text-red-500">
+        <p>Error loading trending shows: {error.message}</p>
+        <p className="text-sm text-muted-foreground mt-2">Check console for details</p>
+      </div>
+    );
+  }
+
+  if (!shows || shows.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground mb-4">No upcoming shows found.</p>
+        <p className="text-sm text-muted-foreground">
+          Try searching for your favorite artists to discover upcoming concerts.
+        </p>
+      </div>
     );
   }
 
   return (
-    <section className="py-20 px-4 relative">
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-900/50 to-transparent pointer-events-none"></div>
-      
-      <div className="max-w-7xl mx-auto relative z-10">
-        <div className="flex items-center justify-between mb-12">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <TrendingUp className="w-6 h-6 text-yellow-400" />
-              <h2 className="text-4xl font-bold text-white">Trending Shows</h2>
-            </div>
-            <p className="text-gray-400">Most viewed upcoming concerts</p>
-          </div>
-          <button 
-            onClick={() => navigate('/search')}
-            className="text-yellow-400 hover:text-yellow-300 font-medium transition-colors"
-          >
-            View all shows →
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {shows && shows.length > 0 ? (
-            shows.map((show) => (
-              <Card
-                key={show.id}
-                onClick={() => navigate(`/show/${show.id}`)}
-                className="group cursor-pointer bg-gray-800/50 backdrop-blur-sm border-gray-700 hover:border-yellow-500/50 transition-all duration-300 overflow-hidden"
-              >
-                <div className="relative h-48 overflow-hidden">
-                  <img
-                    src={show.artist_image_url}
-                    alt={show.artist_name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/placeholder.svg';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent"></div>
-                  
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-yellow-500/20 backdrop-blur-sm border border-yellow-500/30 rounded-full">
-                    <span className="text-xs font-medium text-yellow-400">{show.view_count} views</span>
-                  </div>
-
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{show.artist_name}</h3>
-                  </div>
-                </div>
-
-                <div className="p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                    <span className="text-sm font-medium">
-                      {format(new Date(show.date), "MMM d, yyyy")}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <MapPin className="w-4 h-4" />
-                    <span className="text-sm line-clamp-1">{show.venue_name}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <MapPin className="w-3 h-3 ml-0.5" />
-                    <span className="text-sm">
-                      {show.city}{show.state && `, ${show.state}`}
-                    </span>
-                  </div>
-
-                  <div className="pt-3 border-t border-gray-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs text-gray-500">{show.view_count} views</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs text-gray-500">Voting open</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-              </Card>
-            ))
-          ) : (
-            <div className="col-span-full text-center py-20">
-              <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">No shows available</h3>
-              <p className="text-gray-500 mb-4">Check back soon for upcoming concerts</p>
-              <button 
-                onClick={() => navigate('/search')}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-medium"
-              >
-                Search for Shows
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <TrendingUp className="h-6 w-6 text-primary" />
+          Trending Shows
+        </h2>
       </div>
-    </section>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {shows.map((show: Show) => (
+          <Card
+            key={show.id}
+            className="overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 group"
+            onClick={() => navigate(`/show/${show.id}`)}
+          >
+            {show.image_url && (
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src={show.image_url}
+                  alt={show.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute bottom-2 left-2 right-2">
+                  <h3 className="text-white font-semibold text-lg line-clamp-1">
+                    {show.artist?.name}
+                  </h3>
+                </div>
+              </div>
+            )}
+
+            <div className="p-4 space-y-3">
+              <div>
+                <h4 className="font-medium line-clamp-2">{show.name}</h4>
+                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                  <Calendar className="h-3 w-3" />
+                  <span>{format(new Date(show.date), "MMM d, yyyy")}</span>
+                </div>
+                {show.venue && (
+                  <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    <span className="line-clamp-1">
+                      {show.venue.name}, {show.venue.city}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    {show.view_count || 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    {show.totalVotes} votes
+                  </span>
+                </div>
+                {show.trending_score > 0 && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                    Trending
+                  </span>
+                )}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
-});
+}
 
 export default TrendingShows;

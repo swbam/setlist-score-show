@@ -25,24 +25,24 @@ export interface UserArtist {
 // Get the current logged-in user
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const { data: authUser } = await supabase.auth.getUser();
+    const { data: authUser, error } = await supabase.auth.getUser();
     
-    if (!authUser || !authUser.user) {
+    if (error || !authUser?.user) {
       return null;
     }
-    
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authUser.user.id)
-      .single();
-    
-    if (error) {
-      console.error("Error fetching user:", error);
-      return null;
-    }
-    
-    return data;
+
+    // Map Supabase auth user to our User interface
+    return {
+      id: authUser.user.id,
+      email: authUser.user.email || null,
+      spotify_id: authUser.user.user_metadata?.provider_id || null,
+      display_name: authUser.user.user_metadata?.display_name || 
+                   authUser.user.user_metadata?.full_name || 
+                   authUser.user.user_metadata?.name || 
+                   authUser.user.email?.split('@')[0] || 'User',
+      avatar_url: authUser.user.user_metadata?.avatar_url || null,
+      created_at: authUser.user.created_at
+    };
   } catch (error) {
     console.error("Error getting current user:", error);
     return null;
@@ -58,17 +58,26 @@ export async function upsertUser(
   avatar_url: string | null
 ): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('users')
-      .upsert({
-        id,
-        email,
-        spotify_id,
+    // Update user metadata in Supabase auth instead of custom table
+    const { error } = await supabase.auth.updateUser({
+      data: {
         display_name,
-        avatar_url
-      });
+        avatar_url,
+        spotify_id
+      }
+    });
     
     if (error) {
+      console.error("Error updating user:", error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error upserting user:", error);
+    return false;
+  }
+}
       console.error("Error upserting user:", error);
       return false;
     }

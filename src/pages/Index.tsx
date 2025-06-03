@@ -49,7 +49,7 @@ const Index = () => {
           <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto mb-8">
             <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
             <Input
-              placeholder="Search for artists, venues, or cities..."
+              placeholder="Search for artists or shows..."
               className={`w-full pl-12 pr-4 ${isMobile ? "py-4" : "py-6"} text-lg bg-yellow-metal-950/80 border-yellow-metal-700 focus:border-yellow-metal-400 rounded-xl`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

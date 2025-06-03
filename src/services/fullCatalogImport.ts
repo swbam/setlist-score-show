@@ -1,306 +1,440 @@
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  getArtistTopTracks, 
-  getArtistAlbums, 
-  getAlbumTracks,
-  SpotifyTrack,
-  SpotifyAlbum 
-} from "./spotify";
+import * as spotifyService from "./spotify";
+import { SpotifyArtist, SpotifyTrack, SpotifyAlbum } from "./spotify";
 
-export interface CatalogImportProgress {
-  artistId: string;
-  artistName: string;
-  totalAlbums: number;
-  processedAlbums: number;
-  totalTracks: number;
-  importedTracks: number;
-  skippedTracks: number;
-  errors: string[];
-  isComplete: boolean;
-  startTime: Date;
-  endTime?: Date;
+export interface ImportProgress {
+  artist_id: string;
+  stage: 'starting' | 'fetching_albums' | 'processing_albums' | 'storing_tracks' | 'completed' | 'failed';
+  total_albums: number;
+  processed_albums: number;
+  total_tracks: number;
+  imported_tracks: number;
+  started_at: string;
+  completed_at?: string | null;
+  error_message?: string | null;
 }
 
-export interface CatalogImportResult {
+export interface ImportResult {
   success: boolean;
-  progress: CatalogImportProgress;
+  artist_id: string;
+  tracks_imported: number;
+  albums_processed: number;
   error?: string;
 }
 
-// Helper function to extract Spotify ID from URL
-function extractSpotifyId(spotifyUrl: string): string {
-  const match = spotifyUrl.match(/artist\/([a-zA-Z0-9]+)/);
-  return match ? match[1] : '';
+// Track import progress in the database
+async function updateImportProgress(progress: Partial<ImportProgress>): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('artist_import_progress')
+      .upsert({
+        ...progress,
+        artist_id: progress.artist_id!
+      }, {
+        onConflict: 'artist_id'
+      });
+
+    if (error) {
+      console.error('Error updating import progress:', error);
+    }
+  } catch (error) {
+    console.error('Error updating import progress:', error);
+  }
 }
 
-// Import full catalog for an artist
-export async function importFullArtistCatalog(
-  artistId: string,
-  spotifyArtistId: string,
-  onProgress?: (progress: CatalogImportProgress) => void
-): Promise<CatalogImportResult> {
-  const progress: CatalogImportProgress = {
-    artistId,
-    artistName: '',
-    totalAlbums: 0,
-    processedAlbums: 0,
-    totalTracks: 0,
-    importedTracks: 0,
-    skippedTracks: 0,
-    errors: [],
-    isComplete: false,
-    startTime: new Date()
-  };
-
+// Get current import progress for an artist
+export async function getImportProgress(artistId: string): Promise<ImportProgress | null> {
   try {
-    // Get artist name
-    const { data: artistData, error: artistError } = await supabase
+    const { data, error } = await supabase
+      .from('artist_import_progress')
+      .select('*')
+      .eq('artist_id', artistId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // Not found is ok
+      console.error('Error fetching import progress:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching import progress:', error);
+    return null;
+  }
+}
+
+// Check if an artist needs catalog import
+export async function needsCatalogImport(artistId: string): Promise<boolean> {
+  try {
+    // Check if artist has songs
+    const { count: songCount } = await supabase
+      .from('songs')
+      .select('id', { count: 'exact' })
+      .eq('artist_id', artistId);
+
+    // Check last sync date
+    const { data: artist } = await supabase
       .from('artists')
-      .select('name')
+      .select('last_synced_at')
       .eq('id', artistId)
       .single();
 
-    if (artistError || !artistData) {
+    if (!artist || songCount === 0) {
+      return true;
+    }
+
+    // Check if last sync was more than 7 days ago
+    if (artist.last_synced_at) {
+      const lastSynced = new Date(artist.last_synced_at);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return lastSynced <= sevenDaysAgo;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking catalog import status:', error);
+    return true;
+  }
+}
+
+// Enhanced full catalog import with comprehensive progress tracking
+export async function importFullArtistCatalog(
+  artistId: string,
+  onProgress?: (progress: ImportProgress) => void
+): Promise<ImportResult> {
+  console.log(`🎵 Starting enhanced full catalog import for artist: ${artistId}`);
+
+  const startTime = new Date().toISOString();
+  let currentProgress: ImportProgress = {
+    artist_id: artistId,
+    stage: 'starting',
+    total_albums: 0,
+    processed_albums: 0,
+    total_tracks: 0,
+    imported_tracks: 0,
+    started_at: startTime
+  };
+
+  try {
+    // Update progress: Starting
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
+
+    // Stage 1: Fetch all albums
+    currentProgress.stage = 'fetching_albums';
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
+
+    const albums = await spotifyService.getArtistAlbums(artistId);
+    console.log(`📀 Found ${albums.length} albums for artist ${artistId}`);
+
+    if (albums.length === 0) {
+      // Fall back to top tracks if no albums found
+      console.log(`⚠️ No albums found, falling back to top tracks for artist ${artistId}`);
+      const topTracks = await spotifyService.getArtistTopTracks(artistId);
+      
+      if (topTracks.length > 0) {
+        const stored = await spotifyService.storeTracksInDatabase(artistId, topTracks);
+        
+        currentProgress = {
+          ...currentProgress,
+          stage: stored ? 'completed' : 'failed',
+          total_tracks: topTracks.length,
+          imported_tracks: stored ? topTracks.length : 0,
+          completed_at: new Date().toISOString(),
+          error_message: stored ? null : 'Failed to store top tracks'
+        };
+
+        await updateImportProgress(currentProgress);
+        onProgress?.(currentProgress);
+
+        return {
+          success: stored,
+          artist_id: artistId,
+          tracks_imported: stored ? topTracks.length : 0,
+          albums_processed: 0,
+          error: stored ? undefined : 'Failed to store top tracks'
+        };
+      }
+
+      currentProgress.stage = 'failed';
+      currentProgress.error_message = 'No albums or top tracks found';
+      await updateImportProgress(currentProgress);
+      onProgress?.(currentProgress);
+
       return {
         success: false,
-        progress,
-        error: 'Artist not found'
+        artist_id: artistId,
+        tracks_imported: 0,
+        albums_processed: 0,
+        error: 'No albums or top tracks found'
       };
     }
 
-    progress.artistName = artistData.name;
-    onProgress?.(progress);
+    // Stage 2: Process albums
+    currentProgress.stage = 'processing_albums';
+    currentProgress.total_albums = albums.length;
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
 
-    // Get all albums for the artist
-    const albums = await getArtistAlbums(spotifyArtistId);
-    progress.totalAlbums = albums.length;
-    onProgress?.(progress);
+    let allTracks: SpotifyTrack[] = [];
+    let albumsProcessed = 0;
+    const maxAlbumsToProcess = Math.min(albums.length, 50); // Limit to prevent excessive API calls
 
-    // Process each album
-    for (const album of albums) {
-      try {
-        await processAlbum(artistId, album, progress, onProgress);
-        progress.processedAlbums++;
-        onProgress?.(progress);
+    // Process albums in batches
+    const batchSize = 3;
+    for (let i = 0; i < maxAlbumsToProcess; i += batchSize) {
+      const albumBatch = albums.slice(i, Math.min(i + batchSize, maxAlbumsToProcess));
+      
+      for (const album of albumBatch) {
+        try {
+          console.log(`🎶 Processing album: ${album.name} (${albumsProcessed + 1}/${maxAlbumsToProcess})`);
+          
+          const albumTracks = await spotifyService.getAlbumTracks(album.id);
+          
+          // Add album info to tracks
+          const tracksWithAlbum = albumTracks.map(track => ({
+            ...track,
+            album: { name: album.name, images: album.images }
+          }));
+          
+          allTracks.push(...tracksWithAlbum);
+          albumsProcessed++;
 
-        // Add delay to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error(`Error processing album ${album.name}:`, error);
-        progress.errors.push(`Failed to process album: ${album.name}`);
-        onProgress?.(progress);
+          // Update progress
+          currentProgress.processed_albums = albumsProcessed;
+          currentProgress.total_tracks = allTracks.length;
+          await updateImportProgress(currentProgress);
+          onProgress?.(currentProgress);
+
+          // Rate limiting between albums
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+        } catch (error) {
+          console.error(`❌ Error processing album ${album.name}:`, error);
+          albumsProcessed++;
+          
+          // Update progress even on error
+          currentProgress.processed_albums = albumsProcessed;
+          await updateImportProgress(currentProgress);
+          onProgress?.(currentProgress);
+        }
+      }
+      
+      // Longer delay between batches
+      if (i + batchSize < maxAlbumsToProcess) {
+        console.log(`⏳ Waiting between batches... (${i + batchSize}/${maxAlbumsToProcess})`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    progress.isComplete = true;
-    progress.endTime = new Date();
-    onProgress?.(progress);
+    // Stage 3: Store tracks
+    currentProgress.stage = 'storing_tracks';
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
+
+    // Deduplicate tracks
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+
+    console.log(`💾 Storing ${uniqueTracks.length} unique tracks for artist ${artistId}`);
+
+    const tracksStored = await spotifyService.storeTracksInDatabase(artistId, uniqueTracks);
+
+    // Stage 4: Complete
+    currentProgress.stage = tracksStored ? 'completed' : 'failed';
+    currentProgress.imported_tracks = tracksStored ? uniqueTracks.length : 0;
+    currentProgress.completed_at = new Date().toISOString();
+    currentProgress.error_message = tracksStored ? null : 'Failed to store tracks in database';
+
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
+
+    // Update artist sync timestamp
+    if (tracksStored) {
+      await supabase
+        .from('artists')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('id', artistId);
+    }
+
+    console.log(`✅ Catalog import ${tracksStored ? 'completed' : 'failed'} for artist ${artistId}`);
+    console.log(`📊 Albums processed: ${albumsProcessed}, Tracks imported: ${uniqueTracks.length}`);
 
     return {
-      success: true,
-      progress
+      success: tracksStored,
+      artist_id: artistId,
+      tracks_imported: tracksStored ? uniqueTracks.length : 0,
+      albums_processed: albumsProcessed,
+      error: tracksStored ? undefined : 'Failed to store tracks in database'
     };
 
   } catch (error) {
-    console.error('Error importing catalog:', error);
-    progress.errors.push(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    progress.isComplete = true;
-    progress.endTime = new Date();
-    onProgress?.(progress);
+    console.error(`💥 Error in full catalog import for artist ${artistId}:`, error);
+    
+    currentProgress.stage = 'failed';
+    currentProgress.error_message = error instanceof Error ? error.message : 'Unknown error';
+    currentProgress.completed_at = new Date().toISOString();
+    
+    await updateImportProgress(currentProgress);
+    onProgress?.(currentProgress);
 
     return {
       success: false,
-      progress,
+      artist_id: artistId,
+      tracks_imported: 0,
+      albums_processed: 0,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
 
-// Process a single album
-async function processAlbum(
-  artistId: string,
-  album: SpotifyAlbum,
-  progress: CatalogImportProgress,
-  onProgress?: (progress: CatalogImportProgress) => void
-): Promise<void> {
-  try {
-    // Get tracks for this album
-    const tracks = await getAlbumTracks(album.id);
-    progress.totalTracks += tracks.length;
-    onProgress?.(progress);
+// Import user's Spotify top artists with full catalogs
+export async function importUserTopArtistsWithCatalogs(
+  userId: string,
+  spotifyAccessToken: string,
+  maxArtists: number = 10,
+  onProgress?: (artistName: string, progress: ImportProgress) => void
+): Promise<{success: boolean; imported: number; errors: string[]}> {
+  console.log(`🎯 Starting import of user's top artists with full catalogs`);
+  
+  const errors: string[] = [];
+  let importedCount = 0;
 
-    // Import each track
-    for (const track of tracks) {
+  try {
+    // Get user's top artists from Spotify
+    const response = await fetch('https://api.spotify.com/v1/me/top/artists?limit=50', {
+      headers: {
+        'Authorization': `Bearer ${spotifyAccessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user's top artists: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const topArtists = data.items.slice(0, maxArtists) as SpotifyArtist[];
+
+    console.log(`👤 Found ${topArtists.length} top artists for user`);
+
+    for (let i = 0; i < topArtists.length; i++) {
+      const artist = topArtists[i];
+      
       try {
-        const imported = await importTrack(artistId, track, album);
-        if (imported) {
-          progress.importedTracks++;
-        } else {
-          progress.skippedTracks++;
+        console.log(`🎤 Processing artist ${i + 1}/${topArtists.length}: ${artist.name}`);
+        
+        // Store artist in database
+        await spotifyService.storeArtistInDatabase(artist);
+        
+        // Check if user already follows this artist
+        const { data: existingFollow } = await supabase
+          .from('user_artists')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('artist_id', artist.id)
+          .single();
+
+        if (!existingFollow) {
+          // Add to user's artists
+          const { error: followError } = await supabase
+            .from('user_artists')
+            .insert({
+              user_id: userId,
+              artist_id: artist.id,
+              rank: i + 1
+            });
+
+          if (followError) {
+            console.error(`Error following artist ${artist.name}:`, followError);
+            errors.push(`Failed to follow ${artist.name}`);
+          }
         }
-        onProgress?.(progress);
+
+        // Import full catalog
+        const result = await importFullArtistCatalog(
+          artist.id,
+          (progress) => onProgress?.(artist.name, progress)
+        );
+
+        if (result.success) {
+          importedCount++;
+          console.log(`✅ Successfully imported catalog for ${artist.name}: ${result.tracks_imported} tracks`);
+        } else {
+          errors.push(`Failed to import catalog for ${artist.name}: ${result.error}`);
+        }
+
+        // Rate limiting between artists
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
       } catch (error) {
-        console.error(`Error importing track ${track.name}:`, error);
-        progress.errors.push(`Failed to import track: ${track.name}`);
-        progress.skippedTracks++;
-        onProgress?.(progress);
+        console.error(`Error processing artist ${artist.name}:`, error);
+        errors.push(`Error processing ${artist.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
-  } catch (error) {
-    console.error(`Error getting tracks for album ${album.name}:`, error);
-    progress.errors.push(`Failed to get tracks for album: ${album.name}`);
-    onProgress?.(progress);
-  }
-}
 
-// Import a single track
-async function importTrack(
-  artistId: string,
-  track: SpotifyTrack,
-  album: SpotifyAlbum
-): Promise<boolean> {
-  try {
-    // Check if track already exists
-    const { data: existingTrack } = await supabase
-      .from('songs')
-      .select('id')
-      .eq('artist_id', artistId)
-      .eq('spotify_url', track.external_urls?.spotify || '')
-      .single();
-
-    if (existingTrack) {
-      return false; // Already exists, skip
-    }
-
-    // Insert the track
-    const { error } = await supabase
-      .from('songs')
-      .insert({
-        id: crypto.randomUUID(),
-        artist_id: artistId,
-        name: track.name,
-        spotify_url: track.external_urls?.spotify || '',
-        duration_ms: track.duration_ms,
-        popularity: track.popularity || 0,
-        album: album.name
-      });
-
-    if (error) {
-      console.error('Error inserting track:', error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error importing track:', error);
-    return false;
-  }
-}
-
-// Get catalog import status for an artist
-export async function getCatalogImportStatus(artistId: string): Promise<{
-  hasFullCatalog: boolean;
-  songCount: number;
-  lastImport?: string;
-}> {
-  try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('id')
-      .eq('artist_id', artistId);
-
-    if (error) {
-      console.error('Error getting catalog status:', error);
-      return { hasFullCatalog: false, songCount: 0 };
-    }
-
-    const songCount = data?.length || 0;
-    const hasFullCatalog = songCount > 20; // Assume full catalog if more than 20 songs
+    console.log(`🎉 Completed import: ${importedCount}/${topArtists.length} artists successfully imported`);
 
     return {
-      hasFullCatalog,
-      songCount
+      success: importedCount > 0,
+      imported: importedCount,
+      errors
     };
+
   } catch (error) {
-    console.error('Error getting catalog status:', error);
-    return { hasFullCatalog: false, songCount: 0 };
+    console.error('Error importing user top artists:', error);
+    errors.push(`Failed to fetch user's top artists: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    
+    return {
+      success: false,
+      imported: 0,
+      errors
+    };
   }
 }
 
-// Update artist catalog (refresh with new songs)
-export async function updateArtistCatalog(
-  artistId: string,
-  spotifyArtistId: string,
-  onProgress?: (progress: CatalogImportProgress) => void
-): Promise<CatalogImportResult> {
-  // For updates, we'll import the full catalog again
-  // The importTrack function will skip existing tracks
-  return importFullArtistCatalog(artistId, spotifyArtistId, onProgress);
-}
-
-// Batch import catalogs for multiple artists
-export async function batchImportCatalogs(
-  artists: Array<{ id: string; spotifyId: string; name: string }>,
-  onProgress?: (artistIndex: number, progress: CatalogImportProgress) => void
-): Promise<CatalogImportResult[]> {
-  const results: CatalogImportResult[] = [];
-
-  for (let i = 0; i < artists.length; i++) {
-    const artist = artists[i];
-    console.log(`Importing catalog for ${artist.name} (${i + 1}/${artists.length})`);
-
-    const result = await importFullArtistCatalog(
-      artist.id,
-      artist.spotifyId,
-      (progress) => onProgress?.(i, progress)
-    );
-
-    results.push(result);
-
-    // Add delay between artists to respect rate limits
-    if (i < artists.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+// Batch import for multiple artists
+export async function batchImportArtistCatalogs(
+  artistIds: string[],
+  onProgress?: (artistId: string, progress: ImportProgress) => void
+): Promise<ImportResult[]> {
+  console.log(`📚 Starting batch import for ${artistIds.length} artists`);
+  
+  const results: ImportResult[] = [];
+  
+  for (let i = 0; i < artistIds.length; i++) {
+    const artistId = artistIds[i];
+    console.log(`🎯 Processing artist ${i + 1}/${artistIds.length}: ${artistId}`);
+    
+    try {
+      const result = await importFullArtistCatalog(
+        artistId,
+        (progress) => onProgress?.(artistId, progress)
+      );
+      
+      results.push(result);
+      
+      // Rate limiting between artists
+      if (i < artistIds.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+      
+    } catch (error) {
+      console.error(`Error importing catalog for artist ${artistId}:`, error);
+      results.push({
+        success: false,
+        artist_id: artistId,
+        tracks_imported: 0,
+        albums_processed: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   }
-
+  
+  const successful = results.filter(r => r.success).length;
+  console.log(`📊 Batch import completed: ${successful}/${artistIds.length} successful`);
+  
   return results;
-}
-
-// Get artists that need catalog imports
-export async function getArtistsNeedingCatalogImport(): Promise<Array<{
-  id: string;
-  name: string;
-  spotifyId: string;
-  songCount: number;
-}>> {
-  try {
-    const { data, error } = await supabase
-      .from('artists')
-      .select(`
-        id,
-        name,
-        spotify_url,
-        songs(id)
-      `)
-      .not('spotify_url', 'is', null);
-
-    if (error) {
-      console.error('Error getting artists needing import:', error);
-      return [];
-    }
-
-    return (data || [])
-      .map(artist => ({
-        id: artist.id,
-        name: artist.name,
-        spotifyId: extractSpotifyId(artist.spotify_url!),
-        songCount: artist.songs?.length || 0
-      }))
-      .filter(artist => artist.songCount < 20) // Need more songs
-      .sort((a, b) => a.songCount - b.songCount); // Prioritize artists with fewer songs
-
-  } catch (error) {
-    console.error('Error getting artists needing import:', error);
-    return [];
-  }
 }

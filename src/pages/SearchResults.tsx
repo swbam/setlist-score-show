@@ -165,18 +165,19 @@ export default function SearchResults() {
                         >
                           <div className="flex items-start justify-between">
                             <div>
-                              <h3 className="font-semibold">{show.name || show.artist_name}</h3>
+                              <h3 className="font-semibold">{show.name}</h3>
+                              <p className="text-sm text-cyan-400 mb-1">{show.artist?.name}</p>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <Calendar className="h-3 w-3 mr-1" />
                                 <span>{formatDate(show.date)}</span>
                               </div>
                               <div className="flex items-center text-sm text-gray-400 mt-1">
                                 <MapPin className="h-3 w-3 mr-1" />
-                                <span>{show.venue || show.location || 'Venue TBA'}</span>
+                                <span>{show.venue?.name} - {show.venue?.city}{show.venue?.state ? `, ${show.venue.state}` : ''}</span>
                               </div>
                             </div>
                             <Button size="sm" asChild>
-                              <Link to={`/show/${show.id}`}>View Show</Link>
+                              <Link to={`/shows/${show.id}`}>View Show</Link>
                             </Button>
                           </div>
                         </div>

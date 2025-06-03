@@ -15,7 +15,7 @@ import IndexPage from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import SearchResults from "./pages/SearchResults";
 import ArtistPage from "./pages/ArtistPage";
-import ShowVoting from "./pages/ShowVoting/ShowVoting";
+import ShowVotingFixed from "./pages/ShowVoting/ShowVotingFixed";
 import AuthCallback from "./pages/AuthCallback";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
@@ -29,22 +29,22 @@ function App() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Initialize background data synchronization
-    initBackgroundUpdates();
+    // TODO: Re-enable background updates after fixing performance issues
+    // initBackgroundUpdates();
     
-    // Prefetch trending data on app load
+    // Prefetch trending data on app load (less frequently)
     prefetchStrategies.prefetchTrendingData(queryClient);
     
-    // Set up periodic background sync
+    // Reduce background sync frequency to prevent performance issues
     const syncInterval = setInterval(() => {
       backgroundSync.syncTrendingData(queryClient);
       backgroundSync.syncVoteCounts(queryClient);
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, 10 * 60 * 1000); // Every 10 minutes instead of 5
     
-    // Clean up cache periodically
+    // Clean up cache less frequently
     const cleanupInterval = setInterval(() => {
       backgroundSync.cleanupCache(queryClient);
-    }, 30 * 60 * 1000); // Every 30 minutes
+    }, 60 * 60 * 1000); // Every 60 minutes instead of 30
     
     return () => {
       clearInterval(syncInterval);
@@ -65,13 +65,14 @@ function App() {
           <Route path="/artists/:artistId/:artistSlug" element={<ArtistPage />} />
           
           {/* SEO-friendly URL structure for shows - consolidated routing */}
-          <Route path="/show/:showId" element={<ShowVoting />} />
-          <Route path="/events/:showId/:showSlug" element={<ShowVoting />} />
+          <Route path="/show/:showId" element={<ShowVotingFixed />} />
+          <Route path="/events/:showId/:showSlug" element={<ShowVotingFixed />} />
           
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/my-artists" element={<Profile />} />
           <Route path="/artists" element={<AllArtists />} />
           
           {/* SEO-friendly URL structure for setlist comparisons */}

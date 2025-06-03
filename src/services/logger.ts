@@ -7,10 +7,6 @@ interface LogEntry {
   userId?: string;
   sessionId?: string;
 }
-  data?: any;
-  userId?: string;
-  sessionId?: string;
-}
 
 interface LoggerConfig {
   enableConsole: boolean;

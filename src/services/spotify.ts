@@ -1,13 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { EnhancedSpotifyRateLimiter } from "./spotifyRateLimiterEnhanced";
+import { spotifyRateLimiter as rateLimiter } from "./spotify/productionRateLimiter";
 
 // Spotify API endpoints
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
 const SPOTIFY_CLIENT_ID = "2946864dc822469b9c672292ead45f43";
 const SPOTIFY_CLIENT_SECRET = "feaf0fc901124b839b11e02f97d18a8d";
-
-// Initialize the enhanced rate limiter
-const rateLimiter = new EnhancedSpotifyRateLimiter();
 
 // Types for Spotify API responses
 export interface SpotifyArtist {
@@ -230,18 +227,24 @@ export async function getAllArtistAlbums(artistId: string, accessToken: string) 
 }
 
 // Get tracks for a specific album (manual pagination)
-export async function getAlbumTracks(albumId: string, accessToken: string) {
+export async function getAlbumTracks(albumId: string, accessToken?: string) {
   const tracks = [];
   let offset = 0;
   const limit = 50;
   let hasMore = true;
+
+  // Get access token if not provided
+  const token = accessToken || await getAccessToken();
+  if (!token) {
+    throw new Error('Failed to get Spotify access token');
+  }
 
   while (hasMore) {
     const response = await fetch(
       `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${token}`
         }
       }
     );
@@ -260,7 +263,7 @@ export async function getAlbumTracks(albumId: string, accessToken: string) {
 
 // Import full artist catalog (albums + tracks)
 export async function importFullArtistCatalog(artistId: string) {
-  const accessToken = await getSpotifyAccessToken();
+  const accessToken = await getAccessToken();
   const albums = await getAllArtistAlbums(artistId, accessToken);
   const songs = [];
 
@@ -392,5 +395,211 @@ export async function importFullArtistCatalogWithProgress(
       tracksImported: 0,
       albumsProcessed: 0
     };
+  }
+}
+
+// Store artist data in Supabase
+export async function storeArtistInDatabase(artist: SpotifyArtist): Promise<boolean> {
+  try {
+    console.log("Storing artist in database:", artist.name);
+    
+    const artistData = {
+      id: artist.id,
+      name: artist.name,
+      image_url: artist.images?.[0]?.url || null,
+      popularity: artist.popularity || 0,
+      genres: artist.genres || [],
+      spotify_url: artist.external_urls?.spotify || '',
+      last_synced_at: new Date().toISOString()
+    };
+    
+    console.log("Artist data to store:", artistData);
+    
+    // First check if artist with this ID already exists
+    const { data: existingArtist } = await supabase
+      .from('artists')
+      .select('id')
+      .eq('id', artist.id)
+      .maybeSingle();
+    
+    if (existingArtist) {
+      // Artist exists, update their data
+      const { error } = await supabase
+        .from('artists')
+        .update(artistData)
+        .eq('id', artist.id);
+      
+      if (error) {
+        console.error("Error updating artist in database:", error);
+        return false;
+      }
+      
+      console.log("Successfully updated artist:", artist.name);
+    } else {
+      // Artist doesn't exist, insert them
+      const { error } = await supabase
+        .from('artists')
+        .insert(artistData);
+      
+      if (error) {
+        console.error("Error storing artist in database:", error);
+        return false;
+      }
+      
+      console.log("Successfully stored artist:", artist.name);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error storing artist in database:", error);
+    return false;
+  }
+}
+
+// Store tracks in Supabase
+export async function storeTracksInDatabase(artistId: string, tracks: SpotifyTrack[]): Promise<boolean> {
+  try {
+    console.log(`Storing ${tracks.length} tracks for artist ${artistId}`);
+    
+    // Convert tracks to database format
+    const songsToInsert = tracks.map(track => ({
+      id: track.id,
+      artist_id: artistId,
+      name: track.name,
+      album: track.album?.name || 'Unknown Album',
+      duration_ms: track.duration_ms || 0,
+      popularity: track.popularity || 0,
+      spotify_url: track.external_urls?.spotify || ''
+    }));
+    
+    // Process in batches to avoid hitting request size limits
+    const batchSize = 50;
+    let successCount = 0;
+    
+    for (let i = 0; i < songsToInsert.length; i += batchSize) {
+      const batch = songsToInsert.slice(i, i + batchSize);
+      console.log(`Processing batch ${i}-${i+batch.length} for artist ${artistId}`);
+      
+      const { error } = await supabase
+        .from('songs')
+        .upsert(batch, { onConflict: 'id' });
+      
+      if (error) {
+        console.error(`Error storing tracks batch ${i}-${i+batch.length} in database:`, error);
+        continue;
+      }
+      
+      successCount += batch.length;
+      console.log(`Successfully stored tracks batch ${i}-${i+batch.length} for artist ${artistId}`);
+    }
+    
+    console.log(`Successfully stored ${successCount} of ${tracks.length} tracks for artist ${artistId}`);
+    return successCount > 0;
+  } catch (error) {
+    console.error("Error storing tracks in database:", error);
+    return false;
+  }
+}
+
+// Get all tracks for an artist across all their albums
+export async function getArtistAllTracks(artistId: string): Promise<SpotifyTrack[]> {
+  try {
+    console.log(`Fetching all tracks for artist: ${artistId}`);
+    
+    // Get all albums for the artist
+    const albums = await getArtistAlbums(artistId);
+    console.log(`Found ${albums.length} albums for artist ${artistId}`);
+    
+    const allTracks: SpotifyTrack[] = [];
+    
+    // Process albums in batches to respect rate limits
+    const batchSize = 10;
+    for (let i = 0; i < albums.length; i += batchSize) {
+      const albumBatch = albums.slice(i, i + batchSize);
+      
+      for (const album of albumBatch) {
+        try {
+          const tracks = await getAlbumTracks(album.id);
+          allTracks.push(...tracks);
+          
+          // Add a small delay between album requests
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          console.error(`Error fetching tracks for album ${album.id}:`, error);
+          continue;
+        }
+      }
+      
+      // Longer delay between batches
+      if (i + batchSize < albums.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Deduplicate tracks by ID
+    const uniqueTracks = Array.from(
+      new Map(allTracks.map(track => [track.id, track])).values()
+    );
+    
+    console.log(`Found ${uniqueTracks.length} unique tracks for artist ${artistId}`);
+    return uniqueTracks;
+  } catch (error) {
+    console.error(`Error fetching all tracks for artist ${artistId}:`, error);
+    return [];
+  }
+}
+
+// Import the entire song catalog for an artist
+export async function importArtistCatalog(artistId: string, forceFullCatalog: boolean = false): Promise<boolean> {
+  try {
+    console.log(`Importing catalog for artist: ${artistId} (full: ${forceFullCatalog})`);
+    
+    // Check if artist exists in database
+    const { data: artist, error: artistError } = await supabase
+      .from('artists')
+      .select('last_synced_at')
+      .eq('id', artistId)
+      .maybeSingle();
+    
+    // If artist was synced recently and not forcing full catalog, skip
+    if (!forceFullCatalog && artist?.last_synced_at) {
+      const lastSynced = new Date(artist.last_synced_at);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      if (lastSynced > sevenDaysAgo) {
+        console.log(`Artist ${artistId} was synced recently, skipping import`);
+        return true;
+      }
+    }
+    
+    if (forceFullCatalog) {
+      // Use the full catalog import function
+      const result = await importFullArtistCatalog(artistId);
+      return result && result.length > 0;
+    } else {
+      // Import top tracks only for faster operation
+      const topTracks = await getArtistTopTracks(artistId);
+      if (topTracks.length === 0) {
+        console.log(`No top tracks found for artist ${artistId}`);
+        return false;
+      }
+      
+      // Store tracks in database
+      const success = await storeTracksInDatabase(artistId, topTracks);
+      
+      if (success) {
+        // Update artist sync timestamp
+        await supabase
+          .from('artists')
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq('id', artistId);
+      }
+      
+      return success;
+    }
+  } catch (error) {
+    console.error(`Error importing catalog for artist ${artistId}:`, error);
+    return false;
   }
 }

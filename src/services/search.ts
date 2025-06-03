@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as ticketmasterService from "./ticketmaster";
 import * as spotifyService from "./spotify";
-import * as dataConsistency from "./dataConsistency";
+import * as dataConsistency from "./dataConsistencyFixed";
 import { Show, Artist, Venue } from "@/types/database";
 
 export interface SearchArtist {
@@ -53,41 +53,68 @@ export interface SearchResult {
 }
 
 /**
- * Enhanced search that ensures complete data flow from search to voting
+ * Enhanced search that follows the data-flow.md architecture
+ * 1. Always search Ticketmaster API for real-time show availability
+ * 2. Import artists and shows as needed
+ * 3. Return combined results from database
  */
 export async function searchArtistsAndShows(query: string): Promise<{
   artists: SearchArtist[];
   shows: SearchShow[];
 }> {
   try {
-    console.log(`🔍 Starting enhanced search for: "${query}"`);
+    console.log(`🔍 Starting search for: "${query}"`);
 
     if (!query || query.trim().length < 2) {
       return { artists: [], shows: [] };
     }
 
-    // Step 1: Search database first for existing data
-    const [dbArtists, dbShows] = await Promise.all([
+    // Step 1: Search Ticketmaster API directly for real-time data
+    console.log(`🎫 Searching Ticketmaster API for: "${query}"`);
+    const ticketmasterEvents = await ticketmasterService.searchEvents(query, 20);
+    
+    if (ticketmasterEvents.length > 0) {
+      console.log(`📊 Found ${ticketmasterEvents.length} events from Ticketmaster`);
+      
+      // Process each event and import data as needed
+      const processedArtists = new Set<string>();
+      
+      for (const event of ticketmasterEvents) {
+        try {
+          // Process the event through data consistency layer
+          const result = await dataConsistency.processTicketmasterEvent(event);
+          
+          if (result.artist && !processedArtists.has(result.artist.id)) {
+            processedArtists.add(result.artist.id);
+            
+            // Check if artist needs song catalog import
+            const { count: songCount } = await supabase
+              .from('songs')
+              .select('id', { count: 'exact' })
+              .eq('artist_id', result.artist.id);
+
+            if (!songCount || songCount === 0) {
+              console.log(`📀 Importing song catalog for ${result.artist.name}...`);
+              await spotifyService.importArtistCatalog(result.artist.id);
+            }
+          }
+        } catch (error) {
+          console.error(`⚠️ Error processing event:`, error);
+        }
+      }
+    }
+
+    // Step 2: Query database for final results (now includes imported data)
+    const [artists, shows] = await Promise.all([
       searchDatabaseArtists(query),
       searchDatabaseShows(query)
     ]);
 
-    console.log(`📊 Database search found: ${dbArtists.length} artists, ${dbShows.length} shows`);
-
-    // Step 2: Search external APIs and import new data
-    await searchAndImportFromAPIs(query);
-
-    // Step 3: Search database again for newly imported data
-    const [finalArtists, finalShows] = await Promise.all([
-      searchDatabaseArtists(query),
-      searchDatabaseShows(query)
-    ]);
-
-    console.log(`✅ Final search results: ${finalArtists.length} artists, ${finalShows.length} shows`);
+    console.log(`✅ Search complete: ${artists.length} artists, ${shows.length} shows`);
 
     return {
-      artists: finalArtists,
-      shows: finalShows
+      artists,
+      shows
     };
   } catch (error) {
     console.error("❌ Error in searchArtistsAndShows:", error);
@@ -166,7 +193,7 @@ async function searchDatabaseShows(query: string): Promise<SearchShow[]> {
         artists!shows_artist_id_fkey(id, name, image_url),
         venues!shows_venue_id_fkey(id, name, city, state, country)
       `)
-      .or(`name.ilike.%${query}%,artists.name.ilike.%${query}%`)
+      .or(`name.ilike.%${query}%`)
       .gte('date', new Date().toISOString())
       .order('date', { ascending: true })
       .limit(20);
@@ -205,58 +232,6 @@ async function searchDatabaseShows(query: string): Promise<SearchShow[]> {
   }
 }
 
-/**
- * Search external APIs and import new data
- */
-async function searchAndImportFromAPIs(query: string): Promise<void> {
-  try {
-    console.log(`🌐 Searching external APIs for: "${query}"`);
-
-    // Search Ticketmaster for events and import complete data
-    const ticketmasterEvents = await ticketmasterService.searchEvents(query, 10);
-    
-    if (ticketmasterEvents.length > 0) {
-      console.log(`🎫 Found ${ticketmasterEvents.length} Ticketmaster events`);
-      
-      // Process each event through the data consistency layer
-      for (const event of ticketmasterEvents) {
-        try {
-          await dataConsistency.processTicketmasterEvent(event);
-          
-          // Ensure artist has song catalog
-          if (event._embedded?.attractions?.[0]) {
-            const attraction = event._embedded.attractions[0];
-            const ensuredArtist = await dataConsistency.ensureArtistExists({
-              id: attraction.id,
-              name: attraction.name
-            });
-
-            if (ensuredArtist) {
-              // Check if artist has songs
-              const { count: songCount } = await supabase
-                .from('songs')
-                .select('id', { count: 'exact' })
-                .eq('artist_id', ensuredArtist.id);
-
-              if (!songCount || songCount === 0) {
-                console.log(`📀 Importing song catalog for ${ensuredArtist.name}...`);
-                await spotifyService.importArtistCatalog(ensuredArtist.id);
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`❌ Error processing event ${event.id}:`, error);
-        }
-      }
-    }
-
-    // Add small delay to prevent rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-  } catch (error) {
-    console.error("❌ Error in searchAndImportFromAPIs:", error);
-  }
-}
 
 /**
  * Get trending artists with upcoming shows

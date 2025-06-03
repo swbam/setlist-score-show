@@ -28,6 +28,7 @@ interface ChannelInfo {
   channel: RealtimeChannel;
   createdAt: number;
   isActive: boolean;
+  unsubscribeCallback?: () => void;
 }
 
 class RealtimeService {
@@ -77,12 +78,25 @@ class RealtimeService {
     const channelInfo = this.channels.get(channelName);
     if (channelInfo) {
       try {
+        // Call custom unsubscribe callback if exists
+        if (channelInfo.unsubscribeCallback) {
+          channelInfo.unsubscribeCallback();
+        }
+        
+        // Mark as inactive immediately
+        channelInfo.isActive = false;
+        
+        // Unsubscribe and remove channel
         channelInfo.channel.unsubscribe();
         supabase.removeChannel(channelInfo.channel);
+        
+        console.log(`Successfully force unsubscribed from ${channelName}`);
       } catch (error) {
         console.error(`Error force unsubscribing from ${channelName}:`, error);
+      } finally {
+        // Always remove from our tracking
+        this.channels.delete(channelName);
       }
-      this.channels.delete(channelName);
     }
   }
 
@@ -166,16 +180,19 @@ class RealtimeService {
         }
       });
 
-    // Store channel info
+    // Store channel info with proper cleanup callback
+    const cleanup = () => {
+      this.unsubscribe(channelName);
+    };
+    
     this.channels.set(channelName, {
       channel,
       createdAt: Date.now(),
-      isActive: false
+      isActive: false,
+      unsubscribeCallback: cleanup
     });
 
-    return () => {
-      this.unsubscribe(channelName);
-    };
+    return cleanup;
   }
 
   // Subscribe to show-level updates (total votes, trending)
@@ -186,8 +203,9 @@ class RealtimeService {
   ): () => void {
     const channelName = `show:${showId}`;
     
+    // Clean up existing channel if present
     if (this.channels.has(channelName)) {
-      this.channels.get(channelName)?.unsubscribe();
+      this.forceUnsubscribe(channelName);
     }
 
     const channel = supabase
@@ -216,11 +234,19 @@ class RealtimeService {
         }
       });
 
-    this.channels.set(channelName, channel);
-
-    return () => {
+    // Store channel info with proper cleanup callback
+    const cleanup = () => {
       this.unsubscribe(channelName);
     };
+    
+    this.channels.set(channelName, {
+      channel,
+      createdAt: Date.now(),
+      isActive: false,
+      unsubscribeCallback: cleanup
+    });
+
+    return cleanup;
   }
 
   // Subscribe to global trending updates
@@ -276,11 +302,19 @@ class RealtimeService {
         }
       });
 
-    this.channels.set(channelName, channel);
-
-    return () => {
+    // Store channel info with proper cleanup callback
+    const cleanup = () => {
       this.unsubscribe(channelName);
     };
+    
+    this.channels.set(channelName, {
+      channel,
+      createdAt: Date.now(),
+      isActive: false,
+      unsubscribeCallback: cleanup
+    });
+
+    return cleanup;
   }
 
   private async handleVoteUpdate(
@@ -424,10 +458,18 @@ class RealtimeService {
   }
 
   private unsubscribe(channelName: string) {
-    const channel = this.channels.get(channelName);
-    if (channel) {
-      channel.unsubscribe();
-      this.channels.delete(channelName);
+    const channelInfo = this.channels.get(channelName);
+    if (channelInfo) {
+      try {
+        channelInfo.isActive = false;
+        channelInfo.channel.unsubscribe();
+        supabase.removeChannel(channelInfo.channel);
+        console.log(`Successfully unsubscribed from ${channelName}`);
+      } catch (error) {
+        console.error(`Error unsubscribing from ${channelName}:`, error);
+      } finally {
+        this.channels.delete(channelName);
+      }
     }
   }
 
@@ -438,8 +480,14 @@ class RealtimeService {
 
   // Cleanup all subscriptions
   cleanup() {
-    this.channels.forEach((channel, channelName) => {
-      channel.unsubscribe();
+    this.channels.forEach((channelInfo, channelName) => {
+      try {
+        channelInfo.isActive = false;
+        channelInfo.channel.unsubscribe();
+        supabase.removeChannel(channelInfo.channel);
+      } catch (error) {
+        console.error(`Error cleaning up channel ${channelName}:`, error);
+      }
     });
     this.channels.clear();
     this.connectionState = { isConnected: false, retryCount: 0 };

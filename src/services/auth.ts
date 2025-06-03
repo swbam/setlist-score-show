@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "@/components/ui/sonner";
 import * as spotifyService from "./spotify";
+import type { Artist } from "@/types/enhanced";
 
 interface SpotifyTokenResponse {
   access_token: string;
@@ -164,27 +165,24 @@ export async function storeUserProfile(user: User, displayName?: string) {
   try {
     if (!user) return false;
     
-    const userData = {
-      id: user.id,
-      email: user.email,
-      display_name: displayName || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-      avatar_url: user.user_metadata?.avatar_url || null,
-      spotify_id: user.app_metadata?.provider === 'spotify' ? user.user_metadata?.provider_id : null,
+    // Supabase handles user storage automatically through auth.users
+    // We can update user metadata if needed
+    const updates = {
+      data: {
+        display_name: displayName || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+        avatar_url: user.user_metadata?.avatar_url || null,
+        spotify_id: user.app_metadata?.provider === 'spotify' ? user.user_metadata?.provider_id : null,
+      }
     };
     
-    const { error } = await supabase
-      .from('users')
-      .upsert(userData, { 
-        onConflict: 'id',
-        ignoreDuplicates: false 
-      });
+    const { error } = await supabase.auth.updateUser(updates);
       
     if (error) {
-      console.error("Error storing user profile:", error);
+      console.error("Error updating user metadata:", error);
       return false;
     }
     
-    console.log("Successfully stored user profile:", userData.display_name);
+    console.log("Successfully updated user profile:", updates.data.display_name);
     return true;
   } catch (error) {
     console.error("Error storing user profile:", error);
@@ -364,7 +362,14 @@ export async function getUserTopArtists(userId?: string): Promise<Artist[]> {
     // Extract artists from joined query and ensure type safety
     return (data || [])
       .map(item => item.artists)
-      .filter(artist => artist !== null);
+      .filter(artist => artist !== null)
+      .map(artist => ({
+        ...artist,
+        last_synced_at: artist.last_synced_at || new Date().toISOString(),
+        popularity: artist.popularity || 0,
+        spotify_url: artist.spotify_url || null,
+        ticketmaster_id: artist.ticketmaster_id || null
+      }));
   } catch (error) {
     console.error("Error fetching user top artists:", error);
     return [];

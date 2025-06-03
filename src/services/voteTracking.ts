@@ -16,11 +16,11 @@ export interface VoteValidationResult {
   votesRemaining?: number;
 }
 
-// Constants for vote limits
+// Constants for vote limits (matching documentation requirements)
 export const VOTE_LIMITS = {
-  MAX_VOTES_PER_SHOW: 5,
-  MAX_VOTES_PER_DAY: 20,
-  FREE_TIER_DAILY_LIMIT: 10
+  MAX_VOTES_PER_SHOW: 10,
+  MAX_VOTES_PER_DAY: 50,
+  FREE_TIER_DAILY_LIMIT: 25
 };
 
 // Check if user can vote for a specific song
@@ -101,7 +101,10 @@ export async function getUserVoteStatsForShow(userId: string, showId: string): P
 
     // Count votes for this specific show
     const showVotes = data?.filter(vote => {
-      const setlistSong = vote.setlist_songs as any;
+      const setlistSong = vote.setlist_songs as {
+        setlist_id: string;
+        setlists: { show_id: string } | null;
+      } | null;
       return setlistSong?.setlists?.show_id === showId;
     }).length || 0;
 

@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Music, Calendar, TrendingUp, Plus, Star, Clock, PlayCircle, Heart, ArrowRight, Grid, List } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,29 +14,29 @@ import { useQuery } from "@tanstack/react-query";
 interface UserArtist {
   id: string;
   name: string;
-  image_url?: string;
-  genres?: string[];
+  image_url?: string | null;
+  genres?: string[] | null;
   rank: number;
   upcoming_shows_count?: number;
   total_shows_count?: number;
   vote_count?: number;
   last_show_date?: string;
   next_show_date?: string;
-  popularity?: number;
+  popularity?: number | null;
 }
 
 interface UpcomingShow {
   id: string;
-  name: string;
+  name: string | null;
   date: string;
   venue: {
     name: string;
     city: string;
-    state?: string;
+    state?: string | null;
   };
   artist: {
     name: string;
-    image_url?: string;
+    image_url?: string | null;
   };
 }
 
@@ -50,10 +49,13 @@ interface RecentActivity {
 }
 
 const MyArtistsDashboard = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filterGenre, setFilterGenre] = useState<string>('all');
   const [importing, setImporting] = useState(false);
+
+  // Check if user signed up with Spotify
+  const isSpotifyUser = userProfile?.spotify_id != null;
 
   // Use React Query for better data management
   const { 
@@ -94,6 +96,27 @@ const MyArtistsDashboard = () => {
     retry: 1,
   });
 
+  // For email users, fetch trending artists and shows
+  const { 
+    data: trendingArtists,
+    isLoading: trendingLoading 
+  } = useQuery({
+    queryKey: ['trending-artists'],
+    queryFn: fetchTrendingArtists,
+    enabled: !!user && !isSpotifyUser,
+    staleTime: 15 * 60 * 1000, // 15 minutes
+  });
+
+  const { 
+    data: trendingShows,
+    isLoading: trendingShowsLoading 
+  } = useQuery({
+    queryKey: ['trending-shows'],
+    queryFn: fetchTrendingShows,
+    enabled: !!user && !isSpotifyUser,
+    staleTime: 15 * 60 * 1000, // 15 minutes
+  });
+
   async function fetchUserTopArtists(): Promise<UserArtist[]> {
     if (!user) return [];
 
@@ -124,7 +147,7 @@ const MyArtistsDashboard = () => {
           if (!artist) return null;
 
           // Get show counts and dates
-          const [upcomingShows, totalShows, userVotes] = await Promise.all([
+          const [upcomingShows, totalShows] = await Promise.all([
             supabase
               .from('shows')
               .select('id', { count: 'exact' })
@@ -134,11 +157,7 @@ const MyArtistsDashboard = () => {
             supabase
               .from('shows')
               .select('id', { count: 'exact' })
-              .eq('artist_id', artist.id),
-
-            // Simplified vote count query
-            supabase
-              .rpc('get_user_vote_stats', { show_id_param: 'all' })
+              .eq('artist_id', artist.id)
           ]);
 
           return {
@@ -258,6 +277,68 @@ const MyArtistsDashboard = () => {
     }
   }
 
+  // Enhanced functions for trending content
+  async function fetchTrendingArtists(): Promise<UserArtist[]> {
+    try {
+      const { data, error } = await supabase
+        .from('artists')
+        .select(`
+          id,
+          name,
+          image_url,
+          genres,
+          popularity
+        `)
+        .order('popularity', { ascending: false })
+        .limit(12);
+
+      if (error) throw error;
+
+      return (data || []).map((artist, index) => ({
+        id: artist.id,
+        name: artist.name,
+        image_url: artist.image_url,
+        genres: artist.genres,
+        rank: index + 1,
+        popularity: artist.popularity
+      }));
+    } catch (error) {
+      console.error('Error fetching trending artists:', error);
+      return [];
+    }
+  }
+
+  async function fetchTrendingShows(): Promise<UpcomingShow[]> {
+    try {
+      const { data, error } = await supabase
+        .from('shows')
+        .select(`
+          id,
+          name,
+          date,
+          venue:venues!shows_venue_id_fkey (
+            name,
+            city,
+            state
+          ),
+          artist:artists!shows_artist_id_fkey (
+            name,
+            image_url
+          )
+        `)
+        .gte('date', new Date().toISOString())
+        .order('date', { ascending: true })
+        .limit(8);
+
+      if (error) throw error;
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching trending shows:', error);
+      return [];
+    }
+  }
+
   const importFromSpotify = async () => {
     if (!user?.email) {
       toast.error("Please log in with Spotify to import your top artists");
@@ -266,67 +347,109 @@ const MyArtistsDashboard = () => {
 
     try {
       setImporting(true);
-      toast.info("Importing your top artists from Spotify...");
+      toast.info("🎵 Starting enhanced import from Spotify with full catalogs...");
 
-      // Enhanced Spotify import with multiple artists
-      const searchTerms = [
-        "Taylor Swift", "Ed Sheeran", "Billie Eilish", "Drake", "Ariana Grande",
-        "The Weeknd", "Post Malone", "Dua Lipa", "Harry Styles", "Olivia Rodrigo"
-      ];
+      // Check if user has Spotify OAuth token
+      const { data: { session } } = await supabase.auth.getSession();
+      const spotifyToken = session?.provider_token;
 
-      let importedCount = 0;
-      const maxImports = 5;
+      if (spotifyToken) {
+        // Use enhanced full catalog import for OAuth users
+        const { importUserTopArtistsWithCatalogs } = await import('@/services/fullCatalogImport');
+        
+        const result = await importUserTopArtistsWithCatalogs(
+          user.id,
+          spotifyToken,
+          10, // Import up to 10 top artists
+          (artistName, progress) => {
+            console.log(`📊 ${artistName}: ${progress.stage} - ${progress.processed_albums}/${progress.total_albums} albums`);
+            toast.info(`🎤 Processing ${artistName}: ${progress.stage}...`);
+          }
+        );
 
-      for (const term of searchTerms.slice(0, maxImports)) {
-        try {
-          const popularArtists = await spotifyService.searchArtists(term);
-          
-          if (popularArtists.length > 0) {
-            const artist = popularArtists[0];
+        if (result.success) {
+          toast.success(`✅ Successfully imported ${result.imported} artists with full catalogs!`);
+          if (result.errors.length > 0) {
+            console.warn('Import errors:', result.errors);
+            toast.error(`⚠️ ${result.errors.length} errors occurred during import`);
+          }
+        } else {
+          throw new Error(result.errors.join(', ') || 'Failed to import user artists');
+        }
+      } else {
+        // Fallback to demo artists for email users
+        console.log('⚠️ No Spotify OAuth token, using demo artists');
+        toast.info("🎭 No Spotify connection - importing demo artists...");
+
+        const searchTerms = [
+          "Taylor Swift", "Ed Sheeran", "Billie Eilish", "Drake", "Ariana Grande",
+          "The Weeknd", "Post Malone", "Dua Lipa", "Harry Styles", "Olivia Rodrigo"
+        ];
+
+        let importedCount = 0;
+        const maxImports = 5;
+
+        for (const term of searchTerms.slice(0, maxImports)) {
+          try {
+            const popularArtists = await spotifyService.searchArtists(term);
             
-            // Store artist in our database
-            await spotifyService.storeArtistInDatabase(artist);
-            
-            // Check if user already follows this artist
-            const { data: existingFollow } = await supabase
-              .from('user_artists')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('artist_id', artist.id)
-              .single();
-
-            if (!existingFollow) {
-              // Add to user's artists with incremental rank
-              const { error } = await supabase
+            if (popularArtists.length > 0) {
+              const artist = popularArtists[0];
+              
+              // Store artist in our database
+              await spotifyService.storeArtistInDatabase(artist);
+              
+              // Check if user already follows this artist
+              const { data: existingFollow } = await supabase
                 .from('user_artists')
-                .insert({
-                  user_id: user.id,
-                  artist_id: artist.id,
-                  rank: importedCount + 1
-                });
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('artist_id', artist.id)
+                .single();
 
-              if (error) {
-                console.error('Error storing user artist:', error);
-              } else {
-                importedCount++;
+              if (!existingFollow) {
+                // Add to user's artists with incremental rank
+                const { error } = await supabase
+                  .from('user_artists')
+                  .insert({
+                    user_id: user.id,
+                    artist_id: artist.id,
+                    rank: importedCount + 1
+                  });
+
+                if (error) {
+                  console.error('Error storing user artist:', error);
+                } else {
+                  importedCount++;
+                  
+                  // Import full catalog for each artist
+                  toast.info(`🎶 Importing full catalog for ${artist.name}...`);
+                  try {
+                    const { importFullArtistCatalog } = await import('@/services/fullCatalogImport');
+                    await importFullArtistCatalog(artist.id);
+                  } catch (catalogError) {
+                    console.error(`Error importing catalog for ${artist.name}:`, catalogError);
+                  }
+                }
               }
             }
+          } catch (error) {
+            console.error(`Error importing ${term}:`, error);
           }
-        } catch (error) {
-          console.error(`Error importing ${term}:`, error);
+        }
+
+        if (importedCount > 0) {
+          toast.success(`✅ Successfully imported ${importedCount} demo artists with catalogs!`);
+        } else {
+          toast.info("ℹ️ No new artists were imported - you may already be following these artists.");
         }
       }
 
-      if (importedCount > 0) {
-        toast.success(`Successfully imported ${importedCount} artists from Spotify!`);
-        refetch(); // Refresh the artists list
-      } else {
-        toast.info("No new artists were imported - you may already be following these artists.");
-      }
+      refetch(); // Refresh the artists list
 
     } catch (error) {
       console.error('Error importing from Spotify:', error);
-      toast.error("Failed to import from Spotify. Please try again later.");
+      toast.error(`❌ Failed to import from Spotify: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setImporting(false);
     }
@@ -378,6 +501,195 @@ const MyArtistsDashboard = () => {
   }
 
   if (!filteredArtists || filteredArtists.length === 0) {
+    // For email users, show trending content instead of empty state
+    if (!isSpotifyUser && (trendingArtists?.length || trendingShows?.length)) {
+      return (
+        <div className="space-y-6">
+          {/* Dashboard Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <TrendingUp className="h-6 w-6 mr-2 text-yellow-metal-400" />
+                Trending Artists & Shows
+              </h2>
+              <p className="text-gray-400">Discover popular artists and upcoming shows</p>
+            </div>
+            <Button 
+              onClick={importFromSpotify}
+              disabled={importing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {importing ? (
+                <>
+                  <TrendingUp className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Music className="h-4 w-4 mr-2" />
+                  Import from Spotify
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Trending Content Tabs */}
+          <Tabs defaultValue="trending-artists" className="space-y-6">
+            <TabsList className="bg-gray-800 border border-gray-700">
+              <TabsTrigger value="trending-artists" className="data-[state=active]:bg-yellow-metal-600 data-[state=active]:text-white">
+                Trending Artists ({trendingArtists?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="trending-shows" className="data-[state=active]:bg-yellow-metal-600 data-[state=active]:text-white">
+                Upcoming Shows ({trendingShows?.length || 0})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Trending Artists Tab */}
+            <TabsContent value="trending-artists" className="space-y-4">
+              {trendingLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  {[...Array(12)].map((_, i) => (
+                    <Card key={i} className="bg-gray-900 border-gray-800 animate-pulse">
+                      <div className="h-40 bg-gray-800" />
+                      <CardContent className="p-4">
+                        <div className="h-4 bg-gray-800 rounded mb-2" />
+                        <div className="h-3 bg-gray-800 rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  {trendingArtists?.map((artist) => (
+                    <Card 
+                      key={artist.id} 
+                      className="bg-gray-900 border-gray-800 overflow-hidden hover:border-yellow-metal-500 transition-all duration-300 group"
+                    >
+                      <Link 
+                        to={`/artists/${artist.id}/${artist.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-')}`} 
+                        className="block h-full"
+                      >
+                        <div className="h-40 bg-gray-800 relative overflow-hidden">
+                          {artist.image_url ? (
+                            <img
+                              src={artist.image_url}
+                              alt={`${artist.name} artist image`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                              <Music className="h-8 w-8 text-gray-600" />
+                            </div>
+                          )}
+                          
+                          <div className="absolute top-2 left-2">
+                            <Badge className="text-xs font-bold bg-yellow-metal-400 text-black">
+                              #{artist.rank}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <CardContent className="p-4">
+                          <h3 className="text-white font-medium truncate group-hover:text-yellow-metal-400 transition-colors">
+                            {artist.name}
+                          </h3>
+                          {artist.genres && artist.genres.length > 0 && (
+                            <p className="text-sm text-gray-400 truncate">
+                              {artist.genres.slice(0, 2).join(", ")}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between mt-2 text-xs">
+                            <span className="text-gray-500">Trending</span>
+                            <span className="text-yellow-metal-400">
+                              {artist.popularity || 0}% match
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Link>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Trending Shows Tab */}
+            <TabsContent value="trending-shows" className="space-y-4">
+              {trendingShowsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[...Array(6)].map((_, i) => (
+                    <Card key={i} className="bg-gray-900 border-gray-800 animate-pulse">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-gray-800 rounded-lg" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-gray-800 rounded" />
+                            <div className="h-3 bg-gray-800 rounded w-2/3" />
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {trendingShows?.map((show) => (
+                    <Card key={show.id} className="bg-gray-900 border-gray-800 hover:border-yellow-metal-500 transition-all duration-300">
+                      <Link to={`/shows/${show.id}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gray-800 rounded-lg overflow-hidden">
+                              {show.artist?.image_url ? (
+                                <img
+                                  src={show.artist.image_url}
+                                  alt={show.artist.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Music className="h-5 w-5 text-gray-600" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-white font-medium truncate">{show.artist?.name}</h3>
+                              <p className="text-sm text-gray-400 truncate">{show.name || 'Concert'}</p>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            <div className="flex items-center text-sm">
+                              <Calendar className="h-4 w-4 text-yellow-metal-400 mr-2" />
+                              <span className="text-white">
+                                {new Date(show.date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            </div>
+                            <div className="flex items-center text-sm">
+                              <Clock className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-gray-400">
+                                {show.venue?.city}{show.venue?.state ? `, ${show.venue.state}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Link>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      );
+    }
+
+    // Original empty state for users with no data
     return (
       <div className="space-y-6">
         {/* Dashboard Header */}

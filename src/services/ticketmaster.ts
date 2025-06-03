@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 const TICKETMASTER_API_KEY = "k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b";
@@ -105,33 +104,6 @@ export interface TicketmasterResponse {
     totalPages: number;
     number: number;
   };
-}
-
-// Search for events by artist name
-export async function searchEvents(artistName: string, limit: number = 20): Promise<TicketmasterEvent[]> {
-  try {
-    console.log("Searching Ticketmaster for events by artist:", artistName);
-    
-    const url = `${TICKETMASTER_API_BASE}/events.json?keyword=${encodeURIComponent(artistName)}&apikey=${TICKETMASTER_API_KEY}&size=${limit}&sort=date,asc`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Ticketmaster API error: ${response.status}`);
-    }
-    
-    const data: TicketmasterResponse = await response.json();
-    
-    if (data._embedded?.events) {
-      console.log(`Found ${data._embedded.events.length} events for ${artistName}`);
-      return data._embedded.events;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error("Error searching Ticketmaster events:", error);
-    return [];
-  }
 }
 
 // Get popular events
@@ -267,3 +239,51 @@ export async function storeShowInDatabase(event: TicketmasterEvent, artistId: st
     return false;
   }
 }
+
+// Search for events with additional options
+export async function searchEvents(keyword: string, options: {
+  size?: number;
+  page?: number;
+  countryCode?: string;
+  stateCode?: string;
+  city?: string;
+  startDateTime?: string;
+  endDateTime?: string;
+} = {}): Promise<any[]> {
+  try {
+    const params = new URLSearchParams();
+    params.append('apikey', TICKETMASTER_API_KEY);
+    params.append('keyword', keyword);
+    params.append('size', (options.size || 20).toString());
+    params.append('page', (options.page || 0).toString());
+    params.append('classificationName', 'Music');
+    params.append('sort', 'date,asc');
+    
+    // Add optional parameters
+    if (options.countryCode) params.append('countryCode', options.countryCode);
+    if (options.stateCode) params.append('stateCode', options.stateCode);
+    if (options.city) params.append('city', options.city);
+    if (options.startDateTime) params.append('startDateTime', options.startDateTime);
+    if (options.endDateTime) params.append('endDateTime', options.endDateTime);
+
+    const response = await fetch(
+      `https://app.ticketmaster.com/discovery/v2/events.json?${params}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Ticketmaster API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data._embedded?.events || [];
+  } catch (error) {
+    console.error('Error searching Ticketmaster events:', error);
+    return [];
+  }
+}
+
+// Export service object for compatibility
+export const ticketmasterService = {
+  searchEvents,
+  getPopularEvents
+};

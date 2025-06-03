@@ -96,7 +96,7 @@ export async function fetchArtistsFromDatabase(limit: number = 50): Promise<Arti
 /**
  * Extract unique artists from Ticketmaster events
  */
-export async function extractUniqueArtistsFromEvents(events: any[]): Promise<Artist[]> {
+export async function extractUniqueArtistsFromEvents(events: import('@/types/database').TicketmasterEvent[]): Promise<Artist[]> {
   const artistMap = new Map<string, Artist>();
   
   for (const event of events) {
@@ -106,7 +106,7 @@ export async function extractUniqueArtistsFromEvents(events: any[]): Promise<Art
           artistMap.set(attraction.id, {
             id: attraction.id,
             name: attraction.name,
-            image_url: attraction.images?.[0]?.url,
+            image_url: undefined, // Ticketmaster attractions don't have direct image URLs
             source: 'ticketmaster'
           });
         }
@@ -163,7 +163,7 @@ export function sortSearchResults(artists: Artist[], query: string): Artist[] {
 /**
  * Get artist's upcoming shows
  */
-export async function getArtistUpcomingShows(artistId: string): Promise<any[]> {
+export async function getArtistUpcomingShows(artistId: string): Promise<import('@/types/database').Show[]> {
   try {
     const { data, error } = await supabase
       .from('shows')
