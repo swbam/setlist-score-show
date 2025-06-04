@@ -14,7 +14,10 @@
     "db:migrate": "pnpm --filter @setlist/database migrate",
     "db:push": "pnpm --filter @setlist/database push",
     "db:seed": "pnpm --filter @setlist/database seed",
-    "sync:setlists": "pnpm --filter @setlist/api sync:setlists"
+    "sync:setlists": "pnpm --filter @setlist/api sync:setlists",
+    "db:migrate:deploy": "supabase db push && pnpm --filter @setlist/database db:push",
+    "refresh:trending": "supabase functions invoke refresh_trending_shows",
+    "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

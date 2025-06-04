@@ -39,3 +39,9 @@ jobs:
         run: pnpm --filter @setlist/api calculate:trending
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Refresh trending shows view
+        run: pnpm refresh:trending # Using the script from package.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }} # Added for supabase CLI
+          # Ensure SUPABASE_PROJECT_ID is available if your CLI needs it, or configure it in Supabase CLI settings
