@@ -6,6 +6,7 @@ export const corsPlugin = fp(async (app) => {
     origin: (origin, cb) => {
       const allowedOrigins = [
         'http://localhost:3000',
+        'http://localhost:3001',
         'http://localhost:5173',
         process.env.FRONTEND_URL,
         'https://setlist-score-show.vercel.app',
@@ -20,12 +21,14 @@ export const corsPlugin = fp(async (app) => {
         // In development, allow all origins
         cb(null, true)
       } else {
-        cb(new Error('Not allowed by CORS'))
+        cb(new Error('Not allowed by CORS'), false)
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    preflightContinue: false,
+    optionsSuccessStatus: 200
   })
 })

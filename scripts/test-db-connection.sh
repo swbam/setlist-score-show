@@ -1,25 +1,15 @@
 #!/bin/bash
 
-# Test database connection
-set -e
+echo "Testing database connections..."
 
-echo "🔍 Testing database connection..."
+# Test different connection formats
+echo "1. Testing with pooler (postgres.project)..."
+PGPASSWORD=Bambseth1590 psql -h aws-0-us-west-1.pooler.supabase.com -p 5432 -U postgres.ailrmwtahifvstpfhbgn -d postgres -c "SELECT version();" 2>&1 | head -5
 
-# Export the correct Supabase database URL
-export DATABASE_URL="postgresql://postgres:G7C5c3EAjmGe8Ea3@db.ailrmwtahifvstpfhbgn.supabase.co:5432/postgres"
+echo ""
+echo "2. Testing direct connection..."
+PGPASSWORD=Bambseth1590 psql -h db.ailrmwtahifvstpfhbgn.supabase.co -p 5432 -U postgres -d postgres -c "SELECT version();" 2>&1 | head -5
 
-# Test connection with psql if available
-if command -v psql &> /dev/null; then
-  echo "Testing with psql..."
-  psql "$DATABASE_URL" -c "SELECT version();" || echo "psql connection failed"
-fi
-
-# Test with Prisma
-cd packages/database
-
-echo "Testing with Prisma..."
-npx prisma db execute --url "$DATABASE_URL" --file /dev/stdin <<EOF
-SELECT current_database(), current_user, version();
-EOF
-
-echo "✅ Database connection test completed"
+echo ""
+echo "3. Testing with port 6543..."
+PGPASSWORD=Bambseth1590 psql -h db.ailrmwtahifvstpfhbgn.supabase.co -p 6543 -U postgres -d postgres -c "SELECT version();" 2>&1 | head -5

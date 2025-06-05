@@ -17,16 +17,16 @@ export const supabaseRealtimePlugin = fp(async (app) => {
 
   app.decorate('broadcast', async (channel: string, event: any) => {
     // Broadcast custom events to Supabase Realtime channels
-    const { error } = await supabaseAdmin
-      .channel(channel)
-      .send({
-        type: 'broadcast',
-        event: event.type,
-        payload: event.payload
-      })
-    
-    if (error) {
-      app.log.error('Failed to broadcast event:', error)
+    try {
+      await supabaseAdmin
+        .channel(channel)
+        .send({
+          type: 'broadcast',
+          event: event.type,
+          payload: event.payload
+        })
+    } catch (error) {
+      app.log.error({ error }, 'Failed to broadcast event')
     }
   })
 

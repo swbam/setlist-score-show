@@ -137,14 +137,15 @@ extend type Query {
   shows(
     filter: ShowFilter
     orderBy: ShowOrderBy = DATE_ASC
+    status: String
     limit: Int = 20
     offset: Int = 0
-  ): ShowConnection!
+  ): [Show!]!
   
   # Get trending shows
   trendingShows(
     limit: Int = 10
-    timeframe: TrendingTimeframe = WEEK
+    timeframe: Timeframe = WEEK
   ): [Show!]!
   
   # Get shows near a location
@@ -180,9 +181,4 @@ input SongPositionInput {
   position: Int!
 }
 
-enum TrendingTimeframe {
-  DAY
-  WEEK
-  MONTH
-  ALL_TIME
-}
+# TrendingTimeframe enum moved to common.graphql as Timeframe

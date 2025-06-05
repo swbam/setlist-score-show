@@ -24,10 +24,16 @@ type Venue {
     offset: Int = 0
   ): ShowConnection!
   
+  upcomingShows(limit: Int = 10): [Show!]!
+  recentShows(limit: Int = 10): [Show!]!
+  artists(limit: Int = 20): [Artist!]!
+  
   # Computed fields
+  totalShows: Int!
   upcomingShowCount: Int!
   nextShow: Show
   stats: VenueStats!
+  distanceFrom(latitude: Float!, longitude: Float!): Distance
 }
 
 type VenueStats {
@@ -36,6 +42,11 @@ type VenueStats {
   totalVotes: Int!
   averageAttendance: Int
   popularGenres: [GenreCount!]!
+}
+
+type Distance {
+  kilometers: Float!
+  miles: Float!
 }
 
 type GenreCount {
@@ -118,6 +129,21 @@ extend type Query {
     limit: Int = 20
   ): [Venue!]!
   
+  # Get venues near location (legacy compatibility)
+  venuesNearLocation(
+    latitude: Float!
+    longitude: Float!
+    radiusMiles: Float = 50
+    limit: Int = 20
+  ): [Venue!]!
+  
+  # Get venues by artist
+  venuesByArtist(
+    artistId: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): [Venue!]!
+  
   # Get popular venues
   popularVenues(
     timeframe: Timeframe = MONTH
@@ -136,6 +162,12 @@ extend type Mutation {
   syncVenue(
     source: ExternalSource!
     externalId: String!
+  ): Venue! @auth(requires: ADMIN)
+  
+  # Admin only - merge duplicate venues
+  mergeVenues(
+    primaryVenueId: ID!
+    secondaryVenueId: ID!
   ): Venue! @auth(requires: ADMIN)
 }
 

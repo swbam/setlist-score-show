@@ -108,22 +108,18 @@ export const CommonQueries = {
   getUserWithStats: async (userId: string) => {
     const prisma = getPrismaClient()
     
-    const [user, stats] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId }
-      }),
-      prisma.vote.groupBy({
-        by: ['user_id'],
-        where: { user_id: userId },
-        _count: {
-          id: true
-        }
-      })
-    ])
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    })
+
+    // Simplified vote count without complex groupBy to avoid circular reference
+    const voteCount = await prisma.vote.count({
+      where: { userId: userId }
+    })
 
     return {
       ...user,
-      totalVotes: stats[0]?._count.id || 0
+      totalVotes: voteCount
     }
   },
 
@@ -138,7 +134,7 @@ export const CommonQueries = {
         venue: true,
         setlists: {
           include: {
-            setlist_songs: {
+            setlistSongs: {
               include: {
                 song: true
               },
@@ -148,7 +144,7 @@ export const CommonQueries = {
             }
           },
           orderBy: {
-            order_index: 'asc'
+            orderIndex: 'asc'
           }
         }
       }

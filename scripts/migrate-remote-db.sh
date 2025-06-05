@@ -6,7 +6,7 @@ set -e
 echo "🗄️  Running migrations on remote database..."
 
 # Export the Supabase database URL
-export DATABASE_URL="postgresql://postgres:G7C5c3EAjmGe8Ea3@db.ailrmwtahifvstpfhbgn.supabase.co:5432/postgres"
+export DATABASE_URL="postgresql://postgres.ailrmwtahifvstpfhbgn:Bambseth1590@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
 
 # Navigate to database package
 cd packages/database

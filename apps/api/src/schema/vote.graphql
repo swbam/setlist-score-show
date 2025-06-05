@@ -70,6 +70,10 @@ type VotingAchievement {
   icon: String!
 }
 
+type UserVote {
+  setlistSongId: ID!
+}
+
 enum VoteType {
   UP
   DOWN
@@ -105,12 +109,18 @@ extend type Query {
   
   # Check if user has voted for specific songs
   hasVoted(setlistSongIds: [ID!]!): [Boolean!]!
+  
+  # Get user votes for a show (alias for compatibility)
+  userVotes(showId: ID!): [UserVote!]!
 }
 
 # Mutations
 extend type Mutation {
   # Cast a vote for a song
   vote(input: VoteInput!): VoteResult!
+  
+  # Cast a vote for a song (alias for compatibility)
+  castVote(showId: ID!, setlistSongId: ID!): VoteResult!
   
   # Remove a vote (if within time limit)
   unvote(voteId: ID!): VoteResult!

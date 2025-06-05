@@ -68,13 +68,17 @@ extend type Query {
   # Get a single artist by ID or slug
   artist(id: ID, slug: String): Artist
   
+  # Get artist by slug specifically
+  artistBySlug(slug: String!): Artist
+  
   # List all artists with filtering and pagination
   artists(
     filter: ArtistFilter
     orderBy: ArtistOrderBy = POPULARITY_DESC
+    search: String
     limit: Int = 20
     offset: Int = 0
-  ): ArtistConnection!
+  ): [Artist!]!
   
   # Search artists by name (uses fuzzy search)
   searchArtists(

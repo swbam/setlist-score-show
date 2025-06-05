@@ -127,18 +127,18 @@ export class AnalyticsService {
     this.eventQueue = [];
 
     try {
-      // Store events in database
-      await this.prisma.analyticsEvent.createMany({
-        data: events.map(event => ({
-          event: event.event,
-          user_id: event.userId,
-          session_id: event.sessionId,
-          properties: event.properties,
-          created_at: event.timestamp
-        }))
-      });
+      // Store events in database - disabled since AnalyticsEvent model doesn't exist
+      // await this.prisma.analyticsEvent.createMany({
+      //   data: events.map(event => ({
+      //     event: event.event,
+      //     userId: event.userId,
+      //     sessionId: event.sessionId,
+      //     properties: event.properties,
+      //     createdAt: event.timestamp
+      //   }))
+      // });
 
-      logger.info(`Flushed ${events.length} analytics events`);
+      logger.info(`Would flush ${events.length} analytics events (disabled)`);
     } catch (error) {
       logger.error('Failed to flush analytics events:', error);
       // Put events back in queue
@@ -153,14 +153,14 @@ export class AnalyticsService {
     // Get vote data
     const votes = await this.prisma.vote.findMany({
       where: {
-        show_id: showId,
-        created_at: {
+        showId: showId,
+        createdAt: {
           gte: startDate,
           lte: endDate
         }
       },
       include: {
-        setlist_song: {
+        setlistSong: {
           include: {
             song: true
           }
@@ -168,28 +168,16 @@ export class AnalyticsService {
       }
     });
 
-    // Get view data from analytics events
-    const viewEvents = await this.prisma.analyticsEvent.findMany({
-      where: {
-        event: 'show_viewed',
-        properties: {
-          path: ['showId'],
-          equals: showId
-        },
-        created_at: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
-    });
+    // Get view data from analytics events - placeholder for now since model doesn't exist
+    const viewEvents: any[] = [];
 
     // Calculate metrics
-    const uniqueVoters = new Set(votes.map(v => v.user_id)).size;
-    const uniqueViewers = new Set(viewEvents.map(e => e.session_id)).size;
+    const uniqueVoters = new Set(votes.map(v => v.userId)).size;
+    const uniqueViewers = new Set(viewEvents.map(e => e.sessionId)).size;
 
     // Calculate voting patterns by hour
     const votesByHour = votes.reduce((acc, vote) => {
-      const hour = vote.created_at.getHours();
+      const hour = vote.createdAt.getHours();
       acc[hour] = (acc[hour] || 0) + 1;
       return acc;
     }, {} as Record<number, number>);
@@ -199,11 +187,11 @@ export class AnalyticsService {
 
     // Calculate top songs
     const songVotes = votes.reduce((acc, vote) => {
-      const songId = vote.setlist_song.song_id;
+      const songId = vote.setlistSong.songId;
       if (!acc[songId]) {
         acc[songId] = {
           songId,
-          title: vote.setlist_song.song.title,
+          title: vote.setlistSong.song.title,
           voteCount: 0
         };
       }
@@ -221,13 +209,13 @@ export class AnalyticsService {
 
     // Calculate user engagement
     const userFirstVotes = await this.prisma.vote.groupBy({
-      by: ['user_id'],
-      where: { show_id: showId },
-      _min: { created_at: true }
+      by: ['userId'],
+      where: { showId: showId },
+      _min: { createdAt: true }
     });
 
     const newUsers = userFirstVotes.filter(u => 
-      u._min.created_at && u._min.created_at >= startDate
+      u._min.createdAt && u._min.createdAt >= startDate
     ).length;
 
     const returningUsers = uniqueVoters - newUsers;
@@ -255,7 +243,7 @@ export class AnalyticsService {
   async getUserAnalytics(userId: string): Promise<UserAnalytics> {
     // Get all user votes
     const votes = await this.prisma.vote.findMany({
-      where: { user_id: userId },
+      where: { userId: userId },
       include: {
         show: {
           include: {
@@ -267,7 +255,7 @@ export class AnalyticsService {
 
     // Calculate favorite artists
     const artistVotes = votes.reduce((acc, vote) => {
-      const artistId = vote.show.artist_id;
+      const artistId = vote.show.artistId;
       if (!acc[artistId]) {
         acc[artistId] = {
           artistId,
@@ -285,7 +273,7 @@ export class AnalyticsService {
 
     // Calculate voting patterns
     const votesByDay = votes.reduce((acc, vote) => {
-      const day = format(vote.created_at, 'EEEE');
+      const day = format(vote.createdAt, 'EEEE');
       acc[day] = (acc[day] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -294,7 +282,7 @@ export class AnalyticsService {
       .sort(([, a], [, b]) => b - a)[0]?.[0] || 'Monday';
 
     const votesByHour = votes.reduce((acc, vote) => {
-      const hour = vote.created_at.getHours();
+      const hour = vote.createdAt.getHours();
       acc[hour] = (acc[hour] || 0) + 1;
       return acc;
     }, {} as Record<number, number>);
@@ -307,7 +295,7 @@ export class AnalyticsService {
     // Calculate achievements
     const achievements = await this.calculateUserAchievements(userId, votes);
 
-    const showsVoted = new Set(votes.map(v => v.show_id)).size;
+    const showsVoted = new Set(votes.map(v => v.showId)).size;
 
     return {
       userId,
@@ -333,7 +321,7 @@ export class AnalyticsService {
     if (votes.length >= 1) {
       achievements.push({
         type: 'first_vote',
-        unlockedAt: votes[0].created_at,
+        unlockedAt: votes[0].createdAt,
         description: 'Cast your first vote!'
       });
     }
@@ -343,19 +331,19 @@ export class AnalyticsService {
     for (const milestone of voteMilestones) {
       if (votes.length >= milestone) {
         const unlockVote = votes.sort((a, b) => 
-          a.created_at.getTime() - b.created_at.getTime()
+          a.createdAt.getTime() - b.createdAt.getTime()
         )[milestone - 1];
         
         achievements.push({
           type: `votes_${milestone}`,
-          unlockedAt: unlockVote.created_at,
+          unlockedAt: unlockVote.createdAt,
           description: `Cast ${milestone} votes`
         });
       }
     }
 
     // Show diversity achievement
-    const uniqueShows = new Set(votes.map(v => v.show_id)).size;
+    const uniqueShows = new Set(votes.map(v => v.showId)).size;
     if (uniqueShows >= 10) {
       achievements.push({
         type: 'show_explorer',
@@ -366,11 +354,11 @@ export class AnalyticsService {
 
     // Artist loyalty achievement
     const artistCounts = votes.reduce((acc, vote) => {
-      acc[vote.show.artist_id] = (acc[vote.show.artist_id] || 0) + 1;
+      acc[vote.show.artistId] = (acc[vote.show.artistId] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const loyalArtist = Object.entries(artistCounts).find(([, count]) => count >= 20);
+    const loyalArtist = Object.entries(artistCounts).find(([, count]) => Number(count) >= 20);
     if (loyalArtist) {
       achievements.push({
         type: 'artist_superfan',
@@ -382,7 +370,7 @@ export class AnalyticsService {
     // Early bird achievement (voting on shows > 30 days out)
     const earlyVotes = votes.filter(vote => {
       const daysUntilShow = Math.ceil(
-        (vote.show.date.getTime() - vote.created_at.getTime()) / (1000 * 60 * 60 * 24)
+        (vote.show.date.getTime() - vote.createdAt.getTime()) / (1000 * 60 * 60 * 24)
       );
       return daysUntilShow > 30;
     });
@@ -390,7 +378,7 @@ export class AnalyticsService {
     if (earlyVotes.length >= 5) {
       achievements.push({
         type: 'early_bird',
-        unlockedAt: earlyVotes[4].created_at,
+        unlockedAt: earlyVotes[4].createdAt,
         description: 'Early bird - voted on 5 shows 30+ days in advance'
       });
     }
@@ -419,30 +407,25 @@ export class AnalyticsService {
     }
 
     // Get metrics from database
-    const [votes, users, shows, events] = await Promise.all([
+    const [votes, users, shows] = await Promise.all([
       this.prisma.vote.count({
         where: {
-          created_at: { gte: startDate, lte: endDate }
+          createdAt: { gte: startDate, lte: endDate }
         }
       }),
       this.prisma.user.count({
         where: {
-          created_at: { gte: startDate, lte: endDate }
+          createdAt: { gte: startDate, lte: endDate }
         }
       }),
       this.prisma.show.count({
         where: {
-          created_at: { gte: startDate, lte: endDate }
+          createdAt: { gte: startDate, lte: endDate }
         }
-      }),
-      this.prisma.analyticsEvent.groupBy({
-        by: ['event'],
-        where: {
-          created_at: { gte: startDate, lte: endDate }
-        },
-        _count: true
       })
     ]);
+    
+    const events: any[] = []; // Placeholder since analyticsEvent model doesn't exist
 
     // Get real-time metrics from Redis
     const redisKeys = [];
@@ -456,10 +439,9 @@ export class AnalyticsService {
     // Get trending shows
     const trendingShows = await this.prisma.show.findMany({
       where: {
-        trending_score: { gt: 0 },
         date: { gte: now }
       },
-      orderBy: { trending_score: 'desc' },
+      orderBy: { viewCount: 'desc' }, // Use viewCount instead of non-existent trendingScore
       take: 5,
       include: {
         artist: true,
@@ -482,14 +464,19 @@ export class AnalyticsService {
           title: show.title,
           artist: show.artist.name,
           venue: show.venue.name,
-          score: show.trending_score
+          score: show.viewCount // Use viewCount instead of non-existent trendingScore
         }))
       }
     };
   }
 
   async generateReport(type: 'daily' | 'weekly' | 'monthly') {
-    const metrics = await this.getGlobalMetrics(type);
+    const periodMap = {
+      'daily': 'day' as const,
+      'weekly': 'week' as const,
+      'monthly': 'month' as const
+    };
+    const metrics = await this.getGlobalMetrics(periodMap[type]);
     
     // Additional detailed metrics for reports
     const topVotedShows = await this.prisma.show.findMany({
@@ -518,7 +505,7 @@ export class AnalyticsService {
       where: {
         votes: {
           some: {
-            created_at: {
+            createdAt: {
               gte: metrics.period.start,
               lte: metrics.period.end
             }
@@ -553,7 +540,7 @@ export class AnalyticsService {
         })),
         mostActiveUsers: activeUsers.map(user => ({
           id: user.id,
-          displayName: user.display_name || user.email,
+          displayName: user.displayName || user.email,
           voteCount: user._count.votes
         }))
       }

@@ -116,8 +116,8 @@ export const venueResolvers: IResolvers = {
       const venues = await prisma.$queryRaw`
         SELECT DISTINCT v.*, COUNT(s.id) as show_count
         FROM venues v
-        JOIN shows s ON v.id = s.venue_id
-        WHERE s.artist_id = ${artistId}
+        JOIN shows s ON v.id = s."venueId"
+        WHERE s."artistId" = ${artistId}
         GROUP BY v.id
         ORDER BY show_count DESC
         LIMIT ${limit}
@@ -136,9 +136,9 @@ export const venueResolvers: IResolvers = {
       }
 
       // Check if venue already exists
-      if (input.ticketmaster_id) {
+      if (input.ticketmasterId) {
         const existing = await prisma.venue.findUnique({
-          where: { ticketmaster_id: input.ticketmaster_id }
+          where: { ticketmasterId: input.ticketmasterId }
         })
 
         if (existing) {
@@ -148,9 +148,9 @@ export const venueResolvers: IResolvers = {
         }
       }
 
-      if (input.setlistfm_id) {
+      if (input.setlistfmId) {
         const existing = await prisma.venue.findUnique({
-          where: { setlistfm_id: input.setlistfm_id }
+          where: { setlistfmId: input.setlistfmId }
         })
 
         if (existing) {
@@ -162,14 +162,14 @@ export const venueResolvers: IResolvers = {
 
       return prisma.venue.create({
         data: {
-          ticketmaster_id: input.ticketmaster_id,
-          setlistfm_id: input.setlistfm_id,
+          ticketmasterId: input.ticketmasterId,
+          setlistfmId: input.setlistfmId,
           name: input.name,
           address: input.address,
           city: input.city,
           state: input.state,
           country: input.country,
-          postal_code: input.postal_code,
+          postalCode: input.postalCode,
           latitude: input.latitude,
           longitude: input.longitude,
           timezone: input.timezone,
@@ -221,19 +221,19 @@ export const venueResolvers: IResolvers = {
 
       // Move all shows from source to target
       await prisma.show.updateMany({
-        where: { venue_id: sourceId },
-        data: { venue_id: targetId }
+        where: { venueId: sourceId },
+        data: { venueId: targetId }
       })
 
       // Merge external IDs
       const updateData: Prisma.VenueUpdateInput = {}
       
-      if (source.ticketmaster_id && !target.ticketmaster_id) {
-        updateData.ticketmaster_id = source.ticketmaster_id
+      if (source.ticketmasterId && !target.ticketmasterId) {
+        updateData.ticketmasterId = source.ticketmasterId
       }
       
-      if (source.setlistfm_id && !target.setlistfm_id) {
-        updateData.setlistfm_id = source.setlistfm_id
+      if (source.setlistfmId && !target.setlistfmId) {
+        updateData.setlistfmId = source.setlistfmId
       }
 
       if (source.capacity && !target.capacity) {
@@ -266,7 +266,7 @@ export const venueResolvers: IResolvers = {
   Venue: {
     shows: async (parent, { status, limit = 20, offset = 0 }, { prisma }) => {
       const where: Prisma.ShowWhereInput = {
-        venue_id: parent.id
+        venueId: parent.id
       }
 
       if (status) {
@@ -303,7 +303,7 @@ export const venueResolvers: IResolvers = {
     upcomingShows: async (parent, { limit = 10 }, { prisma }) => {
       return prisma.show.findMany({
         where: {
-          venue_id: parent.id,
+          venueId: parent.id,
           date: { gte: new Date() },
           status: 'upcoming'
         },
@@ -315,7 +315,7 @@ export const venueResolvers: IResolvers = {
     recentShows: async (parent, { limit = 10 }, { prisma }) => {
       return prisma.show.findMany({
         where: {
-          venue_id: parent.id,
+          venueId: parent.id,
           date: { lt: new Date() },
           status: 'completed'
         },
@@ -326,7 +326,7 @@ export const venueResolvers: IResolvers = {
 
     totalShows: async (parent, _args, { prisma }) => {
       return prisma.show.count({
-        where: { venue_id: parent.id }
+        where: { venueId: parent.id }
       })
     },
 
@@ -334,14 +334,87 @@ export const venueResolvers: IResolvers = {
       const artists = await prisma.$queryRaw`
         SELECT DISTINCT a.*, COUNT(s.id) as show_count
         FROM artists a
-        JOIN shows s ON a.id = s.artist_id
-        WHERE s.venue_id = ${parent.id}
+        JOIN shows s ON a.id = s."artistId"
+        WHERE s."venueId" = ${parent.id}
         GROUP BY a.id
         ORDER BY show_count DESC
         LIMIT ${limit}
       `
 
       return artists
+    },
+
+    upcomingShowCount: async (parent, _args, { prisma }) => {
+      return prisma.show.count({
+        where: {
+          venueId: parent.id,
+          date: { gte: new Date() },
+          status: 'upcoming'
+        }
+      })
+    },
+
+    nextShow: async (parent, _args, { prisma }) => {
+      return prisma.show.findFirst({
+        where: {
+          venueId: parent.id,
+          date: { gte: new Date() },
+          status: 'upcoming'
+        },
+        orderBy: { date: 'asc' }
+      })
+    },
+
+    stats: async (parent, _args, { prisma }) => {
+      const [totalShows, totalArtists, totalVotes, popularGenres] = await Promise.all([
+        prisma.show.count({
+          where: { venueId: parent.id }
+        }),
+        prisma.show.groupBy({
+          by: ['artistId'],
+          where: { venueId: parent.id },
+          _count: true
+        }).then(result => result.length),
+        prisma.$queryRaw`
+          SELECT COALESCE(SUM(ss."voteCount"), 0) as total_votes
+          FROM venues v
+          JOIN shows s ON v.id = s."venueId"
+          JOIN setlists sl ON s.id = sl."showId"
+          JOIN "setlistSongs" ss ON sl.id = ss."setlistId"
+          WHERE v.id = ${parent.id}
+        `.then((result: any) => result[0]?.total_votes || 0),
+        prisma.$queryRaw`
+          SELECT a.genres, COUNT(*) as show_count
+          FROM venues v
+          JOIN shows s ON v.id = s."venueId"
+          JOIN artists a ON s."artistId" = a.id
+          WHERE v.id = ${parent.id}
+          GROUP BY a.genres
+          ORDER BY show_count DESC
+          LIMIT 10
+        `.then((result: any) => {
+          const genreCounts: Record<string, number> = {}
+          result.forEach((row: any) => {
+            if (row.genres && Array.isArray(row.genres)) {
+              row.genres.forEach((genre: string) => {
+                genreCounts[genre] = (genreCounts[genre] || 0) + Number(row.show_count)
+              })
+            }
+          })
+          return Object.entries(genreCounts)
+            .map(([genre, count]) => ({ genre, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10)
+        })
+      ])
+
+      return {
+        totalShows,
+        totalArtists,
+        totalVotes,
+        averageAttendance: null, // Could be calculated if we had attendance data
+        popularGenres
+      }
     },
 
     distanceFrom: (parent, { latitude, longitude }) => {

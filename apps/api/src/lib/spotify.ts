@@ -127,6 +127,18 @@ export class SpotifyClient {
     }
   }
 
+  async searchArtists(query: string, options: { limit?: number } = {}) {
+    await this.ensureAccessToken()
+
+    try {
+      const response = await this.spotify.searchArtists(query, { limit: options.limit || 10 })
+      return response
+    } catch (error) {
+      logger.error('Spotify artists search failed:', { query, error })
+      throw error
+    }
+  }
+
   async getArtist(artistId: string): Promise<SpotifyArtist | null> {
     await this.ensureAccessToken()
 
@@ -337,5 +349,37 @@ export class SpotifyClient {
     } catch {
       return false
     }
+  }
+}
+
+// Service wrapper for easy DI
+export class SpotifyService {
+  private client: SpotifyClient
+
+  constructor(redis?: Redis) {
+    const clientId = process.env.SPOTIFY_CLIENT_ID
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
+    
+    if (!clientId || !clientSecret) {
+      throw new Error('Spotify credentials not configured')
+    }
+
+    this.client = new SpotifyClient(clientId, clientSecret, redis)
+  }
+
+  async searchArtists(query: string, options: { limit?: number } = {}) {
+    return this.client.searchArtists(query, options)
+  }
+
+  async getArtist(artistId: string) {
+    return this.client.getArtist(artistId)
+  }
+
+  async getArtistCatalog(artistId: string) {
+    return this.client.getArtistCatalog(artistId)
+  }
+
+  async healthCheck() {
+    return this.client.healthCheck()
   }
 }

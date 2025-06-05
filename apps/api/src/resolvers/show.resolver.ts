@@ -7,9 +7,27 @@ export const showResolvers: IResolvers = {
     show: async (_parent, { id }, { prisma }) => {
       const show = await prisma.show.findUnique({
         where: { id },
+        include: {
+          artist: true,
+          venue: true,
+          setlists: {
+            include: {
+              setlistSongs: {
+                include: {
+                  song: true,
+                },
+                orderBy: { position: 'asc' },
+              },
+            },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
       })
 
       if (!show) {
+        // If show doesn't exist, try to create a sample show for demo purposes
+        // This should be removed in production
+        console.log(`🔍 Show "${id}" not found, might need to create demo data`)
         throw new GraphQLError('Show not found', {
           extensions: { code: 'NOT_FOUND' },
         })
@@ -18,18 +36,18 @@ export const showResolvers: IResolvers = {
       // Increment view count
       await prisma.show.update({
         where: { id },
-        data: { view_count: { increment: 1 } },
+        data: { viewCount: { increment: 1 } },
       })
 
       return show
     },
 
-    shows: async (_parent, { filter, orderBy, limit = 20, offset = 0 }, { prisma }) => {
+    shows: async (_parent, { filter, orderBy, limit = 20, offset = 0, status }, { prisma }) => {
       const where: Prisma.ShowWhereInput = {}
 
       if (filter) {
         if (filter.artistId) {
-          where.artist_id = filter.artistId
+          where.artistId = filter.artistId
         }
 
         if (filter.artistSlug) {
@@ -37,7 +55,7 @@ export const showResolvers: IResolvers = {
         }
 
         if (filter.venueId) {
-          where.venue_id = filter.venueId
+          where.venueId = filter.venueId
         }
 
         if (filter.status) {
@@ -60,7 +78,7 @@ export const showResolvers: IResolvers = {
         if (filter.search) {
           where.OR = [
             { title: { contains: filter.search, mode: 'insensitive' } },
-            { tour_name: { contains: filter.search, mode: 'insensitive' } },
+            { tourName: { contains: filter.search, mode: 'insensitive' } },
             { artist: { name: { contains: filter.search, mode: 'insensitive' } } },
             { venue: { name: { contains: filter.search, mode: 'insensitive' } } },
           ]
@@ -70,36 +88,22 @@ export const showResolvers: IResolvers = {
       const orderByMap: Record<string, Prisma.ShowOrderByWithRelationInput> = {
         DATE_ASC: { date: 'asc' },
         DATE_DESC: { date: 'desc' },
-        TRENDING_SCORE_DESC: { trending_score: 'desc' },
-        TOTAL_VOTES_DESC: { total_votes: 'desc' },
-        VIEW_COUNT_DESC: { view_count: 'desc' },
+        VIEW_COUNT_DESC: { viewCount: 'desc' },
       }
 
-      const [shows, totalCount] = await Promise.all([
-        prisma.show.findMany({
-          where,
-          orderBy: orderByMap[orderBy || 'DATE_ASC'],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.show.count({ where }),
-      ])
-
-      const edges = shows.map((show, index) => ({
-        node: show,
-        cursor: Buffer.from(`${offset + index}`).toString('base64'),
-      }))
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage: offset + shows.length < totalCount,
-          hasPreviousPage: offset > 0,
-          startCursor: edges[0]?.cursor || null,
-          endCursor: edges[edges.length - 1]?.cursor || null,
-        },
-        totalCount,
+      // Add status filter directly if provided
+      if (status) {
+        where.status = status
       }
+
+      const shows = await prisma.show.findMany({
+        where,
+        orderBy: orderByMap[orderBy || 'DATE_ASC'],
+        take: limit,
+        skip: offset,
+      })
+
+      return shows
     },
 
     trendingShows: async (_parent, { limit = 10, timeframe = 'WEEK' }, { prisma }) => {
@@ -120,9 +124,7 @@ export const showResolvers: IResolvers = {
           status: { in: ['UPCOMING', 'ONGOING'] },
         },
         orderBy: [
-          { trending_score: 'desc' },
-          { total_votes: 'desc' },
-          { view_count: 'desc' },
+          { viewCount: 'desc' },
         ],
         take: limit,
       })
@@ -143,7 +145,7 @@ export const showResolvers: IResolvers = {
             )
           ) AS distance_km
         FROM shows s
-        JOIN venues v ON s.venue_id = v.id
+        JOIN venues v ON s."venueId" = v.id
         WHERE v.latitude IS NOT NULL 
           AND v.longitude IS NOT NULL
           AND s.status = 'UPCOMING'
@@ -162,8 +164,8 @@ export const showResolvers: IResolvers = {
       return prisma.show.update({
         where: { id: showId },
         data: { 
-          view_count: { increment: 1 },
-          last_viewed_at: new Date(),
+          viewCount: { increment: 1 },
+          lastViewedAt: new Date(),
         },
       })
     },
@@ -190,7 +192,7 @@ export const showResolvers: IResolvers = {
       const songs = await prisma.song.findMany({
         where: {
           id: { in: songIds },
-          artist_id: show.artist_id,
+          artistId: show.artistId,
         },
       })
 
@@ -205,20 +207,20 @@ export const showResolvers: IResolvers = {
       
       return prisma.setlist.create({
         data: {
-          show_id: showId,
+          showId: showId,
           name,
-          order_index: orderIndex,
-          is_encore: name.toLowerCase().includes('encore'),
-          setlist_songs: {
+          orderIndex: orderIndex,
+          isEncore: name.toLowerCase().includes('encore'),
+          setlistSongs: {
             create: songIds.map((songId, index) => ({
-              song_id: songId,
+              songId: songId,
               position: index + 1,
-              vote_count: 0,
+              voteCount: 0,
             })),
           },
         },
         include: {
-          setlist_songs: {
+          setlistSongs: {
             include: { song: true },
           },
         },
@@ -247,8 +249,8 @@ export const showResolvers: IResolvers = {
         songPositions.map(({ songId, position }) =>
           prisma.setlistSong.updateMany({
             where: {
-              setlist_id: setlistId,
-              song_id: songId,
+              setlistId: setlistId,
+              songId: songId,
             },
             data: { position },
           })
@@ -258,45 +260,109 @@ export const showResolvers: IResolvers = {
       return prisma.setlist.findUnique({
         where: { id: setlistId },
         include: {
-          setlist_songs: {
+          setlistSongs: {
             include: { song: true },
             orderBy: { position: 'asc' },
           },
         },
       })
     },
+
+    addSongToSetlist: async (_parent, { setlistId, songId }, { prisma, user }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      const setlist = await prisma.setlist.findUnique({
+        where: { id: setlistId },
+        include: {
+          show: true,
+          setlistSongs: true,
+        },
+      })
+
+      if (!setlist) {
+        throw new GraphQLError('Setlist not found', {
+          extensions: { code: 'NOT_FOUND' },
+        })
+      }
+
+      // Verify song belongs to the same artist
+      const song = await prisma.song.findUnique({
+        where: { id: songId },
+      })
+
+      if (!song || song.artistId !== setlist.show.artistId) {
+        throw new GraphQLError('Song not found or does not belong to this artist', {
+          extensions: { code: 'BAD_REQUEST' },
+        })
+      }
+
+      // Check if song is already in setlist
+      const existingSong = await prisma.setlistSong.findFirst({
+        where: {
+          setlistId: setlistId,
+          songId: songId,
+        },
+      })
+
+      if (existingSong) {
+        throw new GraphQLError('Song already exists in setlist', {
+          extensions: { code: 'CONFLICT' },
+        })
+      }
+
+      // Add song to end of setlist
+      const nextPosition = setlist.setlistSongs.length + 1
+
+      const setlistSong = await prisma.setlistSong.create({
+        data: {
+          setlistId: setlistId,
+          songId: songId,
+          position: nextPosition,
+          voteCount: 0,
+        },
+        include: {
+          song: true,
+        },
+      })
+
+      return setlistSong
+    },
   },
 
   Show: {
     artist: async (parent, _args, { loaders }) => {
-      return loaders.artist.load(parent.artist_id)
+      return loaders.artist.load(parent.artistId)
     },
 
     venue: async (parent, _args, { loaders }) => {
-      return loaders.venue.load(parent.venue_id)
+      return loaders.venue.load(parent.venueId)
     },
 
     setlists: async (parent, _args, { prisma }) => {
       return prisma.setlist.findMany({
-        where: { show_id: parent.id },
-        orderBy: { order_index: 'asc' },
+        where: { showId: parent.id },
+        orderBy: { orderIndex: 'asc' },
       })
     },
 
     totalVotes: async (parent, _args, { prisma }) => {
       const result = await prisma.setlistSong.aggregate({
         where: {
-          setlist: { show_id: parent.id },
+          setlist: { showId: parent.id },
         },
-        _sum: { vote_count: true },
+        _sum: { voteCount: true },
       })
-      return result._sum.vote_count || 0
+      return result._sum.voteCount || 0
     },
 
     uniqueVoters: async (parent, _args, { prisma }) => {
       const result = await prisma.vote.groupBy({
-        by: ['user_id'],
-        where: { show_id: parent.id },
+        by: ['userId'],
+        where: { showId: parent.id },
       })
       return result.length
     },
@@ -304,15 +370,15 @@ export const showResolvers: IResolvers = {
     avgVotesPerSong: async (parent, _args, { prisma }) => {
       const result = await prisma.setlistSong.aggregate({
         where: {
-          setlist: { show_id: parent.id },
+          setlist: { showId: parent.id },
         },
-        _avg: { vote_count: true },
+        _avg: { voteCount: true },
       })
-      return result._avg.vote_count || 0
+      return result._avg.voteCount || 0
     },
 
     trendingScore: (parent) => {
-      return parent.trending_score || 0
+      return parent.trendingScore || 0
     },
 
     isToday: (parent) => {
@@ -337,7 +403,7 @@ export const showResolvers: IResolvers = {
   Venue: {
     shows: async (parent, { status, limit = 20, offset = 0 }, { prisma }) => {
       const where: Prisma.ShowWhereInput = {
-        venue_id: parent.id,
+        venueId: parent.id,
       }
 
       if (status) {
@@ -374,12 +440,12 @@ export const showResolvers: IResolvers = {
 
   Setlist: {
     show: async (parent, _args, { loaders }) => {
-      return loaders.show.load(parent.show_id)
+      return loaders.show.load(parent.showId)
     },
 
     songs: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.findMany({
-        where: { setlist_id: parent.id },
+        where: { setlistId: parent.id },
         orderBy: { position: 'asc' },
       })
     },
@@ -387,11 +453,11 @@ export const showResolvers: IResolvers = {
 
   SetlistSong: {
     setlist: async (parent, _args, { loaders }) => {
-      return loaders.setlist.load(parent.setlist_id)
+      return loaders.setlist.load(parent.setlistId)
     },
 
     song: async (parent, _args, { loaders }) => {
-      return loaders.song.load(parent.song_id)
+      return loaders.song.load(parent.songId)
     },
 
     hasVoted: async (parent, _args, { prisma, user }) => {
@@ -399,8 +465,8 @@ export const showResolvers: IResolvers = {
 
       const vote = await prisma.vote.findFirst({
         where: {
-          user_id: user.id,
-          setlist_song_id: parent.id,
+          userId: user.id,
+          setlistSongId: parent.id,
         },
       })
 
@@ -410,15 +476,15 @@ export const showResolvers: IResolvers = {
     votePercentage: async (parent, _args, { prisma }) => {
       const totalVotes = await prisma.setlistSong.aggregate({
         where: {
-          setlist_id: parent.setlist_id,
+          setlistId: parent.setlistId,
         },
-        _sum: { vote_count: true },
+        _sum: { voteCount: true },
       })
 
-      const total = totalVotes._sum.vote_count || 0
+      const total = totalVotes._sum.voteCount || 0
       if (total === 0) return 0
 
-      return (parent.vote_count / total) * 100
+      return (parent.voteCount / total) * 100
     },
   },
 }

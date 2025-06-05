@@ -1,0 +1,193 @@
+'use client'
+
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
+import { useGraphQLClient } from '@/lib/graphql-client'
+import { SEARCH_ALL } from '@/lib/graphql/queries'
+import { Search, Music, Calendar, Users } from 'lucide-react'
+import Link from 'next/link'
+import { Skeleton } from '@/components/ui/skeleton'
+
+function SearchPageContent() {
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get('q') || ''
+  const [searchQuery, setSearchQuery] = useState(initialQuery)
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
+  const client = useGraphQLClient()
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['search', debouncedQuery],
+    queryFn: async () => {
+      if (!debouncedQuery) return null
+      return client.request(SEARCH_ALL, { query: debouncedQuery })
+    },
+    enabled: !!debouncedQuery,
+  })
+
+  const results = data?.search
+
+  return (
+    <div className="min-h-screen bg-gray-950">
+      <div className="container mx-auto px-4 py-8">
+        {/* Search Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-6 gradient-text">Search</h1>
+          
+          {/* Search Bar */}
+          <div className="relative max-w-2xl">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search for artists, shows, or songs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-teal-500 transition-colors text-lg"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Results */}
+        {isLoading ? (
+          <div className="space-y-8">
+            <SearchSectionSkeleton title="Artists" />
+            <SearchSectionSkeleton title="Shows" />
+            <SearchSectionSkeleton title="Songs" />
+          </div>
+        ) : !results || !debouncedQuery ? (
+          <div className="text-center py-16">
+            <p className="text-gray-400 text-lg">
+              {!debouncedQuery 
+                ? 'Start typing to search...' 
+                : 'No results found. Try a different search term.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {/* Artists Section */}
+            {results.artists?.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Users className="w-6 h-6 text-teal-500" />
+                  Artists
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {results.artists.map((artist: any) => (
+                    <Link
+                      key={artist.id}
+                      href={`/artists/${artist.slug}`}
+                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover flex items-center gap-4"
+                    >
+                      {artist.imageUrl && (
+                        <img
+                          src={artist.imageUrl}
+                          alt={artist.name}
+                          className="w-16 h-16 rounded-full object-cover"
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-lg">{artist.name}</h3>
+                        <p className="text-sm text-gray-400">Artist</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Shows Section */}
+            {results.shows?.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Calendar className="w-6 h-6 text-teal-500" />
+                  Shows
+                </h2>
+                <div className="space-y-3">
+                  {results.shows.map((show: any) => (
+                    <Link
+                      key={show.id}
+                      href={`/shows/${show.id}`}
+                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover block"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold text-lg">{show.artist.name}</h3>
+                          <p className="text-gray-400">
+                            {show.venue.name} • {show.venue.city}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {new Date(show.date).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium text-teal-400">
+                          Vote Now →
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Songs Section */}
+            {results.songs?.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Music className="w-6 h-6 text-teal-500" />
+                  Songs
+                </h2>
+                <div className="space-y-3">
+                  {results.songs.map((song: any) => (
+                    <div
+                      key={song.id}
+                      className="gradient-card rounded-lg p-4 border border-gray-800"
+                    >
+                      <h3 className="font-semibold">{song.title}</h3>
+                      <p className="text-sm text-gray-400">by {song.artist.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SearchSectionSkeleton({ title }: { title: string }) {
+  return (
+    <section>
+      <h2 className="text-2xl font-semibold mb-4">{title}</h2>
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full" />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SearchPageContent />
+    </Suspense>
+  )
+}

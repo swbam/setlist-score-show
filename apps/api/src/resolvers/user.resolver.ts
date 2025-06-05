@@ -11,7 +11,7 @@ export const userResolvers: IResolvers = {
 
       return prisma.user.findUnique({
         where: { id: user.id },
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
     },
 
@@ -31,7 +31,7 @@ export const userResolvers: IResolvers = {
 
       const requestedUser = await prisma.user.findUnique({
         where: { id },
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
 
       if (!requestedUser) {
@@ -60,26 +60,26 @@ export const userResolvers: IResolvers = {
 
       const userWithPrefs = await prisma.user.findUnique({
         where: { id: user.id },
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
 
-      if (!userWithPrefs?.user_preferences) {
+      if (!userWithPrefs?.userPreferences) {
         // Create default preferences if they don't exist
         const defaultPrefs = await prisma.userPreferences.create({
           data: {
-            user_id: user.id,
-            email_notifications: true,
-            push_notifications: false,
-            show_completed_shows: false,
+            userId: user.id,
+            emailNotifications: true,
+            pushNotifications: false,
+            showCompletedShows: false,
             theme: 'SYSTEM',
-            favorite_genres: [],
+            favoriteGenres: [],
           },
         })
 
         return defaultPrefs
       }
 
-      return userWithPrefs.user_preferences
+      return userWithPrefs.userPreferences
     },
   },
 
@@ -92,13 +92,13 @@ export const userResolvers: IResolvers = {
       }
 
       const updateData: any = {}
-      if (displayName !== undefined) updateData.display_name = displayName
-      if (avatarUrl !== undefined) updateData.avatar_url = avatarUrl
+      if (displayName !== undefined) updateData.displayName = displayName
+      if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
 
       return prisma.user.update({
         where: { id: user.id },
         data: updateData,
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
     },
 
@@ -112,42 +112,42 @@ export const userResolvers: IResolvers = {
       const updateData: any = {}
       
       if (preferences.emailNotifications !== undefined) {
-        updateData.email_notifications = preferences.emailNotifications
+        updateData.emailNotifications = preferences.emailNotifications
       }
       if (preferences.pushNotifications !== undefined) {
-        updateData.push_notifications = preferences.pushNotifications
+        updateData.pushNotifications = preferences.pushNotifications
       }
       if (preferences.showCompletedShows !== undefined) {
-        updateData.show_completed_shows = preferences.showCompletedShows
+        updateData.showCompletedShows = preferences.showCompletedShows
       }
       if (preferences.theme !== undefined) {
         updateData.theme = preferences.theme
       }
       if (preferences.favoriteGenres !== undefined) {
-        updateData.favorite_genres = preferences.favoriteGenres
+        updateData.favoriteGenres = preferences.favoriteGenres
       }
       if (preferences.defaultLocation !== undefined) {
-        updateData.default_location = preferences.defaultLocation
+        updateData.defaultLocation = preferences.defaultLocation
       }
 
       // Upsert preferences
       await prisma.userPreferences.upsert({
-        where: { user_id: user.id },
+        where: { userId: user.id },
         update: updateData,
         create: {
-          user_id: user.id,
+          userId: user.id,
           ...updateData,
-          email_notifications: updateData.email_notifications ?? true,
-          push_notifications: updateData.push_notifications ?? false,
-          show_completed_shows: updateData.show_completed_shows ?? false,
+          emailNotifications: updateData.emailNotifications ?? true,
+          pushNotifications: updateData.pushNotifications ?? false,
+          showCompletedShows: updateData.showCompletedShows ?? false,
           theme: updateData.theme ?? 'SYSTEM',
-          favorite_genres: updateData.favorite_genres ?? [],
+          favoriteGenres: updateData.favoriteGenres ?? [],
         },
       })
 
       return prisma.user.findUnique({
         where: { id: user.id },
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
     },
 
@@ -175,12 +175,12 @@ export const userResolvers: IResolvers = {
         return prisma.user.update({
           where: { id: user.id },
           data: {
-            spotify_id: spotifyProfile.id,
-            spotify_access_token: tokens.access_token,
-            spotify_refresh_token: tokens.refresh_token,
-            spotify_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000),
+            spotifyId: spotifyProfile.id,
+            spotifyAccessToken: tokens.access_token,
+            spotifyRefreshToken: tokens.refresh_token,
+            spotifyTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
           },
-          include: { user_preferences: true },
+          include: { userPreferences: true },
         })
       } catch (error: any) {
         throw new GraphQLError('Failed to connect Spotify account', {
@@ -202,12 +202,12 @@ export const userResolvers: IResolvers = {
       return prisma.user.update({
         where: { id: user.id },
         data: {
-          spotify_id: null,
-          spotify_access_token: null,
-          spotify_refresh_token: null,
-          spotify_token_expires_at: null,
+          spotifyId: null,
+          spotifyAccessToken: null,
+          spotifyRefreshToken: null,
+          spotifyTokenExpiresAt: null,
         },
-        include: { user_preferences: true },
+        include: { userPreferences: true },
       })
     },
 
@@ -248,7 +248,7 @@ export const userResolvers: IResolvers = {
   User: {
     preferences: async (parent, _args, { prisma }) => {
       let prefs = await prisma.userPreferences.findUnique({
-        where: { user_id: parent.id },
+        where: { userId: parent.id },
       })
 
       if (!prefs) {
@@ -260,48 +260,48 @@ export const userResolvers: IResolvers = {
             push_notifications: false,
             show_completed_shows: false,
             theme: 'SYSTEM',
-            favorite_genres: [],
+            favoriteGenres: [],
           },
         })
       }
 
       return {
-        emailNotifications: prefs.email_notifications,
-        pushNotifications: prefs.push_notifications,
-        showCompletedShows: prefs.show_completed_shows,
-        defaultLocation: prefs.default_location,
-        favoriteGenres: prefs.favorite_genres,
+        emailNotifications: prefs.emailNotifications,
+        pushNotifications: prefs.pushNotifications,
+        showCompletedShows: prefs.showCompletedShows,
+        defaultLocation: prefs.defaultLocation,
+        favoriteGenres: prefs.favoriteGenres,
         theme: prefs.theme,
       }
     },
 
     votes: async (parent, { limit = 50, offset = 0 }, { prisma }) => {
       return prisma.vote.findMany({
-        where: { user_id: parent.id },
-        orderBy: { created_at: 'desc' },
+        where: { userId: parent.id },
+        orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
       })
     },
 
     voteAnalytics: async (parent, { showId }, { prisma }) => {
-      const where: any = { user_id: parent.id }
-      if (showId) where.show_id = showId
+      const where: any = { userId: parent.id }
+      if (showId) where.showId = showId
 
       return prisma.voteAnalytics.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy: { createdAt: 'desc' },
       })
     },
 
     totalVotes: async (parent, _args, { prisma }) => {
       return prisma.vote.count({
-        where: { user_id: parent.id },
+        where: { userId: parent.id },
       })
     },
 
     joinedDaysAgo: (parent) => {
-      const created = new Date(parent.created_at)
+      const created = new Date(parent.createdAt)
       const now = new Date()
       const diffTime = Math.abs(now.getTime() - created.getTime())
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
@@ -315,8 +315,8 @@ export const userResolvers: IResolvers = {
 
       const recentVotes = await prisma.vote.count({
         where: {
-          user_id: parent.id,
-          created_at: { gte: thirtyDaysAgo },
+          userId: parent.id,
+          createdAt: { gte: thirtyDaysAgo },
         },
       })
 
@@ -326,12 +326,12 @@ export const userResolvers: IResolvers = {
 
   UserPreferences: {
     defaultLocation: (parent) => {
-      if (!parent.default_location) return null
+      if (!parent.defaultLocation) return null
       
-      // Assuming default_location is stored as JSON
-      const location = typeof parent.default_location === 'string' 
-        ? JSON.parse(parent.default_location)
-        : parent.default_location
+      // Assuming defaultLocation is stored as JSON
+      const location = typeof parent.defaultLocation === 'string' 
+        ? JSON.parse(parent.defaultLocation)
+        : parent.defaultLocation
 
       return {
         city: location.city,

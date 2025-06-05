@@ -61,7 +61,7 @@ interface SetlistFmSetlist {
 }
 
 export class SetlistFmClient {
-  private client: axios.AxiosInstance
+  private client: any // AxiosInstance type
   private apiKey: string
 
   constructor(apiKey: string) {

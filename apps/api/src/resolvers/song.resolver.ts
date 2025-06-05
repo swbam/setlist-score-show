@@ -23,7 +23,7 @@ export const songResolvers: IResolvers = {
 
       if (filter) {
         if (filter.artistId) {
-          where.artist_id = filter.artistId
+          where.artistId = filter.artistId
         }
 
         if (filter.search) {
@@ -42,13 +42,13 @@ export const songResolvers: IResolvers = {
         }
 
         if (filter.maxDurationMs !== undefined) {
-          where.duration_ms = { lte: filter.maxDurationMs }
+          where.durationMs = { lte: filter.maxDurationMs }
         }
 
         if (filter.hasPreview === true) {
-          where.preview_url = { not: null }
+          where.previewUrl = { not: null }
         } else if (filter.hasPreview === false) {
-          where.preview_url = null
+          where.previewUrl = null
         }
       }
 
@@ -59,8 +59,8 @@ export const songResolvers: IResolvers = {
         POPULARITY_DESC: { popularity: 'desc' },
         ALBUM_ASC: { album: 'asc' },
         ALBUM_DESC: { album: 'desc' },
-        DURATION_ASC: { duration_ms: 'asc' },
-        DURATION_DESC: { duration_ms: 'desc' },
+        DURATION_ASC: { durationMs: 'asc' },
+        DURATION_DESC: { durationMs: 'desc' },
       }
 
       const [songs, totalCount] = await Promise.all([
@@ -100,7 +100,7 @@ export const songResolvers: IResolvers = {
       }
 
       if (artistId) {
-        where.artist_id = artistId
+        where.artistId = artistId
       }
 
       return prisma.song.findMany({
@@ -116,10 +116,10 @@ export const songResolvers: IResolvers = {
     topVotedSongs: async (_parent, { showId, limit = 20 }, { prisma }) => {
       return prisma.setlistSong.findMany({
         where: {
-          setlist: { show_id: showId },
-          vote_count: { gt: 0 },
+          setlist: { showId: showId },
+          voteCount: { gt: 0 },
         },
-        orderBy: { vote_count: 'desc' },
+        orderBy: { voteCount: 'desc' },
         take: limit,
         include: { song: true },
       })
@@ -150,7 +150,7 @@ export const songResolvers: IResolvers = {
         })
       }
 
-      if (!artist.spotify_id) {
+      if (!artist.spotifyId) {
         throw new GraphQLError('Artist has no Spotify ID', {
           extensions: { code: 'BAD_REQUEST' },
         })
@@ -164,7 +164,7 @@ export const songResolvers: IResolvers = {
 
       try {
         const result = await services.spotify.importArtistCatalog(
-          artist.spotify_id,
+          artist.spotifyId,
           { includeAlbums, includeSingles }
         )
 
@@ -176,26 +176,26 @@ export const songResolvers: IResolvers = {
         for (const track of result.tracks) {
           try {
             await prisma.song.upsert({
-              where: { spotify_id: track.id },
+              where: { spotifyId: track.id },
               update: {
                 title: track.name,
                 album: track.album?.name,
-                album_image_url: track.album?.images?.[0]?.url,
-                duration_ms: track.duration_ms,
+                albumImageUrl: track.album?.images?.[0]?.url,
+                durationMs: track.duration_ms,
                 popularity: track.popularity,
-                preview_url: track.preview_url,
-                spotify_url: track.external_urls?.spotify,
+                previewUrl: track.preview_url,
+                spotifyUrl: track.external_urls?.spotify,
               },
               create: {
-                artist_id: artistId,
-                spotify_id: track.id,
+                artistId: artistId,
+                spotifyId: track.id,
                 title: track.name,
                 album: track.album?.name,
-                album_image_url: track.album?.images?.[0]?.url,
-                duration_ms: track.duration_ms,
+                albumImageUrl: track.album?.images?.[0]?.url,
+                durationMs: track.duration_ms,
                 popularity: track.popularity,
-                preview_url: track.preview_url,
-                spotify_url: track.external_urls?.spotify,
+                previewUrl: track.preview_url,
+                spotifyUrl: track.external_urls?.spotify,
               },
             })
             itemsImported++
@@ -241,7 +241,7 @@ export const songResolvers: IResolvers = {
       return prisma.song.update({
         where: { id },
         data: {
-          audio_features: audioFeatures ? JSON.stringify(audioFeatures) : undefined,
+          audioFeatures: audioFeatures ? JSON.stringify(audioFeatures) : undefined,
         },
       })
     },
@@ -265,10 +265,10 @@ export const songResolvers: IResolvers = {
 
       return prisma.song.create({
         data: {
-          artist_id: artistId,
+          artistId: artistId,
           title,
           album,
-          duration_ms: durationMs,
+          durationMs: durationMs,
           popularity: 0,
         },
       })
@@ -277,15 +277,15 @@ export const songResolvers: IResolvers = {
 
   Song: {
     artist: async (parent, _args, { loaders }) => {
-      return loaders.artist.load(parent.artist_id)
+      return loaders.artist.load(parent.artistId)
     },
 
     audioFeatures: (parent) => {
-      if (!parent.audio_features) return null
+      if (!parent.audioFeatures) return null
       
-      const features = typeof parent.audio_features === 'string'
-        ? JSON.parse(parent.audio_features)
-        : parent.audio_features
+      const features = typeof parent.audioFeatures === 'string'
+        ? JSON.parse(parent.audioFeatures)
+        : parent.audioFeatures
 
       return {
         acousticness: features.acousticness,
@@ -306,25 +306,25 @@ export const songResolvers: IResolvers = {
     currentVoteCount: async (parent, { showId }, { prisma }) => {
       const result = await prisma.setlistSong.aggregate({
         where: {
-          song_id: parent.id,
-          setlist: { show_id: showId },
+          songId: parent.id,
+          setlist: { showId: showId },
         },
-        _sum: { vote_count: true },
+        _sum: { voteCount: true },
       })
 
-      return result._sum.vote_count || 0
+      return result._sum.voteCount || 0
     },
 
     voteRank: async (parent, { showId }, { prisma }) => {
       const allVotes = await prisma.setlistSong.findMany({
         where: {
-          setlist: { show_id: showId },
+          setlist: { showId: showId },
         },
-        orderBy: { vote_count: 'desc' },
-        select: { song_id: true },
+        orderBy: { voteCount: 'desc' },
+        select: { songId: true },
       })
 
-      const rank = allVotes.findIndex(v => v.song_id === parent.id) + 1
+      const rank = allVotes.findIndex(v => v.songId === parent.id) + 1
       return rank || null
     },
 
@@ -333,10 +333,10 @@ export const songResolvers: IResolvers = {
 
       const vote = await prisma.vote.findFirst({
         where: {
-          user_id: user.id,
-          show_id: showId,
-          setlist_song: {
-            song_id: parent.id,
+          userId: user.id,
+          showId: showId,
+          setlistSong: {
+            songId: parent.id,
           },
         },
       })

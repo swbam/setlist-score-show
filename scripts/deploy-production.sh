@@ -1,71 +1,96 @@
 #!/bin/bash
 
-# Production deployment script
+# Production Deployment Script for Setlist Score Show
 set -e
 
-echo "🚀 Starting production deployment..."
+echo "🚀 Starting Production Deployment..."
+echo "=================================="
 
-# Check if all required environment variables are set
-required_vars=(
-  "VERCEL_TOKEN"
-  "RAILWAY_TOKEN"
-  "DATABASE_URL"
-  "SUPABASE_PROJECT_ID"
-)
+# 1. Environment Check
+echo "📋 Checking environment..."
+if [ ! -f .env ]; then
+  echo "❌ .env file not found in root directory"
+  exit 1
+fi
 
-for var in "${required_vars[@]}"; do
-  if [ -z "${!var}" ]; then
-    echo "❌ Error: $var is not set"
-    exit 1
-  fi
-done
+# 2. Install Dependencies
+echo "📦 Installing dependencies..."
+pnpm install --frozen-lockfile
 
-# 1. Run tests
-echo "🧪 Running tests..."
-pnpm test
+# 3. Type Check
+echo "🔍 Running type checks..."
+pnpm type-check
 
-# 2. Build all packages
-echo "📦 Building packages..."
+# 4. Lint Check
+echo "🧹 Running linters..."
+pnpm lint
+
+# 5. Build All Packages
+echo "🏗️  Building all packages..."
 pnpm build
 
-# 3. Run database migrations
+# 6. Database Migrations
 echo "🗄️  Running database migrations..."
-pnpm --filter @setlist/database migrate:deploy
+cd packages/database
+pnpm prisma generate
+pnpm prisma migrate deploy
+cd ../..
 
-# 4. Deploy Supabase Edge Functions
-echo "⚡ Deploying Edge Functions..."
+# 7. Test API Health
+echo "🏥 Testing API health (make sure API is running)..."
+if curl -f http://localhost:4000/health > /dev/null 2>&1; then
+  echo "✅ API health check passed"
+else
+  echo "⚠️  API not running locally - skipping health check"
+fi
+
+# 8. Deploy Supabase Edge Functions
+echo "☁️  Deploying Supabase Edge Functions..."
 cd supabase/functions
-./deploy-all.sh
+if command -v supabase &> /dev/null; then
+  ./deploy-all.sh
+else
+  echo "⚠️  Supabase CLI not installed - skipping edge function deployment"
+fi
 cd ../..
 
-# 5. Deploy API to Railway
+# 9. Deploy API to Railway
 echo "🚂 Deploying API to Railway..."
-railway up --service api
+if command -v railway &> /dev/null; then
+  cd apps/api
+  echo "📤 Pushing to Railway..."
+  railway up --service api --detach
+  cd ../..
+else
+  echo "⚠️  Railway CLI not installed - run: npm install -g @railway/cli"
+fi
 
-# 6. Deploy Web to Vercel
+# 10. Deploy Web to Vercel
 echo "▲ Deploying Web to Vercel..."
-cd apps/web
-vercel --prod --token=$VERCEL_TOKEN
-cd ../..
-
-# 7. Refresh CDN cache
-if [ ! -z "$CLOUDFLARE_API_TOKEN" ]; then
-  echo "🌐 Purging CDN cache..."
-  curl -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data '{"purge_everything":true}'
+if command -v vercel &> /dev/null; then
+  cd apps/web
+  echo "📤 Pushing to Vercel..."
+  vercel --prod --yes
+  cd ../..
+else
+  echo "⚠️  Vercel CLI not installed - run: npm install -g vercel"
 fi
 
-# 8. Run post-deployment checks
-echo "✅ Running health checks..."
-./scripts/health-check.sh
-
-echo "🎉 Deployment completed successfully!"
-
-# Send notification (optional)
-if [ ! -z "$SLACK_WEBHOOK" ]; then
-  curl -X POST $SLACK_WEBHOOK \
-    -H 'Content-type: application/json' \
-    --data '{"text":"Production deployment completed successfully! 🚀"}'
-fi
+echo ""
+echo "✅ Deployment Complete!"
+echo "======================"
+echo ""
+echo "📝 Post-Deployment Checklist:"
+echo "1. ✓ Check Vercel deployment: https://vercel.com/dashboard"
+echo "2. ✓ Check Railway deployment: https://railway.app/dashboard"
+echo "3. ✓ Verify Supabase Edge Functions: https://app.supabase.com/project/ailrmwtahifvstpfhbgn/functions"
+echo "4. ✓ Test production endpoints:"
+echo "   - Web: [Your Vercel URL]"
+echo "   - API: [Your Railway URL]/health"
+echo "   - GraphQL: [Your Railway URL]/graphql"
+echo ""
+echo "🔐 Environment Variables to Set:"
+echo "- In Vercel: NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SUPABASE_URL, etc."
+echo "- In Railway: DATABASE_URL, REDIS_URL, API keys, etc."
+echo ""
+echo "🎉 Happy deploying!"

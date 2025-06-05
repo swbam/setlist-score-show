@@ -40,23 +40,23 @@ export class SyncService {
       where: { id: artistId }
     })
 
-    if (!artist?.spotify_id) {
+    if (!artist?.spotifyId) {
       throw new Error('Artist missing Spotify ID')
     }
 
     // Sync history entry
     const syncEntry = await this.prisma.syncHistory.create({
       data: {
-        sync_type: 'spotify',
-        entity_type: 'artist',
-        entity_id: artistId,
+        syncType: 'spotify',
+        entityType: 'artist',
+        entityId: artistId,
         status: 'started'
       }
     })
 
     try {
       // Get all albums
-      const albums = await this.spotify.getArtistAlbums(artist.spotify_id)
+      const albums = await this.spotify.getArtistAlbums(artist.spotifyId)
       
       // Get tracks for each album
       const allTracks = await Promise.all(
@@ -72,22 +72,22 @@ export class SyncService {
       for (const track of tracks) {
         await this.prisma.song.upsert({
           where: {
-            spotify_id: track.id
+            spotifyId: track.id
           },
           create: {
-            spotify_id: track.id,
-            artist_id: artistId,
+            spotifyId: track.id,
+            artistId: artistId,
             title: track.name,
             album: track.album.name,
-            album_image_url: track.album.images[0]?.url,
-            duration_ms: track.duration_ms,
+            albumImageUrl: track.album.images[0]?.url,
+            durationMs: track.duration_ms,
             popularity: track.popularity,
-            preview_url: track.preview_url,
-            spotify_url: track.external_urls.spotify
+            previewUrl: track.preview_url,
+            spotifyUrl: track.external_urls.spotify
           },
           update: {
             popularity: track.popularity,
-            preview_url: track.preview_url
+            previewUrl: track.preview_url
           }
         })
         processedCount++
@@ -98,8 +98,8 @@ export class SyncService {
         where: { id: syncEntry.id },
         data: {
           status: 'completed',
-          completed_at: new Date(),
-          items_processed: processedCount
+          completedAt: new Date(),
+          itemsProcessed: processedCount
         }
       })
 
@@ -113,8 +113,8 @@ export class SyncService {
         where: { id: syncEntry.id },
         data: {
           status: 'failed',
-          error_message: error.message,
-          completed_at: new Date()
+          errorMessage: error.message,
+          completedAt: new Date()
         }
       })
       throw error
@@ -141,10 +141,10 @@ export class SyncService {
         if (!forceUpdate) {
           const lastSync = await this.prisma.syncHistory.findFirst({
             where: {
-              entity_id: artist.id,
-              sync_type: 'ticketmaster',
+              entityId: artist.id,
+              syncType: 'ticketmaster',
               status: 'completed',
-              completed_at: {
+              completedAt: {
                 gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours
               }
             }
@@ -157,9 +157,9 @@ export class SyncService {
         }
 
         // Sync from Ticketmaster
-        if (artist.ticketmaster_id) {
+        if (artist.ticketmasterId) {
           const shows = await this.ticketmaster.getArtistEvents(
-            artist.ticketmaster_id,
+            artist.ticketmasterId,
             { startDate, endDate }
           )
 
@@ -175,10 +175,9 @@ export class SyncService {
         }
 
         // Also check Setlist.fm for recent shows
-        if (artist.setlistfm_mbid) {
+        if (artist.setlistfmMbid) {
           const setlists = await this.setlistFm.getArtistSetlists(
-            artist.setlistfm_mbid,
-            { page: 1 }
+            artist.setlistfmMbid
           )
 
           // Filter to upcoming shows only
@@ -226,16 +225,16 @@ export class SyncService {
     // Upsert venue first
     const venue = await this.prisma.venue.upsert({
       where: {
-        ticketmaster_id: showData.venue.id
+        ticketmasterId: showData.venue.id
       },
       create: {
-        ticketmaster_id: showData.venue.id,
+        ticketmasterId: showData.venue.id,
         name: showData.venue.name,
         address: showData.venue.address?.line1,
         city: showData.venue.city.name,
         state: showData.venue.state?.name,
         country: showData.venue.country.name,
-        postal_code: showData.venue.postalCode,
+        postalCode: showData.venue.postalCode,
         latitude: showData.venue.location?.latitude,
         longitude: showData.venue.location?.longitude,
         timezone: showData.venue.timezone
@@ -246,36 +245,36 @@ export class SyncService {
     // Upsert show
     const show = await this.prisma.show.upsert({
       where: {
-        ticketmaster_id: showData.id
+        ticketmasterId: showData.id
       },
       create: {
-        ticketmaster_id: showData.id,
-        artist_id: artistId,
-        venue_id: venue.id,
+        ticketmasterId: showData.id,
+        artistId: artistId,
+        venueId: venue.id,
         date: new Date(showData.dates.start.localDate),
-        start_time: showData.dates.start.localTime,
+        startTime: showData.dates.start.localTime,
         title: showData.name,
         status: 'upcoming',
-        ticketmaster_url: showData.url
+        ticketmasterUrl: showData.url
       },
       update: {
         status: 'upcoming',
-        ticketmaster_url: showData.url
+        ticketmasterUrl: showData.url
       }
     })
 
     // Create default setlist
     await this.prisma.setlist.upsert({
       where: {
-        unique_show_setlist: {
-          show_id: show.id,
-          order_index: 0
+        showId_orderIndex: {
+          showId: show.id,
+          orderIndex: 0
         }
       },
       create: {
-        show_id: show.id,
+        showId: show.id,
         name: 'Main Set',
-        order_index: 0
+        orderIndex: 0
       },
       update: {}
     })
@@ -287,10 +286,10 @@ export class SyncService {
     // Similar to upsertShow but for Setlist.fm data
     const venue = await this.prisma.venue.upsert({
       where: {
-        setlistfm_id: setlistData.venue.id
+        setlistfmId: setlistData.venue.id
       },
       create: {
-        setlistfm_id: setlistData.venue.id,
+        setlistfmId: setlistData.venue.id,
         name: setlistData.venue.name,
         city: setlistData.venue.city.name,
         state: setlistData.venue.city.state,
@@ -303,19 +302,19 @@ export class SyncService {
 
     const show = await this.prisma.show.upsert({
       where: {
-        unique_show: {
-          artist_id: artistId,
-          venue_id: venue.id,
+        artistId_venueId_date: {
+          artistId: artistId,
+          venueId: venue.id,
           date: new Date(setlistData.eventDate)
         }
       },
       create: {
-        artist_id: artistId,
-        venue_id: venue.id,
-        setlistfm_id: setlistData.id,
+        artistId: artistId,
+        venueId: venue.id,
+        setlistfmId: setlistData.id,
         date: new Date(setlistData.eventDate),
         title: setlistData.tour?.name || `${setlistData.artist.name} at ${venue.name}`,
-        tour_name: setlistData.tour?.name,
+        tourName: setlistData.tour?.name,
         status: new Date(setlistData.eventDate) > new Date() ? 'upcoming' : 'completed'
       },
       update: {}

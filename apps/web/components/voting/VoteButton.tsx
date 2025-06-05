@@ -11,6 +11,8 @@ interface VoteButtonProps {
   currentVotes: number
   hasVoted: boolean
   position: number
+  onVote?: (songId: string) => Promise<void>
+  disabled?: boolean
 }
 
 export function VoteButton({ 
@@ -18,18 +20,26 @@ export function VoteButton({
   showId, 
   currentVotes, 
   hasVoted, 
-  position 
+  position,
+  onVote,
+  disabled = false
 }: VoteButtonProps) {
   const { vote, isVoting } = useVoting()
   const [showSuccess, setShowSuccess] = useState(false)
 
   const handleVote = async () => {
-    if (hasVoted || isVoting) return
+    if (hasVoted || isVoting || disabled) return
     
-    const result = await vote({ songId, showId })
-    if (result.success) {
+    if (onVote) {
+      await onVote(songId)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
+    } else {
+      const result = await vote({ songId, showId })
+      if (result.success) {
+        setShowSuccess(true)
+        setTimeout(() => setShowSuccess(false), 2000)
+      }
     }
   }
 
@@ -38,7 +48,7 @@ export function VoteButton({
       whileHover={{ scale: hasVoted ? 1 : 1.05 }}
       whileTap={{ scale: hasVoted ? 1 : 0.95 }}
       onClick={handleVote}
-      disabled={hasVoted || isVoting}
+      disabled={hasVoted || isVoting || disabled}
       className={cn(
         "relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200",
         hasVoted

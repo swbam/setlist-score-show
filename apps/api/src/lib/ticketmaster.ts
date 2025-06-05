@@ -113,7 +113,7 @@ export interface EventSearchParams {
 export class TicketmasterClient {
   private client: AxiosInstance
   private apiKey: string
-  private limit: pLimit.Limit
+  private limit: any // pLimit.Limit type
 
   constructor(config: TicketmasterConfig) {
     this.apiKey = config.apiKey

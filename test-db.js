@@ -1,36 +1,28 @@
-// Quick database test script
-import { createClient } from '@supabase/supabase-js';
+const { PrismaClient } = require('@prisma/client');
+require('dotenv').config({ path: 'apps/api/.env' });
 
-const supabaseUrl = 'https://ailrmwtahifvstpfhbgn.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpbHJtd3RhaGlmdnN0cGZoYmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5NTQ0NjEsImV4cCI6MjA2MzUzMDQ2MX0.WYKAEqCo8yJpnxa6S0_TQaSUm4SR1kKZlfXiwyvk2vw';
+const prisma = new PrismaClient();
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-async function testDatabase() {
-  console.log('Testing database connection...');
-  
-  // Check if tables exist and have data
-  const tables = ['artists', 'shows', 'venues', 'setlists'];
-  
-  for (const table of tables) {
-    try {
-      const { data, error, count } = await supabase
-        .from(table)
-        .select('*', { count: 'exact' })
-        .limit(5);
-      
-      if (error) {
-        console.error(`Error querying ${table}:`, error);
-      } else {
-        console.log(`${table}: ${count} total records`);
-        if (data && data.length > 0) {
-          console.log(`Sample ${table} data:`, data[0]);
-        }
-      }
-    } catch (err) {
-      console.error(`Exception querying ${table}:`, err);
-    }
+async function testConnection() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+    
+    // Try to list tables
+    const result = await prisma.$queryRaw`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+      ORDER BY table_name;
+    `;
+    
+    console.log('📋 Existing tables:', result);
+    
+    await prisma.$disconnect();
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    process.exit(1);
   }
 }
 
-testDatabase().catch(console.error);
+testConnection();

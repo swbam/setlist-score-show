@@ -21,8 +21,8 @@ export const setlistResolvers: IResolvers = {
 
     setlists: async (_parent, { showId }, { prisma }) => {
       return prisma.setlist.findMany({
-        where: { show_id: showId },
-        orderBy: { order_index: 'asc' }
+        where: { showId: showId },
+        orderBy: { orderIndex: 'asc' }
       })
     },
 
@@ -31,7 +31,7 @@ export const setlistResolvers: IResolvers = {
         prisma.setlist.findMany({
           where: {
             show: {
-              artist_id: artistId,
+              artistId: artistId,
               status: 'completed'
             }
           },
@@ -46,7 +46,7 @@ export const setlistResolvers: IResolvers = {
         prisma.setlist.count({
           where: {
             show: {
-              artist_id: artistId,
+              artistId: artistId,
               status: 'completed'
             }
           }
@@ -96,7 +96,7 @@ export const setlistResolvers: IResolvers = {
       const songs = await prisma.song.findMany({
         where: {
           id: { in: songIds },
-          artist_id: show.artist_id
+          artistId: show.artistId
         }
       })
 
@@ -111,20 +111,20 @@ export const setlistResolvers: IResolvers = {
 
       return prisma.setlist.create({
         data: {
-          show_id: showId,
+          showId: showId,
           name: name || (isEncore ? 'Encore' : 'Main Set'),
-          order_index: orderIndex,
-          is_encore: isEncore || false,
-          setlist_songs: {
+          orderIndex: orderIndex,
+          isEncore: isEncore || false,
+          setlistSongs: {
             create: songIds.map((songId, index) => ({
-              song_id: songId,
+              songId: songId,
               position: index + 1,
-              vote_count: 0
+              voteCount: 0
             }))
           }
         },
         include: {
-          setlist_songs: {
+          setlistSongs: {
             include: { song: true },
             orderBy: { position: 'asc' }
           }
@@ -153,7 +153,7 @@ export const setlistResolvers: IResolvers = {
         where: { id },
         data: {
           name: input.name,
-          is_encore: input.isEncore
+          isEncore: input.isEncore
         }
       })
     },
@@ -176,22 +176,22 @@ export const setlistResolvers: IResolvers = {
         })
       }
 
-      // Delete the setlist (cascade will handle setlist_songs)
+      // Delete the setlist (cascade will handle setlistSongs)
       await prisma.setlist.delete({
         where: { id }
       })
 
       // Reorder remaining setlists
       const remainingSetlists = await prisma.setlist.findMany({
-        where: { show_id: setlist.show_id },
-        orderBy: { order_index: 'asc' }
+        where: { showId: setlist.showId },
+        orderBy: { orderIndex: 'asc' }
       })
 
       await prisma.$transaction(
         remainingSetlists.map((s, index) =>
           prisma.setlist.update({
             where: { id: s.id },
-            data: { order_index: index }
+            data: { orderIndex: index }
           })
         )
       )
@@ -210,7 +210,7 @@ export const setlistResolvers: IResolvers = {
         where: { id: setlistId },
         include: { 
           show: true,
-          setlist_songs: true 
+          setlistSongs: true 
         }
       })
 
@@ -224,7 +224,7 @@ export const setlistResolvers: IResolvers = {
       const song = await prisma.song.findFirst({
         where: {
           id: songId,
-          artist_id: setlist.show.artist_id
+          artistId: setlist.show.artistId
         }
       })
 
@@ -235,7 +235,7 @@ export const setlistResolvers: IResolvers = {
       }
 
       // Check if song already in setlist
-      const existingSong = setlist.setlist_songs.find(ss => ss.song_id === songId)
+      const existingSong = setlist.setlistSongs.find(ss => ss.songId === songId)
       if (existingSong) {
         throw new GraphQLError('Song already in setlist', {
           extensions: { code: 'CONFLICT' }
@@ -243,13 +243,13 @@ export const setlistResolvers: IResolvers = {
       }
 
       // If no position specified, add to end
-      const targetPosition = position || setlist.setlist_songs.length + 1
+      const targetPosition = position || setlist.setlistSongs.length + 1
 
       // Shift positions if inserting in middle
-      if (targetPosition <= setlist.setlist_songs.length) {
+      if (targetPosition <= setlist.setlistSongs.length) {
         await prisma.setlistSong.updateMany({
           where: {
-            setlist_id: setlistId,
+            setlistId: setlistId,
             position: { gte: targetPosition }
           },
           data: {
@@ -260,10 +260,10 @@ export const setlistResolvers: IResolvers = {
 
       return prisma.setlistSong.create({
         data: {
-          setlist_id: setlistId,
-          song_id: songId,
+          setlistId: setlistId,
+          songId: songId,
           position: targetPosition,
-          vote_count: 0
+          voteCount: 0
         },
         include: {
           song: true
@@ -280,8 +280,8 @@ export const setlistResolvers: IResolvers = {
 
       const setlistSong = await prisma.setlistSong.findFirst({
         where: {
-          setlist_id: setlistId,
-          song_id: songId
+          setlistId: setlistId,
+          songId: songId
         }
       })
 
@@ -299,7 +299,7 @@ export const setlistResolvers: IResolvers = {
       // Reorder remaining songs
       await prisma.setlistSong.updateMany({
         where: {
-          setlist_id: setlistId,
+          setlistId: setlistId,
           position: { gt: setlistSong.position }
         },
         data: {
@@ -319,7 +319,7 @@ export const setlistResolvers: IResolvers = {
 
       const setlist = await prisma.setlist.findUnique({
         where: { id: setlistId },
-        include: { setlist_songs: true }
+        include: { setlistSongs: true }
       })
 
       if (!setlist) {
@@ -329,7 +329,7 @@ export const setlistResolvers: IResolvers = {
       }
 
       // Verify all songs belong to setlist
-      const setlistSongIds = setlist.setlist_songs.map(ss => ss.song_id)
+      const setlistSongIds = setlist.setlistSongs.map(ss => ss.songId)
       const providedSongIds = songPositions.map(sp => sp.songId)
       
       if (!providedSongIds.every(id => setlistSongIds.includes(id))) {
@@ -343,8 +343,8 @@ export const setlistResolvers: IResolvers = {
         songPositions.map(({ songId, position }) =>
           prisma.setlistSong.updateMany({
             where: {
-              setlist_id: setlistId,
-              song_id: songId
+              setlistId: setlistId,
+              songId: songId
             },
             data: { position }
           })
@@ -354,7 +354,7 @@ export const setlistResolvers: IResolvers = {
       return prisma.setlist.findUnique({
         where: { id: setlistId },
         include: {
-          setlist_songs: {
+          setlistSongs: {
             include: { song: true },
             orderBy: { position: 'asc' }
           }
@@ -365,34 +365,34 @@ export const setlistResolvers: IResolvers = {
 
   Setlist: {
     show: async (parent, _args, { loaders }) => {
-      return loaders.show.load(parent.show_id)
+      return loaders.show.load(parent.showId)
     },
 
     songs: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.findMany({
-        where: { setlist_id: parent.id },
+        where: { setlistId: parent.id },
         orderBy: { position: 'asc' }
       })
     },
 
     totalSongs: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.count({
-        where: { setlist_id: parent.id }
+        where: { setlistId: parent.id }
       })
     },
 
     totalVotes: async (parent, _args, { prisma }) => {
       const result = await prisma.setlistSong.aggregate({
-        where: { setlist_id: parent.id },
-        _sum: { vote_count: true }
+        where: { setlistId: parent.id },
+        _sum: { voteCount: true }
       })
-      return result._sum.vote_count || 0
+      return result._sum.voteCount || 0
     },
 
     topVotedSongs: async (parent, { limit = 5 }, { prisma }) => {
       return prisma.setlistSong.findMany({
-        where: { setlist_id: parent.id },
-        orderBy: { vote_count: 'desc' },
+        where: { setlistId: parent.id },
+        orderBy: { voteCount: 'desc' },
         take: limit,
         include: { song: true }
       })
@@ -401,11 +401,11 @@ export const setlistResolvers: IResolvers = {
 
   SetlistSong: {
     setlist: async (parent, _args, { loaders }) => {
-      return loaders.setlist.load(parent.setlist_id)
+      return loaders.setlist.load(parent.setlistId)
     },
 
     song: async (parent, _args, { loaders }) => {
-      return loaders.song.load(parent.song_id)
+      return loaders.song.load(parent.songId)
     },
 
     hasVoted: async (parent, _args, { prisma, user }) => {
@@ -413,8 +413,21 @@ export const setlistResolvers: IResolvers = {
 
       const vote = await prisma.vote.findFirst({
         where: {
-          user_id: user.id,
-          setlist_song_id: parent.id
+          userId: user.id,
+          setlistSongId: parent.id
+        }
+      })
+
+      return !!vote
+    },
+
+    hasUserVoted: async (parent, _args, { prisma, user }) => {
+      if (!user) return false
+
+      const vote = await prisma.vote.findFirst({
+        where: {
+          userId: user.id,
+          setlistSongId: parent.id
         }
       })
 
@@ -424,22 +437,22 @@ export const setlistResolvers: IResolvers = {
     votePercentage: async (parent, _args, { prisma }) => {
       const totalVotes = await prisma.setlistSong.aggregate({
         where: {
-          setlist_id: parent.setlist_id
+          setlistId: parent.setlistId
         },
-        _sum: { vote_count: true }
+        _sum: { voteCount: true }
       })
 
-      const total = totalVotes._sum.vote_count || 0
+      const total = totalVotes._sum.voteCount || 0
       if (total === 0) return 0
 
-      return (parent.vote_count / total) * 100
+      return (parent.voteCount / total) * 100
     },
 
     rank: async (parent, _args, { prisma }) => {
       const higherRanked = await prisma.setlistSong.count({
         where: {
-          setlist_id: parent.setlist_id,
-          vote_count: { gt: parent.vote_count }
+          setlistId: parent.setlistId,
+          voteCount: { gt: parent.voteCount }
         }
       })
 

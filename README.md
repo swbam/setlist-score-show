@@ -33,7 +33,7 @@ This is a Turborepo monorepo with the following structure:
 ### Prerequisites
 
 - Node.js 20+
-- pnpm 8+
+- pnpm 9+
 - Docker & Docker Compose
 - PostgreSQL 15
 - Redis
@@ -73,7 +73,7 @@ This will start:
 - `pnpm dev` - Start all apps in development mode
 - `pnpm build` - Build all apps and packages
 - `pnpm lint` - Lint all code
-- `pnpm typecheck` - Type check all TypeScript
+- `pnpm type-check` - Type check all TypeScript
 - `pnpm test` - Run all tests
 
 ### Database
@@ -81,6 +81,7 @@ This will start:
 - `pnpm db:migrate:create` - Create a new migration
 - `pnpm db:push` - Push schema changes (dev only)
 - `pnpm db:studio` - Open Prisma Studio
+- `pnpm db:seed` - Seed database with initial data
 
 ### Deployment
 - `pnpm deploy:web` - Deploy web app to Vercel
@@ -136,3 +137,7 @@ GitHub Actions workflow:
 ## 📝 License
 
 MIT
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.

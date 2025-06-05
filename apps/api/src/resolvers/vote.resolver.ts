@@ -14,16 +14,16 @@ export const voteResolvers: IResolvers = {
       const [dailyVotes, showVotes] = await Promise.all([
         prisma.vote.count({
           where: {
-            user_id: user.id,
-            created_at: {
+            userId: user.id,
+            createdAt: {
               gte: new Date(new Date().setHours(0, 0, 0, 0)),
             },
           },
         }),
         prisma.vote.count({
           where: {
-            user_id: user.id,
-            show_id: showId,
+            userId: user.id,
+            showId: showId,
           },
         }),
       ])
@@ -46,13 +46,13 @@ export const voteResolvers: IResolvers = {
       }
 
       const where = {
-        user_id: user.id,
-        ...(showId && { show_id: showId }),
+        userId: user.id,
+        ...(showId && { showId: showId }),
       }
 
       return prisma.vote.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
       })
@@ -66,40 +66,40 @@ export const voteResolvers: IResolvers = {
       }
 
       const [totalVotes, todayVotes, favoriteArtists, recentVotes] = await Promise.all([
-        prisma.vote.count({ where: { user_id: user.id } }),
+        prisma.vote.count({ where: { userId: user.id } }),
         prisma.vote.count({
           where: {
-            user_id: user.id,
-            created_at: {
+            userId: user.id,
+            createdAt: {
               gte: new Date(new Date().setHours(0, 0, 0, 0)),
             },
           },
         }),
         prisma.$queryRaw`
-          SELECT a.*, COUNT(v.id) as vote_count, MAX(v.created_at) as last_voted_at
+          SELECT a.*, COUNT(v.id) as "voteCount", MAX(v."createdAt") as "lastVotedAt"
           FROM votes v
-          JOIN setlist_songs ss ON v.setlist_song_id = ss.id
-          JOIN setlists sl ON ss.setlist_id = sl.id
-          JOIN shows s ON sl.show_id = s.id
-          JOIN artists a ON s.artist_id = a.id
-          WHERE v.user_id = ${user.id}
+          JOIN "setlistSongs" ss ON v."setlistSongId" = ss.id
+          JOIN setlists sl ON ss."setlistId" = sl.id
+          JOIN shows s ON sl."showId" = s.id
+          JOIN artists a ON s."artistId" = a.id
+          WHERE v."userId" = ${user.id}
           GROUP BY a.id
-          ORDER BY vote_count DESC
+          ORDER BY "voteCount" DESC
           LIMIT 5
         `,
         prisma.vote.findMany({
-          where: { user_id: user.id },
-          orderBy: { created_at: 'desc' },
+          where: { userId: user.id },
+          orderBy: { createdAt: 'desc' },
           take: 10,
         }),
       ])
 
       // Calculate voting streak
       const streakQuery = await prisma.$queryRaw`
-        SELECT COUNT(DISTINCT DATE(created_at)) as streak
+        SELECT COUNT(DISTINCT DATE("createdAt")) as streak
         FROM votes
-        WHERE user_id = ${user.id}
-        AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE "userId" = ${user.id}
+        AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'
       `
       const votingStreak = streakQuery[0]?.streak || 0
 
@@ -108,8 +108,8 @@ export const voteResolvers: IResolvers = {
         todayVotes,
         favoriteArtists: favoriteArtists.map((artist: any) => ({
           artist,
-          voteCount: artist.vote_count,
-          lastVotedAt: artist.last_voted_at,
+          voteCount: artist.voteCount,
+          lastVotedAt: artist.lastVotedAt,
         })),
         recentVotes,
         votingStreak,
@@ -124,14 +124,30 @@ export const voteResolvers: IResolvers = {
 
       const votes = await prisma.vote.findMany({
         where: {
-          user_id: user.id,
-          setlist_song_id: { in: setlistSongIds },
+          userId: user.id,
+          setlistSongId: { in: setlistSongIds },
         },
-        select: { setlist_song_id: true },
+        select: { setlistSongId: true },
       })
 
-      const votedIds = new Set(votes.map((v) => v.setlist_song_id))
+      const votedIds = new Set(votes.map((v) => v.setlistSongId))
       return setlistSongIds.map((id) => votedIds.has(id))
+    },
+
+    userVotes: async (_parent, { showId }, { prisma, user }) => {
+      if (!user) {
+        return []
+      }
+
+      const votes = await prisma.vote.findMany({
+        where: {
+          userId: user.id,
+          showId: showId,
+        },
+        select: { setlistSongId: true },
+      })
+
+      return votes.map(vote => ({ setlistSongId: vote.setlistSongId }))
     },
   },
 
@@ -174,6 +190,44 @@ export const voteResolvers: IResolvers = {
       }
     },
 
+    castVote: async (_parent, { showId, setlistSongId }, { prisma, redis, supabase, user }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      const votingService = new VotingService(prisma, redis, supabase)
+      
+      try {
+        const result = await votingService.castVote({
+          userId: user.id,
+          showId: showId,
+          songId: '', // We don't have songId in this simplified interface
+          setlistSongId: setlistSongId,
+        })
+        
+        return result
+      } catch (error: any) {
+        if (error.code === 'TOO_MANY_REQUESTS') {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'TOO_MANY_REQUESTS' },
+          })
+        }
+        if (error.code === 'FORBIDDEN') {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'FORBIDDEN' },
+          })
+        }
+        if (error.code === 'CONFLICT') {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'CONFLICT' },
+          })
+        }
+        throw error
+      }
+    },
+
     unvote: async (_parent, { voteId }, { prisma, redis, user }) => {
       if (!user) {
         throw new GraphQLError('Authentication required', {
@@ -184,7 +238,7 @@ export const voteResolvers: IResolvers = {
       const vote = await prisma.vote.findUnique({
         where: { id: voteId },
         include: {
-          setlist_song: true,
+          setlistSong: true,
         },
       })
 
@@ -194,7 +248,7 @@ export const voteResolvers: IResolvers = {
         })
       }
 
-      if (vote.user_id !== user.id) {
+      if (vote.userId !== user.id) {
         throw new GraphQLError('Unauthorized', {
           extensions: { code: 'FORBIDDEN' },
         })
@@ -202,7 +256,7 @@ export const voteResolvers: IResolvers = {
 
       // Check if vote is within 5 minutes
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-      if (vote.created_at < fiveMinutesAgo) {
+      if (vote.createdAt < fiveMinutesAgo) {
         throw new GraphQLError('Cannot unvote after 5 minutes', {
           extensions: { code: 'FORBIDDEN' },
         })
@@ -213,9 +267,9 @@ export const voteResolvers: IResolvers = {
         await tx.vote.delete({ where: { id: voteId } })
         
         const updatedSetlistSong = await tx.setlistSong.update({
-          where: { id: vote.setlist_song_id },
+          where: { id: vote.setlistSongId },
           data: {
-            vote_count: {
+            voteCount: {
               decrement: 1,
             },
           },
@@ -225,12 +279,12 @@ export const voteResolvers: IResolvers = {
       })
 
       // Clear cache
-      await redis.del(`show:${vote.show_id}:songs`)
+      await redis.del(`show:${vote.showId}:songs`)
 
       return {
         success: true,
         voteId: null,
-        newVoteCount: result.vote_count,
+        newVoteCount: result.voteCount,
         dailyVotesRemaining: 0, // TODO: Calculate actual remaining
         showVotesRemaining: 0, // TODO: Calculate actual remaining
         message: 'Vote removed successfully',
@@ -277,19 +331,19 @@ export const voteResolvers: IResolvers = {
   Vote: {
     user: async (parent, _args, { prisma }) => {
       return prisma.user.findUnique({
-        where: { id: parent.user_id },
+        where: { id: parent.userId },
       })
     },
 
     setlistSong: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.findUnique({
-        where: { id: parent.setlist_song_id },
+        where: { id: parent.setlistSongId },
       })
     },
 
     show: async (parent, _args, { prisma }) => {
       return prisma.show.findUnique({
-        where: { id: parent.show_id },
+        where: { id: parent.showId },
       })
     },
   },
@@ -297,13 +351,13 @@ export const voteResolvers: IResolvers = {
   VoteAnalytics: {
     user: async (parent, _args, { prisma }) => {
       return prisma.user.findUnique({
-        where: { id: parent.user_id },
+        where: { id: parent.userId },
       })
     },
 
     show: async (parent, _args, { prisma }) => {
       return prisma.show.findUnique({
-        where: { id: parent.show_id },
+        where: { id: parent.showId },
       })
     },
   },

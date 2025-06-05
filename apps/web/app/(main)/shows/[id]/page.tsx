@@ -1,133 +1,217 @@
-// app/(main)/shows/[id]/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useGraphQLClient } from '@/lib/graphql-client'
+import { GET_SHOW_WITH_SETLIST, GET_USER_VOTES, CAST_VOTE } from '@/lib/graphql/queries'
 import { useRealtimeVotes } from '@/hooks/useRealtimeVotes'
-import { VoteButton } from '@/components/voting/VoteButton'
-import { motion, AnimatePresence } from 'framer-motion'
+import { VotingSection } from '@/components/voting/VotingSection'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/useAuth'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Calendar, MapPin, Users, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
+
+interface SetlistSong {
+  id: string
+  position: number
+  vote_count: number
+  song: {
+    id: string
+    title: string
+    name?: string // Some APIs use name instead of title
+    album: string
+    duration_ms: number
+    spotify_url?: string
+  }
+}
 
 export default function ShowPage({ params }: { params: { id: string } }) {
   const queryClient = useQueryClient()
-  const { latestUpdate } = useRealtimeVotes(params.id)
-  const [votedSongs, setVotedSongs] = useState<Set<string>>(new Set())
+  const client = useGraphQLClient()
+  const { user } = useAuth()
+  const { 
+    voteCounts, 
+    isConnected, 
+    optimisticVoteUpdate, 
+    revertVoteUpdate,
+    refreshVoteCounts
+  } = useRealtimeVotes(params.id)
+  
+  const [userVotes, setUserVotes] = useState<Set<string>>(new Set())
+  const [voteLimits, setVoteLimits] = useState({
+    showVotesRemaining: 10,
+    dailyVotesRemaining: 50
+  })
 
   // Fetch show data with songs
-  const { data: show, isLoading } = useQuery({
+  const { data: showData, isLoading } = useQuery({
     queryKey: ['show', params.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('shows')
-        .select(`
-          *,
-          artist:artists(*),
-          venue:venues(*),
-          setlists(
-            *,
-            setlist_songs(
-              *,
-              song:songs(*)
-            )
-          )
-        `)
-        .eq('id', params.id)
-        .single()
-      
-      if (error) throw error
-      return data
+      return client.request(GET_SHOW_WITH_SETLIST, { id: params.id })
     }
   })
 
-  // Update local state when realtime update comes in
+  const show = showData?.show
+
+  // Fetch user's votes for this show
+  const { data: userVotesData } = useQuery({
+    queryKey: ['userVotes', params.id, user?.id],
+    queryFn: async () => {
+      if (!user?.id) return []
+      const data = await client.request(GET_USER_VOTES, { showId: params.id })
+      return data.userVotes?.map((v: any) => v.setlist_song_id) || []
+    },
+    enabled: !!user?.id
+  })
+
+  // Update user votes state
   useEffect(() => {
-    if (latestUpdate) {
-      // Update the query cache with new vote count
-      queryClient.setQueryData(['show', params.id], (oldData: any) => {
-        if (!oldData) return oldData
-        
-        return {
-          ...oldData,
-          setlists: oldData.setlists.map((setlist: any) => ({
-            ...setlist,
-            setlist_songs: setlist.setlist_songs.map((ss: any) => 
-              ss.id === latestUpdate.setlistSongId
-                ? { ...ss, vote_count: latestUpdate.newVoteCount }
-                : ss
-            )
-          }))
-        }
-      })
-      
-      // Show a toast or animation for the update
-      showVoteAnimation(latestUpdate)
+    if (userVotesData) {
+      setUserVotes(new Set(userVotesData))
+      setVoteLimits(prev => ({
+        ...prev,
+        showVotesRemaining: Math.max(0, 10 - userVotesData.length)
+      }))
     }
-  }, [latestUpdate, queryClient, params.id])
+  }, [userVotesData])
+
+  // Set up vote mutation
+  const voteMutation = useMutation({
+    mutationFn: async ({ showId, setlistSongId }: { showId: string; setlistSongId: string }) => {
+      return client.request(CAST_VOTE, { showId, setlistSongId })
+    },
+    onSuccess: (data) => {
+      if (data.castVote?.votesRemaining) {
+        setVoteLimits({
+          showVotesRemaining: data.castVote.votesRemaining.show,
+          dailyVotesRemaining: data.castVote.votesRemaining.daily
+        })
+      }
+    }
+  })
+
+  // Handle voting
+  const handleVote = async (songId: string, setlistSongId: string) => {
+    if (!user) {
+      // Show login prompt
+      alert('Please sign in to vote')
+      return
+    }
+
+    // Optimistic update
+    optimisticVoteUpdate(setlistSongId)
+    setUserVotes(prev => new Set([...prev, setlistSongId]))
+    setVoteLimits(prev => ({
+      ...prev,
+      showVotesRemaining: Math.max(0, prev.showVotesRemaining - 1)
+    }))
+
+    try {
+      await voteMutation.mutateAsync({
+        showId: params.id,
+        setlistSongId
+      })
+
+      // Refresh data
+      await queryClient.invalidateQueries({ queryKey: ['userVotes', params.id] })
+      await refreshVoteCounts()
+    } catch (error) {
+      // Revert on error
+      console.error('Vote error:', error)
+      revertVoteUpdate(setlistSongId)
+      setUserVotes(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(setlistSongId)
+        return newSet
+      })
+      setVoteLimits(prev => ({
+        ...prev,
+        showVotesRemaining: prev.showVotesRemaining + 1
+      }))
+    }
+  }
 
   if (isLoading) return <ShowPageSkeleton />
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Show header with gradient */}
-      <div className="mb-8 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 p-8 text-white">
-        <h1 className="text-4xl font-bold mb-2">{show.artist.name}</h1>
-        <p className="text-xl opacity-90">{show.venue.name}</p>
-        <p className="opacity-80">
-          {new Date(show.date).toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}
-        </p>
+  if (!show) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <h1 className="text-2xl font-bold">Show not found</h1>
       </div>
+    )
+  }
 
-      {/* Voting section */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-semibold">Vote for Songs</h2>
-          <div className="text-sm text-gray-500">
-            {votedSongs.size}/10 votes used
+  // Transform data for VotingSection
+  const songs: SetlistSong[] = show.setlists?.[0]?.setlist_songs?.map((ss: any) => ({
+    id: ss.id,
+    position: ss.position,
+    votes: voteCounts[ss.id] || ss.vote_count || 0,
+    hasVoted: userVotes.has(ss.id),
+    canVote: voteLimits.showVotesRemaining > 0 && !userVotes.has(ss.id),
+    song: {
+      id: ss.song.id,
+      name: ss.song.title || ss.song.name,
+      album: ss.song.album || 'Unknown Album',
+      duration_ms: ss.song.duration_ms || 180000, // Default 3 minutes
+      spotify_url: ss.song.spotify_url
+    }
+  })) || []
+
+  return (
+    <div className="min-h-screen bg-gray-950">
+      {/* Show header with gradient */}
+      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 p-8 text-white">
+        <div className="container mx-auto">
+          <h1 className="text-4xl font-bold mb-2">{show.artist.name}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-white/90">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              <span>{show.venue.name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              <span>
+                {new Date(show.date).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </span>
+            </div>
+            {show.ticketmaster_url && (
+              <Link 
+                href={show.ticketmaster_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-white/80 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Get Tickets</span>
+              </Link>
+            )}
           </div>
         </div>
+      </div>
 
-        <AnimatePresence>
-          {show.setlists[0]?.setlist_songs
-            .sort((a, b) => b.vote_count - a.vote_count)
-            .map((setlistSong, index) => (
-              <motion.div
-                key={setlistSong.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="bg-gray-900 rounded-lg p-4 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl font-bold text-gray-600">
-                    #{index + 1}
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-lg">
-                      {setlistSong.song.title}
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                      {setlistSong.song.album}
-                    </p>
-                  </div>
-                </div>
-                
-                <VoteButton
-                  songId={setlistSong.song.id}
-                  showId={params.id}
-                  currentVotes={setlistSong.vote_count}
-                  hasVoted={votedSongs.has(setlistSong.id)}
-                  position={index + 1}
-                />
-              </motion.div>
-            ))}
-        </AnimatePresence>
+      {/* Main content */}
+      <div className="container mx-auto px-4 py-8">
+        {/* Connection status */}
+        {!isConnected && (
+          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-800/50 rounded-lg text-yellow-200">
+            Connecting to live updates...
+          </div>
+        )}
+
+        {/* Voting section */}
+        <VotingSection
+          songs={songs}
+          onVote={handleVote}
+          isLoading={isLoading}
+          showId={params.id}
+          voteLimits={voteLimits}
+        />
       </div>
 
       {/* Live activity indicator */}
@@ -136,7 +220,28 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   )
 }
 
-// Component to show live voting activity
+// Loading skeleton
+function ShowPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-950">
+      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 p-8">
+        <div className="container mx-auto">
+          <Skeleton className="h-10 w-64 mb-2" />
+          <Skeleton className="h-6 w-48" />
+        </div>
+      </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Live activity indicator component
 function LiveActivityIndicator({ showId }: { showId: string }) {
   const [activeUsers, setActiveUsers] = useState(0)
   

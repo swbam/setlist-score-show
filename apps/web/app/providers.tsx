@@ -7,6 +7,7 @@ import { ThemeProvider } from 'next-themes'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import { Toaster } from 'sonner'
+import { AuthProvider } from '@/hooks/useAuth'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,7 +24,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   )
 
-  const [supabase] = useState(() => createClientComponentClient())
+  const [supabase] = useState(() => createClientComponentClient({
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  }))
 
   return (
     <ThemeProvider
@@ -33,20 +37,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <SessionContextProvider supabaseClient={supabase}>
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: 'hsl(var(--background))',
-                color: 'hsl(var(--foreground))',
-                border: '1px solid hsl(var(--border))',
-              },
-            }}
-          />
-          <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: 'hsl(var(--background))',
+                  color: 'hsl(var(--foreground))',
+                  border: '1px solid hsl(var(--border))',
+                },
+              }}
+            />
+            <ReactQueryDevtools initialIsOpen={false} />
+          </QueryClientProvider>
+        </AuthProvider>
       </SessionContextProvider>
     </ThemeProvider>
   )

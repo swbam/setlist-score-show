@@ -1,6 +1,6 @@
 import { IResolvers } from '@graphql-tools/utils'
 import { GraphQLError } from 'graphql'
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '@setlist/database'
 
 export const artistResolvers: IResolvers = {
   Query: {
@@ -26,13 +26,143 @@ export const artistResolvers: IResolvers = {
       return artist
     },
 
-    artists: async (_parent, { filter, orderBy, limit = 20, offset = 0 }, { prisma }) => {
+    artistBySlug: async (_parent, { slug }, { prisma, spotify, ticketmaster, setlistfm }) => {
+      // First try to find artist in database
+      let artist = await prisma.artist.findUnique({
+        where: { slug },
+        include: {
+          shows: {
+            include: {
+              venue: true,
+            },
+            orderBy: { date: 'desc' },
+          },
+          songs: {
+            orderBy: { popularity: 'desc' },
+            take: 50 // Load top 50 songs for the artist
+          }
+        },
+      })
+
+      // If artist not found and it looks like a slug we might have seen in search,
+      // try to import from Spotify
+      if (!artist && slug) {
+        try {
+          console.log(`🔍 Artist "${slug}" not found in DB, searching Spotify...`)
+          
+          // Convert slug back to search query
+          const searchQuery = slug.replace(/-/g, ' ')
+          const spotifyResults = await spotify.searchArtists(searchQuery, { limit: 1 })
+          
+          if (spotifyResults.body.artists.items.length > 0) {
+            const spotifyArtist = spotifyResults.body.artists.items[0]
+            const artistSlug = spotifyArtist.name.toLowerCase()
+              .replace(/[^a-z0-9\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-')
+              .trim()
+
+            // Only import if the slug matches (exact match)
+            if (artistSlug === slug) {
+              // Import artist and their song catalog
+              artist = await prisma.artist.create({
+                data: {
+                  spotifyId: spotifyArtist.id,
+                  name: spotifyArtist.name,
+                  slug: artistSlug,
+                  imageUrl: spotifyArtist.images[0]?.url || null,
+                  genres: spotifyArtist.genres,
+                  popularity: spotifyArtist.popularity || 0,
+                  followers: spotifyArtist.followers?.total || 0,
+                  lastSyncedAt: new Date(),
+                }
+              })
+
+              console.log(`✅ Imported artist: ${spotifyArtist.name}`)
+
+              // Import song catalog from Spotify
+              await importArtistSongCatalog(prisma, spotify, artist.id, spotifyArtist.id)
+
+              // Try to get other external IDs and sync shows
+              if (!artist.ticketmasterId && ticketmaster) {
+                try {
+                  const tmArtists = await ticketmaster.searchArtists(spotifyArtist.name)
+                  if (tmArtists.length > 0) {
+                    const bestMatch = tmArtists.find((tm: any) => 
+                      tm.name.toLowerCase() === spotifyArtist.name.toLowerCase()
+                    ) || tmArtists[0]
+                    
+                    await prisma.artist.update({
+                      where: { id: artist.id },
+                      data: { ticketmasterId: bestMatch.id }
+                    })
+                    
+                    // Sync shows from Ticketmaster
+                    await syncTicketmasterShows(artist.id, bestMatch.id, { prisma, ticketmaster })
+                  }
+                } catch (error) {
+                  console.error('Error getting Ticketmaster data:', error)
+                }
+              }
+              
+              if (!artist.setlistfmMbid && setlistfm) {
+                try {
+                  const sfResults = await setlistfm.searchArtists(spotifyArtist.name)
+                  if (sfResults.artists.length > 0) {
+                    const bestMatch = sfResults.artists.find((sf: any) => 
+                      sf.name.toLowerCase() === spotifyArtist.name.toLowerCase()
+                    ) || sfResults.artists[0]
+                    
+                    await prisma.artist.update({
+                      where: { id: artist.id },
+                      data: { setlistfmMbid: bestMatch.mbid }
+                    })
+                  }
+                } catch (error) {
+                  console.error('Error getting Setlist.fm data:', error)
+                }
+              }
+
+              // Refetch with songs included
+              artist = await prisma.artist.findUnique({
+                where: { id: artist.id },
+                include: {
+                  shows: {
+                    include: {
+                      venue: true,
+                    },
+                    orderBy: { date: 'desc' },
+                  },
+                  songs: {
+                    orderBy: { popularity: 'desc' },
+                    take: 50
+                  }
+                },
+              })
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error importing artist for slug "${slug}":`, error)
+        }
+      }
+
+      if (!artist) {
+        throw new GraphQLError('Artist not found', {
+          extensions: { code: 'NOT_FOUND' },
+        })
+      }
+
+      return artist
+    },
+
+    artists: async (_parent, { filter, orderBy, limit = 20, offset = 0, search }, { prisma }) => {
       const where: Prisma.ArtistWhereInput = {}
 
-      if (filter?.search) {
+      if (filter?.search || search) {
+        const searchTerm = filter?.search || search
         where.OR = [
-          { name: { contains: filter.search, mode: 'insensitive' } },
-          { genres: { hasSome: [filter.search] } },
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { genres: { hasSome: [searchTerm] } },
         ]
       }
 
@@ -60,34 +190,17 @@ export const artistResolvers: IResolvers = {
         POPULARITY_DESC: { popularity: 'desc' },
         FOLLOWERS_ASC: { followers: 'asc' },
         FOLLOWERS_DESC: { followers: 'desc' },
-        RECENTLY_SYNCED: { last_synced_at: 'desc' },
+        RECENTLY_SYNCED: { lastSyncedAt: 'desc' },
       }
 
-      const [artists, totalCount] = await Promise.all([
-        prisma.artist.findMany({
-          where,
-          orderBy: orderByMap[orderBy || 'POPULARITY_DESC'],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.artist.count({ where }),
-      ])
+      const artists = await prisma.artist.findMany({
+        where,
+        orderBy: orderByMap[orderBy || 'POPULARITY_DESC'],
+        take: limit,
+        skip: offset,
+      })
 
-      const edges = artists.map((artist, index) => ({
-        node: artist,
-        cursor: Buffer.from(`${offset + index}`).toString('base64'),
-      }))
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage: offset + artists.length < totalCount,
-          hasPreviousPage: offset > 0,
-          startCursor: edges[0]?.cursor || null,
-          endCursor: edges[edges.length - 1]?.cursor || null,
-        },
-        totalCount,
-      }
+      return artists
     },
 
     searchArtists: async (_parent, { query, limit = 10 }, { prisma }) => {
@@ -111,11 +224,11 @@ export const artistResolvers: IResolvers = {
       const trendingArtists = await prisma.$queryRaw`
         SELECT a.*, 
                COUNT(DISTINCT s.id) as recent_shows,
-               COALESCE(SUM(ss.vote_count), 0) as total_votes
+               COALESCE(SUM(ss."voteCount"), 0) as total_votes
         FROM artists a
-        JOIN shows s ON s.artist_id = a.id
-        LEFT JOIN setlists sl ON sl.show_id = s.id
-        LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
+        JOIN shows s ON s."artistId" = a.id
+        LEFT JOIN setlists sl ON sl."showId" = s.id
+        LEFT JOIN "setlistSongs" ss ON ss."setlistId" = sl.id
         WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY a.id
         ORDER BY total_votes DESC, recent_shows DESC
@@ -146,19 +259,19 @@ export const artistResolvers: IResolvers = {
 
       try {
         // Sync from Spotify if we have a Spotify ID
-        if (artist.spotify_id && services?.spotify) {
-          await services.spotify.syncArtist(artist.spotify_id)
+        if (artist.spotifyId && services?.spotify) {
+          await services.spotify.syncArtist(artist.spotifyId)
         }
 
         // Sync shows from Ticketmaster
-        if (artist.ticketmaster_id && services?.ticketmaster) {
-          await services.ticketmaster.syncArtistShows(artist.ticketmaster_id)
+        if (artist.ticketmasterId && services?.ticketmaster) {
+          await services.ticketmaster.syncArtistShows(artist.ticketmasterId)
         }
 
         // Update last synced timestamp
         await prisma.artist.update({
           where: { id: artistId },
-          data: { last_synced_at: new Date() },
+          data: { lastSyncedAt: new Date() },
         })
 
         return {
@@ -192,9 +305,9 @@ export const artistResolvers: IResolvers = {
       const existingArtist = await prisma.artist.findFirst({
         where: {
           OR: [
-            spotifyId ? { spotify_id: spotifyId } : {},
-            ticketmasterId ? { ticketmaster_id: ticketmasterId } : {},
-            setlistfmMbid ? { setlistfm_mbid: setlistfmMbid } : {},
+            spotifyId ? { spotifyId: spotifyId } : {},
+            ticketmasterId ? { ticketmasterId: ticketmasterId } : {},
+            setlistfmMbid ? { setlistfmMbid: setlistfmMbid } : {},
           ].filter(obj => Object.keys(obj).length > 0),
         },
       })
@@ -219,7 +332,7 @@ export const artistResolvers: IResolvers = {
             genres: spotifyData.genres || [],
             popularity: spotifyData.popularity || 0,
             followers: spotifyData.followers?.total || 0,
-            image_url: spotifyData.images?.[0]?.url,
+            imageUrl: spotifyData.images?.[0]?.url,
           }
         }
       }
@@ -229,16 +342,16 @@ export const artistResolvers: IResolvers = {
       
       return prisma.artist.create({
         data: {
-          spotify_id: spotifyId,
-          ticketmaster_id: ticketmasterId,
-          setlistfm_mbid: setlistfmMbid,
+          spotifyId: spotifyId,
+          ticketmasterId: ticketmasterId,
+          setlistfmMbid: setlistfmMbid,
           name: artistData.name,
           slug,
           genres: artistData.genres,
           popularity: artistData.popularity,
           followers: artistData.followers,
-          image_url: artistData.image_url,
-          last_synced_at: new Date(),
+          imageUrl: artistData.imageUrl,
+          lastSyncedAt: new Date(),
         },
       })
     },
@@ -247,7 +360,7 @@ export const artistResolvers: IResolvers = {
   Artist: {
     shows: async (parent, { status, startDate, endDate, limit = 20, offset = 0 }, { prisma }) => {
       const where: Prisma.ShowWhereInput = {
-        artist_id: parent.id,
+        artistId: parent.id,
       }
 
       if (status) {
@@ -289,16 +402,16 @@ export const artistResolvers: IResolvers = {
 
     songs: async (parent, { limit = 50, offset = 0, orderBy }, { prisma }) => {
       const orderByMap: Record<string, Prisma.SongOrderByWithRelationInput> = {
-        NAME_ASC: { name: 'asc' },
-        NAME_DESC: { name: 'desc' },
+        NAME_ASC: { title: 'asc' },
+        NAME_DESC: { title: 'desc' },
         POPULARITY_ASC: { popularity: 'asc' },
         POPULARITY_DESC: { popularity: 'desc' },
-        DURATION_ASC: { duration_ms: 'asc' },
-        DURATION_DESC: { duration_ms: 'desc' },
+        DURATION_ASC: { durationMs: 'asc' },
+        DURATION_DESC: { durationMs: 'desc' },
       }
 
       const where: Prisma.SongWhereInput = {
-        artist_id: parent.id,
+        artistId: parent.id,
       }
 
       const [songs, totalCount] = await Promise.all([
@@ -331,7 +444,7 @@ export const artistResolvers: IResolvers = {
     upcomingShowsCount: async (parent, _args, { prisma }) => {
       return prisma.show.count({
         where: {
-          artist_id: parent.id,
+          artistId: parent.id,
           status: 'UPCOMING',
           date: { gte: new Date() },
         },
@@ -340,8 +453,244 @@ export const artistResolvers: IResolvers = {
 
     totalSongs: async (parent, _args, { prisma }) => {
       return prisma.song.count({
-        where: { artist_id: parent.id },
+        where: { artistId: parent.id },
       })
     },
   },
+}
+
+// Helper function to import artist's song catalog
+async function importArtistSongCatalog(prisma: any, spotify: any, artistId: string, spotifyArtistId: string) {
+  try {
+    console.log(`🎵 Importing song catalog for artist...`)
+    
+    // Get artist's albums
+    const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtistId, {
+      include_groups: 'album,single',
+      limit: 20
+    })
+
+    let importedCount = 0
+
+    for (const album of albumsResponse.body.items) {
+      try {
+        // Get tracks for this album
+        const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+
+        for (const track of tracksResponse.body.items) {
+          try {
+            // Check if song already exists
+            const existingSong = await prisma.song.findFirst({
+              where: {
+                artistId: artistId,
+                title: track.name
+              }
+            })
+
+            if (!existingSong) {
+              await prisma.song.create({
+                data: {
+                  artistId: artistId,
+                  spotifyId: track.id,
+                  title: track.name,
+                  album: album.name,
+                  albumImageUrl: album.images[0]?.url || null,
+                  durationMs: track.duration_ms,
+                  popularity: 0, // We'll update this later
+                  previewUrl: track.preview_url,
+                  spotifyUrl: track.external_urls?.spotify,
+                }
+              })
+              importedCount++
+            }
+          } catch (songError) {
+            console.error(`❌ Error importing song "${track.name}":`, songError)
+          }
+        }
+      } catch (albumError) {
+        console.error(`❌ Error importing album "${album.name}":`, albumError)
+      }
+    }
+
+    console.log(`✅ Imported ${importedCount} songs for artist`)
+  } catch (error) {
+    console.error(`❌ Error importing song catalog:`, error)
+  }
+}
+
+// Helper function to sync shows from Ticketmaster
+async function syncTicketmasterShows(artistId: string, ticketmasterId: string, { prisma, ticketmaster }: any) {
+  try {
+    console.log(`🎫 Syncing shows from Ticketmaster for artist ${artistId}`)
+    
+    const startDate = new Date()
+    const endDate = new Date()
+    endDate.setDate(endDate.getDate() + 180) // Next 6 months
+    
+    const events = await ticketmaster.getArtistEvents(ticketmasterId, {
+      startDate,
+      endDate,
+      size: 50
+    })
+    
+    console.log(`Found ${events.length} upcoming shows`)
+    
+    for (const event of events) {
+      try {
+        const venue = event._embedded.venues[0]
+        
+        // Upsert venue
+        const dbVenue = await prisma.venue.upsert({
+          where: { ticketmasterId: venue.id },
+          create: {
+            ticketmasterId: venue.id,
+            name: venue.name,
+            address: venue.address?.line1,
+            city: venue.city.name,
+            state: venue.state?.name,
+            country: venue.country.name,
+            postalCode: venue.postalCode,
+            latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
+            longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null,
+            timezone: venue.timezone
+          },
+          update: {}
+        })
+        
+        // Upsert show
+        const show = await prisma.show.upsert({
+          where: { ticketmasterId: event.id },
+          create: {
+            ticketmasterId: event.id,
+            artistId: artistId,
+            venueId: dbVenue.id,
+            date: new Date(event.dates.start.localDate),
+            startTime: event.dates.start.localTime,
+            title: event.name,
+            status: 'upcoming',
+            ticketmasterUrl: event.url,
+            viewCount: 0
+          },
+          update: {
+            status: 'upcoming',
+            ticketmasterUrl: event.url
+          }
+        })
+        
+        // Create default setlist
+        const setlist = await prisma.setlist.upsert({
+          where: {
+            showId_orderIndex: {
+              showId: show.id,
+              orderIndex: 0
+            }
+          },
+          create: {
+            showId: show.id,
+            name: 'Main Set',
+            orderIndex: 0
+          },
+          update: {}
+        })
+        
+        // Add some songs to the setlist from the artist's catalog
+        const songs = await prisma.song.findMany({
+          where: { artistId: artistId },
+          take: 15,
+          orderBy: { popularity: 'desc' }
+        })
+        
+        for (let i = 0; i < songs.length; i++) {
+          try {
+            await prisma.setlistSong.create({
+              data: {
+                setlistId: setlist.id,
+                songId: songs[i].id,
+                position: i + 1,
+                voteCount: 0
+              }
+            })
+          } catch (error) {
+            // Song might already be in setlist
+          }
+        }
+      } catch (showError) {
+        console.error('Error creating show:', showError)
+      }
+    }
+  } catch (error) {
+    console.error('Error syncing Ticketmaster shows:', error)
+  }
+}
+
+// Helper function to create a demo show for artists
+async function createDemoShow(prisma: any, artistId: string) {
+  try {
+    console.log(`🎪 Creating demo show for artist...`)
+
+    // Create a demo venue if it doesn't exist
+    let venue = await prisma.venue.findFirst({
+      where: { name: 'Demo Venue' }
+    })
+
+    if (!venue) {
+      venue = await prisma.venue.create({
+        data: {
+          name: 'Demo Venue',
+          city: 'Los Angeles',
+          state: 'CA',
+          country: 'United States',
+          address: '123 Demo Street',
+          capacity: 5000,
+        }
+      })
+    }
+
+    // Create an upcoming show
+    const futureDate = new Date()
+    futureDate.setDate(futureDate.getDate() + 30) // 30 days from now
+
+    const show = await prisma.show.create({
+      data: {
+        artistId: artistId,
+        venueId: venue.id,
+        date: futureDate,
+        title: 'Demo Concert',
+        status: 'UPCOMING',
+        viewCount: 0,
+      }
+    })
+
+    // Create a setlist for the show
+    const setlist = await prisma.setlist.create({
+      data: {
+        showId: show.id,
+        name: 'Main Set',
+        orderIndex: 0,
+      }
+    })
+
+    // Get some songs for this artist and add them to the setlist
+    const songs = await prisma.song.findMany({
+      where: { artistId: artistId },
+      take: 10,
+      orderBy: { popularity: 'desc' }
+    })
+
+    // Add songs to setlist
+    for (let i = 0; i < songs.length; i++) {
+      await prisma.setlistSong.create({
+        data: {
+          setlistId: setlist.id,
+          songId: songs[i].id,
+          position: i + 1,
+          voteCount: Math.floor(Math.random() * 20), // Random vote count for demo
+        }
+      })
+    }
+
+    console.log(`✅ Created demo show with ${songs.length} songs`)
+  } catch (error) {
+    console.error(`❌ Error creating demo show:`, error)
+  }
 }

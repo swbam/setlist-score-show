@@ -29,23 +29,23 @@ export const subscriptionResolvers: IResolvers = {
         // Get active users in the last 5 minutes
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
         const activeUsersResult = await prisma.vote.groupBy({
-          by: ['user_id'],
+          by: ['userId'],
           where: {
-            show_id: showId,
-            created_at: { gte: fiveMinutesAgo },
+            showId: showId,
+            createdAt: { gte: fiveMinutesAgo },
           },
         })
 
         // Get recent votes
         const recentVotes = await prisma.vote.findMany({
           where: {
-            show_id: showId,
-            created_at: { gte: fiveMinutesAgo },
+            showId: showId,
+            createdAt: { gte: fiveMinutesAgo },
           },
-          orderBy: { created_at: 'desc' },
+          orderBy: { createdAt: 'desc' },
           take: 10,
           include: {
-            setlist_song: {
+            setlistSong: {
               include: { song: true },
             },
           },
@@ -57,11 +57,11 @@ export const subscriptionResolvers: IResolvers = {
           SELECT ss.*, s.title as song_title,
                  COUNT(v.id) as recent_votes
           FROM setlist_songs ss
-          JOIN songs s ON ss.song_id = s.id
-          JOIN setlists sl ON ss.setlist_id = sl.id
-          LEFT JOIN votes v ON v.setlist_song_id = ss.id 
-            AND v.created_at >= ${oneHourAgo}
-          WHERE sl.show_id = ${showId}
+          JOIN songs s ON ss."songId" = s.id
+          JOIN setlists sl ON ss."setlistId" = sl.id
+          LEFT JOIN votes v ON v."setlistSongId" = ss.id 
+            AND v."createdAt" >= ${oneHourAgo}
+          WHERE sl."showId" = ${showId}
           GROUP BY ss.id, s.title
           ORDER BY recent_votes DESC
           LIMIT 5
@@ -70,12 +70,12 @@ export const subscriptionResolvers: IResolvers = {
         return {
           activeUsers: activeUsersResult.length,
           recentVotes: recentVotes.map(vote => ({
-            setlistSongId: vote.setlist_song_id,
-            songId: vote.setlist_song.song_id,
-            newVoteCount: vote.setlist_song.vote_count,
-            songTitle: vote.setlist_song.song.title,
-            voterId: vote.user_id,
-            timestamp: vote.created_at,
+            setlistSongId: vote.setlistSongId,
+            songId: vote.setlistSong.songId,
+            newVoteCount: vote.setlistSong.voteCount,
+            songTitle: vote.setlistSong.song.title,
+            voterId: vote.userId,
+            timestamp: vote.createdAt,
           })),
           topMovers,
         }

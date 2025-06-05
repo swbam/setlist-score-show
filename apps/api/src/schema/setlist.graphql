@@ -13,8 +13,10 @@ type Setlist {
   
   # Computed fields
   songCount: Int!
+  totalSongs: Int!
   totalVotes: Int!
   duration: Int # in minutes
+  topVotedSongs(limit: Int = 5): [SetlistSong!]!
 }
 
 type SetlistSong {
@@ -36,6 +38,7 @@ type SetlistSong {
   votePercentage: Float!
   rank: Int!
   hasUserVoted: Boolean!
+  hasVoted: Boolean!
 }
 
 type SetlistConnection {
@@ -109,6 +112,16 @@ extend type Query {
   # Get setlists for a show
   showSetlists(showId: ID!): [Setlist!]!
   
+  # Get setlists (legacy compatibility)
+  setlists(showId: ID!): [Setlist!]!
+  
+  # Get setlists by artist
+  setlistsByArtist(
+    artistId: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): [Setlist!]!
+  
   # Compare two setlists
   compareSetlists(
     setlistId1: ID!
@@ -163,6 +176,11 @@ extend type Mutation {
     setlistId: ID!
     targetShowId: ID!
   ): Setlist! @auth
+  
+  # Delete a setlist
+  deleteSetlist(
+    setlistId: ID!
+  ): Boolean! @auth
 }
 
 extend type Subscription {

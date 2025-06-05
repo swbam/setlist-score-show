@@ -40,16 +40,16 @@ export class VotingService {
     const [dailyVotes, showVotes] = await Promise.all([
       this.prisma.vote.count({
         where: {
-          user_id: userId,
-          created_at: {
+          userId: userId,
+          createdAt: {
             gte: new Date(new Date().setHours(0, 0, 0, 0))
           }
         }
       }),
       this.prisma.vote.count({
         where: {
-          user_id: userId,
-          show_id: showId
+          userId: userId,
+          showId: showId
         }
       })
     ])
@@ -74,8 +74,8 @@ export class VotingService {
       const existingVote = await tx.vote.findUnique({
         where: {
           unique_user_song_vote: {
-            user_id: userId,
-            setlist_song_id: setlistSongId
+            userId: userId,
+            setlistSongId: setlistSongId
           }
         }
       })
@@ -90,10 +90,10 @@ export class VotingService {
       // Create vote
       const vote = await tx.vote.create({
         data: {
-          user_id: userId,
-          setlist_song_id: setlistSongId,
-          show_id: showId,
-          vote_type: 'up'
+          userId: userId,
+          setlistSongId: setlistSongId,
+          showId: showId,
+          voteType: 'up'
         }
       })
 
@@ -101,7 +101,7 @@ export class VotingService {
       const updatedSetlistSong = await tx.setlistSong.update({
         where: { id: setlistSongId },
         data: {
-          vote_count: {
+          voteCount: {
             increment: 1
           }
         },
@@ -114,25 +114,25 @@ export class VotingService {
       await tx.voteAnalytics.upsert({
         where: {
           unique_user_show_analytics: {
-            user_id: userId,
-            show_id: showId
+            userId: userId,
+            showId: showId
           }
         },
         create: {
-          user_id: userId,
-          show_id: showId,
-          daily_votes: 1,
-          show_votes: 1,
-          last_vote_at: new Date()
+          userId: userId,
+          showId: showId,
+          dailyVotes: 1,
+          showVotes: 1,
+          lastVoteAt: new Date()
         },
         update: {
-          daily_votes: {
+          dailyVotes: {
             increment: 1
           },
-          show_votes: {
+          showVotes: {
             increment: 1
           },
-          last_vote_at: new Date()
+          lastVoteAt: new Date()
         }
       })
 
@@ -153,7 +153,7 @@ export class VotingService {
         payload: {
           setlistSongId,
           songId,
-          newVoteCount: result.updatedSetlistSong.vote_count,
+          newVoteCount: result.updatedSetlistSong.voteCount,
           songTitle: result.updatedSetlistSong.song.title,
           voterId: userId
         }
@@ -164,7 +164,7 @@ export class VotingService {
       voteId: result.vote.id,
       dailyVotesRemaining: 50 - dailyVotes - 1,
       showVotesRemaining: 10 - showVotes - 1,
-      newVoteCount: result.updatedSetlistSong.vote_count
+      newVoteCount: result.updatedSetlistSong.voteCount
     }
   }
 }

@@ -12,6 +12,9 @@
     --primary-foreground: 0 0% 98%;
     --accent: 172 66% 50%;
     --accent-foreground: 0 0% 9%;
+    --muted: 0 0% 8%;
+    --muted-foreground: 0 0% 60%;
+    --border: 0 0% 14.9%;
     
     /* Gradient definitions */
     --gradient-primary: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
@@ -34,5 +37,9 @@
   
   .card-hover {
     @apply transition-all duration-300 hover:shadow-xl hover:shadow-teal-500/10 hover:-translate-y-1;
+  }
+  
+  .gradient-card {
+    @apply bg-gray-900/50 backdrop-blur-sm;
   }
 }

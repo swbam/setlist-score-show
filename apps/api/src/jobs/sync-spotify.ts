@@ -21,11 +21,11 @@ export class SpotifySyncJob {
     // Get artists to sync
     const artists = await this.prisma.artist.findMany({
       where: {
-        spotify_id: { not: null },
+        spotifyId: { not: null },
         ...(artistIds ? { id: { in: artistIds } } : {})
       },
       orderBy: {
-        last_synced_at: 'asc'
+        lastSyncedAt: 'asc'
       },
       take: artistIds ? undefined : 50 // Limit to 50 artists per run if not specific
     });
@@ -50,12 +50,11 @@ export class SpotifySyncJob {
     const startTime = Date.now();
     
     try {
-      logger.info(`Syncing catalog for ${artist.name} (${artist.spotify_id})`);
+      logger.info(`Syncing catalog for ${artist.name} (${artist.spotifyId})`);
       
       // Get all albums
-      const albums = await this.client.getArtistAlbums(artist.spotify_id, {
-        include_groups: ['album', 'single', 'compilation'],
-        limit: 50
+      const albums = await this.client.getArtistAlbums(artist.spotifyId, { 
+        include_groups: 'album,single,compilation' 
       });
 
       let totalTracks = 0;
@@ -68,7 +67,7 @@ export class SpotifySyncJob {
 
         for (const track of tracks) {
           // Skip tracks not by this artist
-          if (!track.artists.some(a => a.id === artist.spotify_id)) {
+          if (!track.artists.some(a => a.id === artist.spotifyId)) {
             continue;
           }
 
@@ -78,19 +77,19 @@ export class SpotifySyncJob {
 
             await this.prisma.song.upsert({
               where: {
-                spotify_id: track.id
+                spotifyId: track.id
               },
               create: {
-                spotify_id: track.id,
-                artist_id: artist.id,
+                spotifyId: track.id,
+                artistId: artist.id,
                 title: track.name,
                 album: album.name,
-                album_image_url: album.images?.[0]?.url,
-                duration_ms: track.duration_ms,
+                albumImageUrl: album.images?.[0]?.url,
+                durationMs: track.duration_ms,
                 popularity: track.popularity,
-                preview_url: track.preview_url,
-                spotify_url: track.external_urls.spotify,
-                audio_features: audioFeatures ? {
+                previewUrl: track.preview_url,
+                spotifyUrl: track.external_urls.spotify,
+                audioFeatures: audioFeatures ? {
                   acousticness: audioFeatures.acousticness,
                   danceability: audioFeatures.danceability,
                   energy: audioFeatures.energy,
@@ -101,19 +100,19 @@ export class SpotifySyncJob {
                   mode: audioFeatures.mode,
                   speechiness: audioFeatures.speechiness,
                   tempo: audioFeatures.tempo,
-                  time_signature: audioFeatures.time_signature,
+                  timeSignature: audioFeatures.time_signature,
                   valence: audioFeatures.valence
                 } : undefined
               },
               update: {
                 title: track.name,
                 album: album.name,
-                album_image_url: album.images?.[0]?.url,
-                duration_ms: track.duration_ms,
+                albumImageUrl: album.images?.[0]?.url,
+                durationMs: track.duration_ms,
                 popularity: track.popularity,
-                preview_url: track.preview_url,
-                spotify_url: track.external_urls.spotify,
-                audio_features: audioFeatures ? {
+                previewUrl: track.preview_url,
+                spotifyUrl: track.external_urls.spotify,
+                audioFeatures: audioFeatures ? {
                   acousticness: audioFeatures.acousticness,
                   danceability: audioFeatures.danceability,
                   energy: audioFeatures.energy,
@@ -124,7 +123,7 @@ export class SpotifySyncJob {
                   mode: audioFeatures.mode,
                   speechiness: audioFeatures.speechiness,
                   tempo: audioFeatures.tempo,
-                  time_signature: audioFeatures.time_signature,
+                  timeSignature: audioFeatures.time_signature,
                   valence: audioFeatures.valence
                 } : undefined
               }
@@ -138,30 +137,30 @@ export class SpotifySyncJob {
       }
 
       // Update artist with latest data
-      const artistData = await this.client.getArtist(artist.spotify_id);
+      const artistData = await this.client.getArtist(artist.spotifyId);
       
       await this.prisma.artist.update({
         where: { id: artist.id },
         data: {
           name: artistData.name,
-          image_url: artistData.images?.[0]?.url,
+          imageUrl: artistData.images?.[0]?.url,
           genres: artistData.genres,
           popularity: artistData.popularity,
           followers: artistData.followers.total,
-          last_synced_at: new Date()
+          lastSyncedAt: new Date()
         }
       });
 
       // Log sync history
       await this.prisma.syncHistory.create({
         data: {
-          sync_type: 'spotify',
-          entity_type: 'artist',
-          entity_id: artist.id,
-          external_id: artist.spotify_id,
+          syncType: 'spotify',
+          entityType: 'artist',
+          entityId: artist.id,
+          externalId: artist.spotifyId,
           status: 'completed',
-          items_processed: syncedTracks,
-          completed_at: new Date()
+          itemsProcessed: syncedTracks,
+          completedAt: new Date()
         }
       });
 
@@ -174,12 +173,12 @@ export class SpotifySyncJob {
       
       await this.prisma.syncHistory.create({
         data: {
-          sync_type: 'spotify',
-          entity_type: 'artist',
-          entity_id: artist.id,
-          external_id: artist.spotify_id,
+          syncType: 'spotify',
+          entityType: 'artist',
+          entityId: artist.id,
+          externalId: artist.spotifyId,
           status: 'failed',
-          error_message: error.message
+          errorMessage: error.message
         }
       });
       
@@ -192,9 +191,9 @@ export class SpotifySyncJob {
       logger.info(`Searching for new artist: ${artistName}`);
       
       // Search for artist on Spotify
-      const searchResults = await this.client.searchArtists(artistName, { limit: 5 });
+      const searchResults = await this.client.searchArtist(artistName);
       
-      if (searchResults.length === 0) {
+      if (!Array.isArray(searchResults) || searchResults.length === 0) {
         logger.warn(`No Spotify results found for: ${artistName}`);
         return null;
       }
@@ -204,7 +203,7 @@ export class SpotifySyncJob {
       
       // Check if artist already exists
       const existingArtist = await this.prisma.artist.findUnique({
-        where: { spotify_id: spotifyArtist.id }
+        where: { spotifyId: spotifyArtist.id }
       });
 
       if (existingArtist) {
@@ -215,10 +214,10 @@ export class SpotifySyncJob {
       // Create new artist
       const artist = await this.prisma.artist.create({
         data: {
-          spotify_id: spotifyArtist.id,
+          spotifyId: spotifyArtist.id,
           name: spotifyArtist.name,
           slug: spotifyArtist.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          image_url: spotifyArtist.images?.[0]?.url,
+          imageUrl: spotifyArtist.images?.[0]?.url,
           genres: spotifyArtist.genres,
           popularity: spotifyArtist.popularity,
           followers: spotifyArtist.followers.total
@@ -242,7 +241,7 @@ export class SpotifySyncJob {
     
     const artists = await this.prisma.artist.findMany({
       where: {
-        spotify_id: { not: null }
+        spotifyId: { not: null }
       }
     });
 
@@ -250,12 +249,12 @@ export class SpotifySyncJob {
     
     for (const artist of artists) {
       try {
-        const spotifyData = await this.client.getArtist(artist.spotify_id!);
+        const spotifyData = await this.client.getArtist(artist.spotifyId!);
         
         const hasChanges = 
           artist.popularity !== spotifyData.popularity ||
           artist.followers !== spotifyData.followers.total ||
-          artist.image_url !== spotifyData.images?.[0]?.url;
+          artist.imageUrl !== spotifyData.images?.[0]?.url;
 
         if (hasChanges) {
           await this.prisma.artist.update({
@@ -263,7 +262,7 @@ export class SpotifySyncJob {
             data: {
               popularity: spotifyData.popularity,
               followers: spotifyData.followers.total,
-              image_url: spotifyData.images?.[0]?.url,
+              imageUrl: spotifyData.images?.[0]?.url,
               genres: spotifyData.genres
             }
           });

@@ -1,5 +1,8 @@
 # Common type definitions used across the schema
 
+# Directives
+directive @auth(requires: UserRole = USER) on FIELD_DEFINITION
+
 # Scalar types
 scalar DateTime
 scalar Date
@@ -106,6 +109,32 @@ enum HealthStatus {
   HEALTHY
   DEGRADED
   UNHEALTHY
+}
+
+# Common enum types
+enum OrderDirection {
+  ASC
+  DESC
+}
+
+enum Timeframe {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum ExternalSource {
+  SETLISTFM
+  SPOTIFY
+  TICKETMASTER
+  MANUAL
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
 }
 
 # Root Query type
