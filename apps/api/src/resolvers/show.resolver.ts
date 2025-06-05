@@ -121,7 +121,7 @@ export const showResolvers: IResolvers = {
       return prisma.show.findMany({
         where: {
           date: { gte: startDate },
-          status: { in: ['UPCOMING', 'ONGOING'] },
+          status: { in: ['upcoming', 'ongoing'] },
         },
         orderBy: [
           { viewCount: 'desc' },
@@ -148,7 +148,7 @@ export const showResolvers: IResolvers = {
         JOIN venues v ON s."venueId" = v.id
         WHERE v.latitude IS NOT NULL 
           AND v.longitude IS NOT NULL
-          AND s.status = 'UPCOMING'
+          AND s.status = 'upcoming'
           AND s.date >= CURRENT_DATE
         HAVING distance_km <= ${radiusKm}
         ORDER BY distance_km ASC

@@ -1,6 +1,6 @@
 import { IResolvers } from '@graphql-tools/utils'
 import { GraphQLError } from 'graphql'
-import type { Prisma } from '@setlist/database'
+import { Prisma } from '@prisma/client'
 
 export const artistResolvers: IResolvers = {
   Query: {
@@ -29,20 +29,41 @@ export const artistResolvers: IResolvers = {
     artistBySlug: async (_parent, { slug }, { prisma, spotify, ticketmaster, setlistfm }) => {
       // First try to find artist in database
       let artist = await prisma.artist.findUnique({
-        where: { slug },
-        include: {
-          shows: {
-            include: {
-              venue: true,
-            },
-            orderBy: { date: 'desc' },
-          },
-          songs: {
-            orderBy: { popularity: 'desc' },
-            take: 50 // Load top 50 songs for the artist
-          }
-        },
+        where: { slug }
       })
+      
+      // If artist exists, check if we need to import songs or sync shows
+      if (artist) {
+        // Check if we need to import songs
+        const songCount = await prisma.song.count({
+          where: { artistId: artist.id }
+        })
+        
+        if (songCount === 0 && artist.spotifyId && spotify) {
+          console.log(`🎵 No songs found for ${artist.name}, importing from Spotify...`)
+          try {
+            await importArtistSongCatalog(prisma, spotify, artist.id, artist.spotifyId)
+          } catch (error) {
+            console.error(`Failed to import songs:`, error)
+          }
+        }
+        
+        // Check if we need to sync shows
+        if (artist.ticketmasterId && ticketmaster) {
+          const showCount = await prisma.show.count({
+            where: { artistId: artist.id }
+          })
+          
+          if (showCount === 0) {
+            console.log(`🎫 No shows found for ${artist.name}, syncing from Ticketmaster...`)
+            try {
+              await syncTicketmasterShows(artist.id, artist.ticketmasterId, { prisma, ticketmaster })
+            } catch (error) {
+              console.error(`Failed to sync shows:`, error)
+            }
+          }
+        }
+      }
 
       // If artist not found and it looks like a slug we might have seen in search,
       // try to import from Spotify
@@ -123,21 +144,9 @@ export const artistResolvers: IResolvers = {
                 }
               }
 
-              // Refetch with songs included
+              // Refetch artist
               artist = await prisma.artist.findUnique({
-                where: { id: artist.id },
-                include: {
-                  shows: {
-                    include: {
-                      venue: true,
-                    },
-                    orderBy: { date: 'desc' },
-                  },
-                  songs: {
-                    orderBy: { popularity: 'desc' },
-                    take: 50
-                  }
-                },
+                where: { id: artist.id }
               })
             }
           }
@@ -173,7 +182,7 @@ export const artistResolvers: IResolvers = {
       if (filter?.hasUpcomingShows) {
         where.shows = {
           some: {
-            status: 'UPCOMING',
+            status: 'upcoming',
             date: { gte: new Date() },
           },
         }
@@ -373,31 +382,17 @@ export const artistResolvers: IResolvers = {
         if (endDate) where.date.lte = new Date(endDate)
       }
 
-      const [shows, totalCount] = await Promise.all([
-        prisma.show.findMany({
-          where,
-          orderBy: { date: 'asc' },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.show.count({ where }),
-      ])
+      const shows = await prisma.show.findMany({
+        where,
+        orderBy: { date: 'asc' },
+        take: limit,
+        skip: offset,
+        include: {
+          venue: true
+        }
+      })
 
-      const edges = shows.map((show, index) => ({
-        node: show,
-        cursor: Buffer.from(`${offset + index}`).toString('base64'),
-      }))
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage: offset + shows.length < totalCount,
-          hasPreviousPage: offset > 0,
-          startCursor: edges[0]?.cursor || null,
-          endCursor: edges[edges.length - 1]?.cursor || null,
-        },
-        totalCount,
-      }
+      return shows
     },
 
     songs: async (parent, { limit = 50, offset = 0, orderBy }, { prisma }) => {
@@ -414,38 +409,21 @@ export const artistResolvers: IResolvers = {
         artistId: parent.id,
       }
 
-      const [songs, totalCount] = await Promise.all([
-        prisma.song.findMany({
-          where,
-          orderBy: orderByMap[orderBy || 'POPULARITY_DESC'],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.song.count({ where }),
-      ])
+      const songs = await prisma.song.findMany({
+        where,
+        orderBy: orderByMap[orderBy || 'POPULARITY_DESC'],
+        take: limit,
+        skip: offset,
+      })
 
-      const edges = songs.map((song, index) => ({
-        node: song,
-        cursor: Buffer.from(`${offset + index}`).toString('base64'),
-      }))
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage: offset + songs.length < totalCount,
-          hasPreviousPage: offset > 0,
-          startCursor: edges[0]?.cursor || null,
-          endCursor: edges[edges.length - 1]?.cursor || null,
-        },
-        totalCount,
-      }
+      return songs
     },
 
     upcomingShowsCount: async (parent, _args, { prisma }) => {
       return prisma.show.count({
         where: {
           artistId: parent.id,
-          status: 'UPCOMING',
+          status: 'upcoming',
           date: { gte: new Date() },
         },
       })
@@ -521,41 +499,88 @@ async function importArtistSongCatalog(prisma: any, spotify: any, artistId: stri
 // Helper function to sync shows from Ticketmaster
 async function syncTicketmasterShows(artistId: string, ticketmasterId: string, { prisma, ticketmaster }: any) {
   try {
-    console.log(`🎫 Syncing shows from Ticketmaster for artist ${artistId}`)
+    console.log(`🎫 Syncing shows from Ticketmaster for artist ${artistId} (TM ID: ${ticketmasterId})`)
     
     const startDate = new Date()
     const endDate = new Date()
-    endDate.setDate(endDate.getDate() + 180) // Next 6 months
+    endDate.setMonth(endDate.getMonth() + 12) // Next 12 months
     
-    const events = await ticketmaster.getArtistEvents(ticketmasterId, {
-      startDate,
-      endDate,
-      size: 50
-    })
+    console.log(`📅 Searching for events from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
-    console.log(`Found ${events.length} upcoming shows`)
+    let events = []
+    try {
+      events = await ticketmaster.getArtistEvents(ticketmasterId, {
+        startDate,
+        endDate,
+        size: 200
+      })
+    } catch (apiError: any) {
+      console.error(`❌ Ticketmaster API error:`, apiError.message)
+      if (apiError.response) {
+        console.error(`Response status: ${apiError.response.status}`)
+        console.error(`Response data:`, JSON.stringify(apiError.response.data, null, 2))
+      }
+      return
+    }
+    
+    console.log(`✅ Found ${events.length} upcoming shows`)
+    
+    if (events.length === 0) {
+      console.log(`⚠️ No upcoming shows found for artist with Ticketmaster ID: ${ticketmasterId}`)
+      return
+    }
+    
+    let createdCount = 0
+    let errorCount = 0
     
     for (const event of events) {
       try {
+        if (!event._embedded || !event._embedded.venues || event._embedded.venues.length === 0) {
+          console.warn(`⚠️ Event ${event.id} has no venue information, skipping`)
+          continue
+        }
+        
         const venue = event._embedded.venues[0]
         
-        // Upsert venue
+        // Log venue data to debug
+        console.log(`🏛️ Processing venue: ${venue.name} (${venue.id})`)
+        
+        // Upsert venue with more robust handling
         const dbVenue = await prisma.venue.upsert({
           where: { ticketmasterId: venue.id },
           create: {
             ticketmasterId: venue.id,
             name: venue.name,
-            address: venue.address?.line1,
-            city: venue.city.name,
-            state: venue.state?.name,
-            country: venue.country.name,
-            postalCode: venue.postalCode,
+            address: venue.address?.line1 || null,
+            city: venue.city?.name || 'Unknown City',
+            state: venue.state?.name || null,
+            country: venue.country?.name || 'Unknown Country',
+            postalCode: venue.postalCode || null,
             latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
             longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null,
-            timezone: venue.timezone
+            timezone: venue.timezone || null,
+            capacity: null // Will be updated later if available
           },
-          update: {}
+          update: {
+            // Update only if better data is available
+            name: venue.name,
+            ...(venue.address?.line1 && { address: venue.address.line1 }),
+            ...(venue.city?.name && { city: venue.city.name }),
+            ...(venue.state?.name && { state: venue.state.name }),
+            ...(venue.country?.name && { country: venue.country.name }),
+            ...(venue.postalCode && { postalCode: venue.postalCode }),
+            ...(venue.timezone && { timezone: venue.timezone })
+          }
         })
+        
+        console.log(`✅ Venue upserted: ${dbVenue.name}`)
+        
+        // Parse date properly
+        const eventDate = new Date(event.dates.start.localDate)
+        if (isNaN(eventDate.getTime())) {
+          console.error(`❌ Invalid date for event ${event.id}: ${event.dates.start.localDate}`)
+          continue
+        }
         
         // Upsert show
         const show = await prisma.show.upsert({
@@ -564,18 +589,23 @@ async function syncTicketmasterShows(artistId: string, ticketmasterId: string, {
             ticketmasterId: event.id,
             artistId: artistId,
             venueId: dbVenue.id,
-            date: new Date(event.dates.start.localDate),
-            startTime: event.dates.start.localTime,
+            date: eventDate,
+            startTime: event.dates.start.localTime ? new Date(`1970-01-01T${event.dates.start.localTime}`) : null,
             title: event.name,
-            status: 'upcoming',
-            ticketmasterUrl: event.url,
+            status: 'upcoming', // Use lowercase to match schema default
+            ticketmasterUrl: event.url || null,
             viewCount: 0
           },
           update: {
             status: 'upcoming',
-            ticketmasterUrl: event.url
+            date: eventDate,
+            ...(event.dates.start.localTime && { startTime: new Date(`1970-01-01T${event.dates.start.localTime}`) }),
+            ...(event.url && { ticketmasterUrl: event.url })
           }
         })
+        
+        console.log(`✅ Show created/updated: ${show.title} on ${eventDate.toDateString()}`)
+        createdCount++
         
         // Create default setlist
         const setlist = await prisma.setlist.upsert({
@@ -593,33 +623,50 @@ async function syncTicketmasterShows(artistId: string, ticketmasterId: string, {
           update: {}
         })
         
-        // Add some songs to the setlist from the artist's catalog
-        const songs = await prisma.song.findMany({
-          where: { artistId: artistId },
-          take: 15,
-          orderBy: { popularity: 'desc' }
+        // Add songs to the setlist only if they don't exist
+        const existingSetlistSongs = await prisma.setlistSong.count({
+          where: { setlistId: setlist.id }
         })
         
-        for (let i = 0; i < songs.length; i++) {
-          try {
-            await prisma.setlistSong.create({
-              data: {
-                setlistId: setlist.id,
-                songId: songs[i].id,
-                position: i + 1,
-                voteCount: 0
+        if (existingSetlistSongs === 0) {
+          const songs = await prisma.song.findMany({
+            where: { artistId: artistId },
+            take: 15,
+            orderBy: { popularity: 'desc' }
+          })
+          
+          console.log(`🎵 Adding ${songs.length} songs to setlist`)
+          
+          for (let i = 0; i < songs.length; i++) {
+            try {
+              await prisma.setlistSong.create({
+                data: {
+                  setlistId: setlist.id,
+                  songId: songs[i].id,
+                  position: i + 1,
+                  voteCount: 0
+                }
+              })
+            } catch (songError: any) {
+              if (!songError.message.includes('Unique constraint')) {
+                console.error(`Error adding song to setlist:`, songError.message)
               }
-            })
-          } catch (error) {
-            // Song might already be in setlist
+            }
           }
         }
-      } catch (showError) {
-        console.error('Error creating show:', showError)
+      } catch (showError: any) {
+        errorCount++
+        console.error(`❌ Error creating show ${event.name}:`, showError.message)
+        if (showError.code === 'P2002') {
+          console.error(`Unique constraint violation:`, showError.meta)
+        }
       }
     }
-  } catch (error) {
-    console.error('Error syncing Ticketmaster shows:', error)
+    
+    console.log(`✅ Show sync completed: ${createdCount} created/updated, ${errorCount} errors`)
+  } catch (error: any) {
+    console.error(`❌ Error syncing Ticketmaster shows:`, error.message)
+    console.error(`Full error:`, error)
   }
 }
 

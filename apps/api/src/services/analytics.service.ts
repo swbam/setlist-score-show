@@ -183,7 +183,7 @@ export class AnalyticsService {
     }, {} as Record<number, number>);
 
     const peakHour = Object.entries(votesByHour)
-      .sort(([, a], [, b]) => b - a)[0]?.[0] || '0';
+      .sort(([, a], [, b]) => (b as number) - (a as number))[0]?.[0] || '0';
 
     // Calculate top songs
     const songVotes = votes.reduce((acc, vote) => {
@@ -200,9 +200,9 @@ export class AnalyticsService {
     }, {} as Record<string, any>);
 
     const topSongs = Object.values(songVotes)
-      .sort((a, b) => b.voteCount - a.voteCount)
+      .sort((a: any, b: any) => b.voteCount - a.voteCount)
       .slice(0, 10)
-      .map(song => ({
+      .map((song: any) => ({
         ...song,
         votePercentage: (song.voteCount / votes.length) * 100
       }));
@@ -268,8 +268,8 @@ export class AnalyticsService {
     }, {} as Record<string, any>);
 
     const favoriteArtists = Object.values(artistVotes)
-      .sort((a, b) => b.voteCount - a.voteCount)
-      .slice(0, 5);
+      .sort((a: any, b: any) => b.voteCount - a.voteCount)
+      .slice(0, 5) as { artistId: string; name: string; voteCount: number; }[];
 
     // Calculate voting patterns
     const votesByDay = votes.reduce((acc, vote) => {
@@ -279,7 +279,7 @@ export class AnalyticsService {
     }, {} as Record<string, number>);
 
     const mostActiveDay = Object.entries(votesByDay)
-      .sort(([, a], [, b]) => b - a)[0]?.[0] || 'Monday';
+      .sort(([, a], [, b]) => (b as number) - (a as number))[0]?.[0] || 'Monday';
 
     const votesByHour = votes.reduce((acc, vote) => {
       const hour = vote.createdAt.getHours();
@@ -289,7 +289,7 @@ export class AnalyticsService {
 
     const mostActiveHour = parseInt(
       Object.entries(votesByHour)
-        .sort(([, a], [, b]) => b - a)[0]?.[0] || '0'
+        .sort(([, a], [, b]) => (b as number) - (a as number))[0]?.[0] || '0'
     );
 
     // Calculate achievements

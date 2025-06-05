@@ -17,13 +17,22 @@ async function syncArtistShows(artistId: string, { prisma, ticketmaster }: any) 
     const endDate = new Date()
     endDate.setDate(endDate.getDate() + 180) // Next 6 months
     
-    const events = await ticketmaster.getArtistEvents(artist.ticketmasterId, {
-      startDate,
-      endDate,
-      size: 50
-    })
+    console.log(`🔍 Searching Ticketmaster for artist ${artist.name} (ID: ${artist.ticketmasterId})`)
+    console.log(`📅 Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
-    console.log(`🎫 Found ${events.length} upcoming shows for ${artist.name}`)
+    let events = []
+    try {
+      events = await ticketmaster.getArtistEvents(artist.ticketmasterId, {
+        startDate,
+        endDate,
+        size: 50
+      })
+      console.log(`🎫 Found ${events.length} upcoming shows for ${artist.name}`)
+    } catch (tmError) {
+      console.error(`❌ Ticketmaster API error for ${artist.name}:`, tmError.message)
+      console.error(`Full error:`, tmError)
+      return
+    }
     
     for (const event of events) {
       try {
@@ -56,7 +65,7 @@ async function syncArtistShows(artistId: string, { prisma, ticketmaster }: any) 
             artistId: artistId,
             venueId: dbVenue.id,
             date: new Date(event.dates.start.localDate),
-            startTime: event.dates.start.localTime,
+            startTime: event.dates.start.localTime ? new Date(`1970-01-01T${event.dates.start.localTime}`) : null,
             title: event.name,
             status: 'upcoming',
             ticketmasterUrl: event.url,
@@ -246,7 +255,9 @@ export const commonResolvers: IResolvers = {
                 // Try to get Ticketmaster ID
                 let ticketmasterId = null
                 try {
+                  console.log(`🔍 Searching Ticketmaster for artist: ${spotifyArtist.name}`)
                   const tmArtists = await ticketmaster.searchArtists(spotifyArtist.name)
+                  console.log(`🎫 Ticketmaster search returned ${tmArtists.length} results`)
                   if (tmArtists.length > 0) {
                     // Find best match by name similarity
                     const bestMatch = tmArtists.find((tm: any) => 
@@ -254,9 +265,13 @@ export const commonResolvers: IResolvers = {
                     ) || tmArtists[0]
                     ticketmasterId = bestMatch.id
                     console.log(`✅ Found Ticketmaster ID for ${spotifyArtist.name}: ${ticketmasterId}`)
+                    console.log(`    Name: ${bestMatch.name}`)
+                  } else {
+                    console.log(`⚠️ No Ticketmaster results for ${spotifyArtist.name}`)
                   }
                 } catch (tmError) {
-                  console.log(`⚠️ Could not find Ticketmaster ID for ${spotifyArtist.name}`)
+                  console.error(`❌ Ticketmaster search error for ${spotifyArtist.name}:`, tmError.message)
+                  console.error(`Full error:`, tmError)
                 }
 
                 // Try to get Setlist.fm MBID
@@ -299,9 +314,56 @@ export const commonResolvers: IResolvers = {
                   artists.push(newArtist)
                   console.log(`✅ Created artist with all IDs: ${spotifyArtist.name}`)
                   
+                  // Import song catalog from Spotify
+                  try {
+                    console.log(`🎵 Importing song catalog for ${spotifyArtist.name}...`)
+                    const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtist.id, {
+                      include_groups: 'album,single',
+                      limit: 20
+                    })
+                    
+                    let songCount = 0
+                    for (const album of albumsResponse.body.items.slice(0, 5)) { // Limit to first 5 albums for speed
+                      try {
+                        const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+                        
+                        for (const track of tracksResponse.body.items) {
+                          try {
+                            await prisma.song.create({
+                              data: {
+                                artistId: newArtist.id,
+                                spotifyId: track.id,
+                                title: track.name,
+                                album: album.name,
+                                albumImageUrl: album.images[0]?.url || null,
+                                durationMs: track.duration_ms,
+                                popularity: 0,
+                                previewUrl: track.preview_url,
+                                spotifyUrl: track.external_urls?.spotify,
+                              }
+                            })
+                            songCount++
+                          } catch (songError: any) {
+                            if (!songError.message.includes('Unique constraint')) {
+                              console.error(`Error importing song:`, songError.message)
+                            }
+                          }
+                        }
+                      } catch (albumError) {
+                        console.error(`Error importing album:`, albumError)
+                      }
+                    }
+                    console.log(`✅ Imported ${songCount} songs for ${spotifyArtist.name}`)
+                  } catch (error) {
+                    console.error(`Error importing song catalog:`, error)
+                  }
+                  
                   // Trigger sync jobs to get shows
                   if (ticketmasterId) {
-                    syncArtistShows(newArtist.id, { prisma, ticketmaster })
+                    // Don't await - let it run in background
+                    syncArtistShows(newArtist.id, { prisma, ticketmaster }).catch(err => 
+                      console.error(`Failed to sync shows for ${newArtist.name}:`, err)
+                    )
                   }
                 } else {
                   // Update existing artist with missing IDs
@@ -319,10 +381,76 @@ export const commonResolvers: IResolvers = {
                     
                     // Trigger sync if we just added Ticketmaster ID
                     if (ticketmasterId && !existingArtist.ticketmasterId) {
-                      syncArtistShows(updatedArtist.id, { prisma, ticketmaster })
+                      syncArtistShows(updatedArtist.id, { prisma, ticketmaster }).catch(err => 
+                        console.error(`Failed to sync shows for ${updatedArtist.name}:`, err)
+                      )
                     }
                   } else {
                     artists.push(existingArtist)
+                    
+                    // Check if we need to import songs
+                    const songCount = await prisma.song.count({
+                      where: { artistId: existingArtist.id }
+                    })
+                    
+                    if (songCount === 0) {
+                      console.log(`🎵 No songs found, importing catalog for ${existingArtist.name}...`)
+                      try {
+                        const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtist.id, {
+                          include_groups: 'album,single',
+                          limit: 20
+                        })
+                        
+                        let importedCount = 0
+                        for (const album of albumsResponse.body.items.slice(0, 5)) {
+                          try {
+                            const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+                            
+                            for (const track of tracksResponse.body.items) {
+                              try {
+                                await prisma.song.create({
+                                  data: {
+                                    artistId: existingArtist.id,
+                                    spotifyId: track.id,
+                                    title: track.name,
+                                    album: album.name,
+                                    albumImageUrl: album.images[0]?.url || null,
+                                    durationMs: track.duration_ms,
+                                    popularity: 0,
+                                    previewUrl: track.preview_url,
+                                    spotifyUrl: track.external_urls?.spotify,
+                                  }
+                                })
+                                importedCount++
+                              } catch (songError: any) {
+                                if (!songError.message.includes('Unique constraint')) {
+                                  console.error(`Error importing song:`, songError.message)
+                                }
+                              }
+                            }
+                          } catch (albumError) {
+                            console.error(`Error importing album:`, albumError)
+                          }
+                        }
+                        console.log(`✅ Imported ${importedCount} songs for ${existingArtist.name}`)
+                      } catch (error) {
+                        console.error(`Error importing song catalog:`, error)
+                      }
+                    }
+                    
+                    // Check if we need to sync shows
+                    if (existingArtist.ticketmasterId) {
+                      const showCount = await prisma.show.count({
+                        where: { artistId: existingArtist.id }
+                      })
+                      
+                      if (showCount === 0) {
+                        console.log(`🎫 No shows found, syncing from Ticketmaster...`)
+                        syncArtistShows(existingArtist.id, { prisma, ticketmaster }).catch(err => 
+                          console.error(`Failed to sync shows:`, err)
+                        )
+                      }
+                    }
                   }
                 }
               } catch (error) {
@@ -436,7 +564,7 @@ export const commonResolvers: IResolvers = {
         }),
         prisma.show.findMany({
           where: {
-            status: 'UPCOMING',
+            status: 'upcoming',
             date: { gte: new Date() },
           },
           orderBy: { viewCount: 'desc' }, // Use viewCount instead of non-existent total_votes
