@@ -159,23 +159,80 @@ serve(async (req) => {
             }
 
             // Create show
-            const { error: showError } = await supabase
+            const { data: newShowData, error: showError } = await supabase // Assign data to newShowData
               .from('shows')
               .insert({
                 artist_id: artist.id,
                 venue_id: venueId,
                 date: eventDate,
-                name: event.name,
+                title: event.name, // Changed 'name' to 'title' to match schema
                 ticketmaster_id: event.id,
                 ticketmaster_url: event.url,
-                image_url: event.images?.[0]?.url,
-              });
+                // image_url: event.images?.[0]?.url, // image_url is not in the 'shows' table schema in TheSet-Fixes.md
+                status: 'upcoming' // Explicitly set status
+              }).select('id').single();
 
-            if (!showError) {
+            if (!showError && newShowData?.id) { // Check newShowData and its id
               showsStored++;
-              console.log(`✅ Stored show for ${artist.name} on ${eventDate}`);
+              console.log(`✅ Stored show for ${artist.name} on ${eventDate} with ID: ${newShowData.id}`);
+
+              // Create default setlist for the new show
+              const { data: newSetlistData, error: setlistError } = await supabase
+                .from('setlists')
+                .upsert(
+                  {
+                    show_id: newShowData.id,
+                    name: 'Main Set',
+                    order_index: 0,
+                  },
+                  {
+                    onConflict: 'show_id,order_index',
+                  }
+                )
+                .select('id')
+                .single();
+
+              if (setlistError) {
+                console.error(`Error creating default setlist for show ${newShowData.id}: ${setlistError.message}`);
+              } else if (newSetlistData) {
+                console.log(`✅ Created default setlist for show ${newShowData.id} with setlist ID: ${newSetlistData.id}`);
+
+                // Fetch up to 5 songs for the artist to populate the new setlist
+                const { data: artistSongs, error: songsError } = await supabase
+                  .from('songs')
+                  .select('id')
+                  .eq('artist_id', artist.id)
+                  // .order('popularity', { ascending: false }) // Optional: order by popularity
+                  .limit(5);
+
+                if (songsError) {
+                  console.error(`Error fetching songs for artist ${artist.id} for initial setlist: ${songsError.message}`);
+                } else if (artistSongs && artistSongs.length > 0) {
+                  const setlistSongInserts = artistSongs.map((song, index) => ({
+                    setlist_id: newSetlistData.id,
+                    song_id: song.id,
+                    position: index + 1,
+                    vote_count: 0
+                  }));
+
+                  const { error: insertSetlistSongsError } = await supabase
+                    .from('setlist_songs')
+                    .insert(setlistSongInserts);
+
+                  if (insertSetlistSongsError) {
+                    console.error(`Error inserting initial songs into setlist ${newSetlistData.id}: ${insertSetlistSongsError.message}`);
+                  } else {
+                    console.log(`✅ Inserted ${artistSongs.length} initial songs into setlist ${newSetlistData.id}`);
+                  }
+                } else {
+                  console.log(`No songs found for artist ${artist.id} to populate initial setlist ${newSetlistData.id}.`);
+                }
+              }
+
+            } else if (showError) {
+              console.error(`Error storing show for ${artist.name} on ${eventDate}: ${showError.message}`);
             } else {
-              console.error(`Error storing show: ${showError.message}`);
+              console.warn(`Show for ${artist.name} on ${eventDate} might not have been stored correctly, or ID was not returned.`);
             }
 
           } catch (error) {

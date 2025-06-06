@@ -8,7 +8,7 @@ export default function MainLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col"> {/* Use theme variables */}
       {/* Header */}
       <Header />
 

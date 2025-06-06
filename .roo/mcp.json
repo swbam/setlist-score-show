@@ -8,6 +8,9 @@
         "@supabase/mcp-server-supabase@latest",
         "--access-token",
         "sbp_15d1dc92bfddd29d4e59950778e4e0130dd25266"
+      ],
+      "alwaysAllow": [
+        "list_tables"
       ]
     },
     "sequential-thinking": {
@@ -16,15 +19,19 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
-      ]
+      ],
+      "disabled": true,
+      "alwaysAllow": []
     },
     "browser-tools": {
-      "type": "stdio", 
+      "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
         "@agentdeskai/browser-tools-mcp@1.2.0"
-      ]
+      ],
+      "disabled": true,
+      "alwaysAllow": []
     }
   }
 }

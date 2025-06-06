@@ -4,7 +4,8 @@ import Redis from 'ioredis'
 import { SupabaseClient } from '@supabase/supabase-js'
 import pLimit from 'p-limit'
 import { SetlistFmClient } from '../lib/setlistfm'
-import { SpotifyClient } from '../lib/spotify'
+// import { SpotifyClient } from '../lib/spotify' // No longer directly using SpotifyClient type here
+import { SpotifyService } from '../lib/spotify' // Import SpotifyService
 import { TicketmasterClient } from '../lib/ticketmaster'
 
 export interface SyncOptions {
@@ -24,7 +25,7 @@ export class SyncService {
     private redis: Redis,
     private supabase: SupabaseClient,
     private setlistFm: SetlistFmClient,
-    private spotify: SpotifyClient,
+    private spotify: SpotifyService, // Changed type to SpotifyService
     private ticketmaster: TicketmasterClient
   ) {}
 

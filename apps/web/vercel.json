@@ -16,15 +16,5 @@
     "app/api/trpc/[trpc]/route.ts": {
       "maxDuration": 30
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/sync-setlists",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/calculate-trending",
-      "schedule": "0 */4 * * *"
-    }
-  ]
+  }
 }

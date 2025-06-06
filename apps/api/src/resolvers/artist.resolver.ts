@@ -388,7 +388,8 @@ export const artistResolvers: IResolvers = {
         take: limit,
         skip: offset,
         include: {
-          venue: true
+          venue: true,
+          artist: true
         }
       })
 
@@ -443,19 +444,19 @@ async function importArtistSongCatalog(prisma: any, spotify: any, artistId: stri
     console.log(`🎵 Importing song catalog for artist...`)
     
     // Get artist's albums
-    const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtistId, {
+    const albums = await spotify.getArtistAlbums(spotifyArtistId, {
       include_groups: 'album,single',
       limit: 20
     })
 
     let importedCount = 0
 
-    for (const album of albumsResponse.body.items) {
+    for (const album of albums.slice(0, 5)) { // Limit to first 5 albums for speed
       try {
         // Get tracks for this album
-        const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+        const tracks = await spotify.getAlbumTracks(album.id, { limit: 50 })
 
-        for (const track of tracksResponse.body.items) {
+        for (const track of tracks) {
           try {
             // Check if song already exists
             const existingSong = await prisma.song.findFirst({
@@ -472,9 +473,9 @@ async function importArtistSongCatalog(prisma: any, spotify: any, artistId: stri
                   spotifyId: track.id,
                   title: track.name,
                   album: album.name,
-                  albumImageUrl: album.images[0]?.url || null,
+                  albumImageUrl: album.images?.[0]?.url || null,
                   durationMs: track.duration_ms,
-                  popularity: 0, // We'll update this later
+                  popularity: track.popularity || 0,
                   previewUrl: track.preview_url,
                   spotifyUrl: track.external_urls?.spotify,
                 }

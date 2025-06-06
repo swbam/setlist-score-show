@@ -317,17 +317,17 @@ export const commonResolvers: IResolvers = {
                   // Import song catalog from Spotify
                   try {
                     console.log(`🎵 Importing song catalog for ${spotifyArtist.name}...`)
-                    const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtist.id, {
+                    const albums = await spotify.getArtistAlbums(spotifyArtist.id, {
                       include_groups: 'album,single',
                       limit: 20
                     })
                     
                     let songCount = 0
-                    for (const album of albumsResponse.body.items.slice(0, 5)) { // Limit to first 5 albums for speed
+                    for (const album of albums.slice(0, 5)) { // Limit to first 5 albums for speed
                       try {
-                        const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+                        const tracks = await spotify.getAlbumTracks(album.id, { limit: 50 })
                         
-                        for (const track of tracksResponse.body.items) {
+                        for (const track of tracks) {
                           try {
                             await prisma.song.create({
                               data: {
@@ -335,7 +335,7 @@ export const commonResolvers: IResolvers = {
                                 spotifyId: track.id,
                                 title: track.name,
                                 album: album.name,
-                                albumImageUrl: album.images[0]?.url || null,
+                                albumImageUrl: album.images?.[0]?.url || null,
                                 durationMs: track.duration_ms,
                                 popularity: 0,
                                 previewUrl: track.preview_url,
@@ -396,17 +396,17 @@ export const commonResolvers: IResolvers = {
                     if (songCount === 0) {
                       console.log(`🎵 No songs found, importing catalog for ${existingArtist.name}...`)
                       try {
-                        const albumsResponse = await spotify.spotify.getArtistAlbums(spotifyArtist.id, {
+                        const albums = await spotify.getArtistAlbums(spotifyArtist.id, {
                           include_groups: 'album,single',
                           limit: 20
                         })
                         
                         let importedCount = 0
-                        for (const album of albumsResponse.body.items.slice(0, 5)) {
+                        for (const album of albums.slice(0, 5)) {
                           try {
-                            const tracksResponse = await spotify.spotify.getAlbumTracks(album.id, { limit: 50 })
+                            const tracks = await spotify.getAlbumTracks(album.id, { limit: 50 })
                             
-                            for (const track of tracksResponse.body.items) {
+                            for (const track of tracks) {
                               try {
                                 await prisma.song.create({
                                   data: {
@@ -414,7 +414,7 @@ export const commonResolvers: IResolvers = {
                                     spotifyId: track.id,
                                     title: track.name,
                                     album: album.name,
-                                    albumImageUrl: album.images[0]?.url || null,
+                                    albumImageUrl: album.images?.[0]?.url || null,
                                     durationMs: track.duration_ms,
                                     popularity: 0,
                                     previewUrl: track.preview_url,

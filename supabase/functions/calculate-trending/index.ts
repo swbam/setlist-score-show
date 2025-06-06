@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Matched version from refresh_trending_shows
 import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
@@ -12,10 +12,10 @@ serve(async (req) => {
   try {
     // Verify cron secret for scheduled runs or API key for manual runs
     const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
+    const cronSecret = Deno.env.get('CRON_SECRET'); // Assuming Deno is available in runtime
     
     if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
+        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) { // Assuming Deno is available
       console.error('Unauthorized trending calculation request');
       return new Response(
         JSON.stringify({ success: false, message: 'Unauthorized' }), 
@@ -23,138 +23,33 @@ serve(async (req) => {
       );
     }
 
-    console.log('📈 Starting trending score calculation job');
+    console.log('📈 Starting refresh of trending_shows materialized view');
     
     const supabase = createServiceClient();
 
-    // Get upcoming shows (next 30 days) for trending calculation
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    // Call the PostgreSQL function to refresh the materialized view
+    const { error: rpcError } = await supabase.rpc('refresh_trending_shows');
 
-    const { data: shows, error: showsError } = await supabase
-      .from('shows')
-      .select(`
-        id,
-        name,
-        date,
-        view_count,
-        artist:artists!shows_artist_id_fkey (
-          name
-        ),
-        setlists!shows_id_fkey (
-          id,
-          setlist_songs!setlists_id_fkey (
-            votes
-          )
-        )
-      `)
-      .gte('date', new Date().toISOString())
-      .lte('date', thirtyDaysFromNow.toISOString())
-      .order('date', { ascending: true });
-
-    if (showsError) {
-      throw new Error(`Failed to fetch shows: ${showsError.message}`);
-    }
-
-    if (!shows || shows.length === 0) {
-      console.log('✅ No upcoming shows found for trending calculation');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'No upcoming shows to process',
-          processed: 0,
-          duration: Date.now() - startTime,
-        }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`🎯 Calculating trending scores for ${shows.length} upcoming shows`);
-
-    let processed = 0;
-    let updated = 0;
-    const errors: string[] = [];
-
-    // Calculate trending scores
-    for (const show of shows) {
-      try {
-        // Calculate total votes for the show
-        const totalVotes = show.setlists?.[0]?.setlist_songs?.reduce(
-          (sum: number, song: any) => sum + (song.votes || 0), 0
-        ) || 0;
-
-        // Enhanced trending score calculation
-        const viewCount = show.view_count || 0;
-        const daysUntilShow = Math.max(1, Math.ceil((new Date(show.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-        
-        // Score factors:
-        // - View count (30%)
-        // - Total votes (50%) 
-        // - Recency boost (20%) - higher for shows happening sooner
-        const recencyBoost = Math.max(1, 31 - daysUntilShow) / 30; // 1.0 for tomorrow, decreasing to ~0.03 for 30 days out
-        
-        const trending_score = Math.round(
-          (viewCount * 0.3) + 
-          (totalVotes * 0.5) + 
-          (recencyBoost * 100 * 0.2)
-        );
-
-        // Update the show's trending score
-        const { error: updateError } = await supabase
-          .from('shows')
-          .update({ trending_score })
-          .eq('id', show.id);
-
-        if (updateError) {
-          errors.push(`${show.artist?.name || 'Unknown'}: ${updateError.message}`);
-          console.error(`❌ Error updating trending score for show ${show.id}:`, updateError);
-        } else {
-          updated++;
-          console.log(`✅ Updated trending score for ${show.artist?.name || 'Unknown'} (${show.date}): ${trending_score}`);
-        }
-
-        processed++;
-
-      } catch (error) {
-        processed++;
-        const errorMsg = `${show.artist?.name || 'Unknown'}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        errors.push(errorMsg);
-        console.error(`💥 Error processing show ${show.id}:`, error);
-      }
-    }
-
-    // Also clear trending scores for past shows
-    const { error: clearError } = await supabase
-      .from('shows')
-      .update({ trending_score: 0 })
-      .lt('date', new Date().toISOString());
-
-    if (clearError) {
-      console.error('Error clearing old trending scores:', clearError);
+    if (rpcError) {
+      throw new Error(`Failed to refresh trending_shows materialized view: ${rpcError.message}`);
     }
 
     const duration = Date.now() - startTime;
-    const response = {
+    const responsePayload = {
       success: true,
-      message: `Processed ${processed} shows, updated ${updated} trending scores`,
-      stats: {
-        processed,
-        updated,
-        failed: processed - updated,
-        errors: errors.slice(0, 5),
-      },
+      message: 'Successfully refreshed trending_shows materialized view.',
       duration,
     };
 
-    console.log(`🎉 Trending calculation completed: ${updated}/${processed} successful in ${duration}ms`);
+    console.log(`🎉 Trending materialized view refresh completed in ${duration}ms`);
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify(responsePayload),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('💥 Critical error in trending calculation:', error);
+    console.error('💥 Critical error in trending materialized view refresh:', error);
     
     return new Response(
       JSON.stringify({

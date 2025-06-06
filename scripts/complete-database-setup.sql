@@ -71,7 +71,8 @@ CREATE TABLE shows (
   ticketmaster_url TEXT,
   view_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+  -- trending_score column removed as we are using the materialized view
   CONSTRAINT unique_show UNIQUE (artist_id, venue_id, date)
 );
 
@@ -298,44 +299,46 @@ CREATE TABLE IF NOT EXISTS analytics_events (
 
 -- Add some initial test data
 -- Insert a test artist
-INSERT INTO artists (id, name, slug, spotify_id, genres, popularity, followers)
-VALUES 
-  ('a1111111-1111-1111-1111-111111111111', 'The Beatles', 'the-beatles', '3WrFJ7ztbogyGnTHbHJFl2', ARRAY['rock', 'pop'], 90, 25000000),
-  ('a2222222-2222-2222-2222-222222222222', 'Pink Floyd', 'pink-floyd', '0k17h0D3J5VfsdmQ1iZtE9', ARRAY['rock', 'progressive rock'], 85, 15000000);
+INSERT INTO artists (name, slug, spotify_id, genres, popularity, followers)
+VALUES
+  ('The Beatles', 'the-beatles', '3WrFJ7ztbogyGnTHbHJFl2', ARRAY['rock', 'pop'], 90, 25000000),
+  ('Pink Floyd', 'pink-floyd', '0k17h0D3J5VfsdmQ1iZtE9', ARRAY['rock', 'progressive rock'], 85, 15000000);
 
 -- Insert test venues
-INSERT INTO venues (id, name, city, state, country, capacity)
-VALUES 
-  ('v1111111-1111-1111-1111-111111111111', 'Madison Square Garden', 'New York', 'NY', 'USA', 20000),
-  ('v2222222-2222-2222-2222-222222222222', 'The Hollywood Bowl', 'Los Angeles', 'CA', 'USA', 17500);
+INSERT INTO venues (name, city, state, country, capacity)
+VALUES
+  ('Madison Square Garden', 'New York', 'NY', 'USA', 20000),
+  ('The Hollywood Bowl', 'Los Angeles', 'CA', 'USA', 17500);
 
 -- Insert test shows
-INSERT INTO shows (id, artist_id, venue_id, date, title, status)
-VALUES 
-  ('s1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'v1111111-1111-1111-1111-111111111111', CURRENT_DATE + INTERVAL '30 days', 'The Beatles Revival Tour', 'upcoming'),
-  ('s2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'v2222222-2222-2222-2222-222222222222', CURRENT_DATE + INTERVAL '45 days', 'Pink Floyd Experience', 'upcoming');
+-- Note: We need to select the artist_id and venue_id from the newly inserted rows
+-- This is a simplified approach for test data. For production, you'd handle this more robustly.
+INSERT INTO shows (artist_id, venue_id, date, title, status)
+VALUES
+  ((SELECT id from artists WHERE name = 'The Beatles'), (SELECT id from venues WHERE name = 'Madison Square Garden'), CURRENT_DATE + INTERVAL '30 days', 'The Beatles Revival Tour', 'upcoming'),
+  ((SELECT id from artists WHERE name = 'Pink Floyd'), (SELECT id from venues WHERE name = 'The Hollywood Bowl'), CURRENT_DATE + INTERVAL '45 days', 'Pink Floyd Experience', 'upcoming');
 
 -- Insert test songs
-INSERT INTO songs (id, artist_id, title, album, spotify_id, duration_ms, popularity)
-VALUES 
-  ('g1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'Hey Jude', 'The Beatles (White Album)', '0aym2LBJBk9DAYuHHutrIl', 431333, 85),
-  ('g2222222-2222-2222-2222-222222222222', 'a1111111-1111-1111-1111-111111111111', 'Let It Be', 'Let It Be', '7iN1s7xHE4ifF5povM6A48', 243026, 82),
-  ('g3333333-3333-3333-3333-333333333333', 'a2222222-2222-2222-2222-222222222222', 'Comfortably Numb', 'The Wall', '5HNCy40Ni5BZJFw1TKzRsC', 382296, 88),
-  ('g4444444-4444-4444-4444-444444444444', 'a2222222-2222-2222-2222-222222222222', 'Wish You Were Here', 'Wish You Were Here', '6mFkJmJqdDVQ1REhVfGgd1', 334743, 86);
+INSERT INTO songs (artist_id, title, album, spotify_id, duration_ms, popularity)
+VALUES
+  ((SELECT id from artists WHERE name = 'The Beatles'), 'Hey Jude', 'The Beatles (White Album)', '0aym2LBJBk9DAYuHHutrIl', 431333, 85),
+  ((SELECT id from artists WHERE name = 'The Beatles'), 'Let It Be', 'Let It Be', '7iN1s7xHE4ifF5povM6A48', 243026, 82),
+  ((SELECT id from artists WHERE name = 'Pink Floyd'), 'Comfortably Numb', 'The Wall', '5HNCy40Ni5BZJFw1TKzRsC', 382296, 88),
+  ((SELECT id from artists WHERE name = 'Pink Floyd'), 'Wish You Were Here', 'Wish You Were Here', '6mFkJmJqdDVQ1REhVfGgd1', 334743, 86);
 
 -- Insert test setlists
-INSERT INTO setlists (id, show_id, name, order_index)
-VALUES 
-  ('l1111111-1111-1111-1111-111111111111', 's1111111-1111-1111-1111-111111111111', 'Main Set', 0),
-  ('l2222222-2222-2222-2222-222222222222', 's2222222-2222-2222-2222-222222222222', 'Main Set', 0);
+INSERT INTO setlists (show_id, name, order_index)
+VALUES
+  ((SELECT id from shows WHERE title = 'The Beatles Revival Tour'), 'Main Set', 0),
+  ((SELECT id from shows WHERE title = 'Pink Floyd Experience'), 'Main Set', 0);
 
 -- Insert test setlist songs
 INSERT INTO setlist_songs (setlist_id, song_id, position, vote_count)
-VALUES 
-  ('l1111111-1111-1111-1111-111111111111', 'g1111111-1111-1111-1111-111111111111', 1, 0),
-  ('l1111111-1111-1111-1111-111111111111', 'g2222222-2222-2222-2222-222222222222', 2, 0),
-  ('l2222222-2222-2222-2222-222222222222', 'g3333333-3333-3333-3333-333333333333', 1, 0),
-  ('l2222222-2222-2222-2222-222222222222', 'g4444444-4444-4444-4444-444444444444', 2, 0);
+VALUES
+  ((SELECT id from setlists WHERE show_id = (SELECT id from shows WHERE title = 'The Beatles Revival Tour')), (SELECT id from songs WHERE title = 'Hey Jude'), 1, 0),
+  ((SELECT id from setlists WHERE show_id = (SELECT id from shows WHERE title = 'The Beatles Revival Tour')), (SELECT id from songs WHERE title = 'Let It Be'), 2, 0),
+  ((SELECT id from setlists WHERE show_id = (SELECT id from shows WHERE title = 'Pink Floyd Experience')), (SELECT id from songs WHERE title = 'Comfortably Numb'), 1, 0),
+  ((SELECT id from setlists WHERE show_id = (SELECT id from shows WHERE title = 'Pink Floyd Experience')), (SELECT id from songs WHERE title = 'Wish You Were Here'), 2, 0);
 
 -- Refresh the materialized view
 REFRESH MATERIALIZED VIEW trending_shows;

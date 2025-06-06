@@ -14,6 +14,7 @@ import { supabaseRealtimePlugin } from './plugins/supabase-realtime'
 import { SpotifyService } from './lib/spotify'
 import { TicketmasterClient } from './lib/ticketmaster'
 import { SetlistFmClient } from './lib/setlistfm'
+import { SyncService } from './services/sync.service' // Import SyncService
 
 export async function createServer() {
   const app = Fastify({
@@ -81,6 +82,37 @@ export async function createServer() {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   }))
+
+  // Internal route for triggering upcoming shows sync
+  app.post('/internal/sync/upcoming-shows', async (request, reply) => {
+    const cronSecret = process.env.CRON_SECRET
+    const authHeader = request.headers['cron-secret'] // Or a different header like 'Authorization': 'Bearer <secret>'
+
+    if (!cronSecret || authHeader !== cronSecret) {
+      app.log.warn('Unauthorized attempt to trigger upcoming shows sync')
+      return reply.status(401).send({ error: 'Unauthorized' })
+    }
+
+    try {
+      app.log.info('Triggering upcoming shows sync via internal API call...')
+      // Instantiate SyncService - dependencies are already decorated on 'app'
+      const syncService = new SyncService(
+        app.prisma,
+        app.redis!, // Assuming redis is always available when this route is hit
+        app.supabase,
+        app.setlistfm,
+        app.spotify,
+        app.ticketmaster
+      )
+      
+      const results = await syncService.syncUpcomingShows({ forceUpdate: true }) // Example: allow force update
+      app.log.info('Upcoming shows sync completed via internal API call.', results)
+      return reply.send({ success: true, message: 'Upcoming shows sync triggered.', results })
+    } catch (error) {
+      app.log.error('Error triggering upcoming shows sync:', error)
+      return reply.status(500).send({ error: 'Failed to trigger upcoming shows sync' })
+    }
+  })
 
   return app
 }
