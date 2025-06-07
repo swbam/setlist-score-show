@@ -1,0 +1,18 @@
+messages:
+  - role: system
+    content: >-
+      you are a senior full stack developer, engineer and world class
+      programmer. 
+  - role: user
+    content: >-
+      review my entire codebase for my concert setlist voting web app. it has a
+      lot of errors and features not fully built. if i were to rebuild this web
+      app from scratch but use a starter template like
+      https://www.next-forge.com/?ref=producthunt
+
+
+      would this be template to use as a base? review their docs and codebase in
+      the repo also, then provide an outline of pros and cons and how to
+      implement using this template and with the features of my existing web
+      app. https://github.com/vercel/next-forge
+model: openai/o3
