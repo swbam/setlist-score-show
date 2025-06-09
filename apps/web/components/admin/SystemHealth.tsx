@@ -13,15 +13,15 @@ export function SystemHealth() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span>API Status</span>
-            <Badge variant="success">Online</Badge>
+            <Badge variant="default" className="bg-green-600">Online</Badge>
           </div>
           <div className="flex items-center justify-between">
             <span>Database</span>
-            <Badge variant="success">Connected</Badge>
+            <Badge variant="default" className="bg-green-600">Connected</Badge>
           </div>
           <div className="flex items-center justify-between">
             <span>Redis Cache</span>
-            <Badge variant="success">Active</Badge>
+            <Badge variant="default" className="bg-green-600">Active</Badge>
           </div>
           <div className="flex items-center justify-between">
             <span>Background Jobs</span>

@@ -36,7 +36,7 @@ export class SupabaseAdapter {
       
       // Transform to match GraphQL structure
       return {
-        shows: data?.map(show => ({
+        shows: data?.map((show: any) => ({
           ...show,
           ticketmasterUrl: show.ticketmaster_url,
           viewCount: show.view_count,
@@ -107,10 +107,10 @@ export class SupabaseAdapter {
             ...data.artist,
             imageUrl: data.artist?.image_url
           },
-          setlists: data.setlists?.map(setlist => ({
+          setlists: data.setlists?.map((setlist: any) => ({
             ...setlist,
             orderIndex: setlist.order_index,
-            setlistSongs: setlist.setlist_songs?.map(ss => ({
+            setlistSongs: setlist.setlist_songs?.map((ss: any) => ({
               ...ss,
               voteCount: ss.vote_count,
               song: {
@@ -118,8 +118,8 @@ export class SupabaseAdapter {
                 durationMs: ss.song?.duration_ms,
                 spotifyUrl: ss.song?.spotify_url
               }
-            })).sort((a, b) => a.position - b.position)
-          }))
+            })).sort((a: any, b: any) => a.position - b.position)
+          })) || []
         }
       }
     } catch (error) {
@@ -145,7 +145,7 @@ export class SupabaseAdapter {
       if (error) throw error
       
       return {
-        artists: data?.map(artist => ({
+        artists: data?.map((artist: any) => ({
           ...artist,
           imageUrl: artist.image_url
         })) || []
@@ -208,43 +208,85 @@ export class SupabaseAdapter {
 
   async search(query: string) {
     try {
-      const [artistsRes, showsRes] = await Promise.all([
-        supabase
-          .from('artists')
-          .select('id, name, slug, image_url')
-          .ilike('name', `%${query}%`)
-          .limit(5),
-        supabase
-          .from('shows')
-          .select(`
-            id,
-            date,
-            title,
-            artist:artists(name),
-            venue:venues(name, city)
-          `)
-          .ilike('title', `%${query}%`)
-          .eq('status', 'upcoming')
-          .limit(5)
-      ])
+      // Search Ticketmaster API for artists
+      const ticketmasterUrl = `https://app.ticketmaster.com/discovery/v2/attractions.json?keyword=${encodeURIComponent(query)}&apikey=k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b&size=10&classificationName=music`
+      
+      console.log('Searching Ticketmaster for:', query)
+      
+      const tmResponse = await fetch(ticketmasterUrl)
+      
+      if (!tmResponse.ok) {
+        console.error('Ticketmaster API error:', tmResponse.status)
+        throw new Error('Ticketmaster API error')
+      }
+
+      const tmData = await tmResponse.json()
+      const tmArtists = tmData._embedded?.attractions || []
+      
+      console.log(`Found ${tmArtists.length} artists from Ticketmaster`)
+
+      // Transform Ticketmaster artists
+      const apiArtists = tmArtists.map((tm: any) => ({
+        id: `tm_${tm.id}`, // Temporary ID
+        ticketmasterId: tm.id,
+        name: tm.name,
+        slug: tm.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-'),
+        imageUrl: tm.images?.[0]?.url || null,
+        isFromApi: true // Flag to indicate this needs to be imported
+      }))
+
+      // Also search local database
+      const { data: dbArtists } = await supabase
+        .from('artists')
+        .select('id, name, slug, image_url, ticketmaster_id')
+        .ilike('name', `%${query}%`)
+        .limit(5)
+
+      // Combine and deduplicate
+      const allArtists = [...(dbArtists || []).map((a: any) => ({
+        ...a,
+        imageUrl: a.image_url,
+        ticketmasterId: a.ticketmaster_id
+      })), ...apiArtists]
+      
+      // Deduplicate by name
+      const uniqueArtists = allArtists.reduce((acc: any[], artist) => {
+        if (!acc.some(a => a.name.toLowerCase() === artist.name.toLowerCase())) {
+          acc.push(artist)
+        }
+        return acc
+      }, [])
+
+      // Search shows in database
+      const { data: shows } = await supabase
+        .from('shows')
+        .select(`
+          id,
+          date,
+          title,
+          artist:artists(name),
+          venue:venues(name, city)
+        `)
+        .ilike('title', `%${query}%`)
+        .eq('status', 'upcoming')
+        .limit(5)
 
       return {
         search: {
-          artists: artistsRes.data?.map(artist => ({
-            ...artist,
-            imageUrl: artist.image_url
-          })) || [],
-          shows: showsRes.data || [],
-          songs: [] // TODO: Implement song search when songs table is populated
+          artists: uniqueArtists.slice(0, 10),
+          shows: shows || [],
+          songs: [],
+          totalResults: uniqueArtists.length + (shows?.length || 0)
         }
       }
     } catch (error) {
-      console.error('Error searching:', error)
+      console.error('Search error:', error)
       return {
         search: {
           artists: [],
           shows: [],
-          songs: []
+          songs: [],
+          totalResults: 0
         }
       }
     }
@@ -307,9 +349,11 @@ export class SupabaseAdapter {
       return {
         castVote: {
           success: true,
-          vote: { id: 'temp-id', createdAt: new Date().toISOString() },
+          voteId: 'temp-id',
           newVoteCount: (await this.getVoteCount(setlistSongId)) || 1,
-          votesRemaining: { daily: 49, show: 9 } // TODO: Calculate actual remaining votes
+          dailyVotesRemaining: 49,
+          showVotesRemaining: 9,
+          message: 'Vote cast successfully'
         }
       }
     } catch (error) {
@@ -317,7 +361,11 @@ export class SupabaseAdapter {
       return {
         castVote: {
           success: false,
-          error: error.message
+          voteId: null,
+          newVoteCount: 0,
+          dailyVotesRemaining: 0,
+          showVotesRemaining: 0,
+          message: error.message
         }
       }
     }
@@ -355,6 +403,197 @@ export class SupabaseAdapter {
     } catch (error) {
       console.error('Error fetching user votes:', error)
       return { userVotes: [] }
+    }
+  }
+
+  async getArtistSongs(artistId: string, limit = 50, offset = 0) {
+    try {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('id, title, album, album_image_url, duration_ms, popularity, spotify_url')
+        .eq('artist_id', artistId)
+        .order('popularity', { ascending: false })
+        .range(offset, offset + limit - 1)
+
+      if (error) throw error
+
+      return {
+        songs: {
+          edges: data?.map((song, index) => ({
+            node: {
+              ...song,
+              albumImageUrl: song.album_image_url,
+              durationMs: song.duration_ms,
+              spotifyUrl: song.spotify_url
+            },
+            cursor: Buffer.from(`${offset + index}`).toString('base64')
+          })) || []
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching artist songs:', error)
+      return { songs: { edges: [] } }
+    }
+  }
+
+  async getTrendingShows(limit = 10) {
+    try {
+      const { data, error } = await supabase
+        .from('trending_shows_view') // Assuming we have a view
+        .select(`
+          id,
+          date,
+          title,
+          trending_score,
+          total_votes,
+          unique_voters,
+          artist:artists(name, slug, image_url),
+          venue:venues(name, city)
+        `)
+        .order('trending_score', { ascending: false })
+        .limit(limit)
+
+      if (error) {
+        // Fallback to regular shows if view doesn't exist
+        const { data: showsData, error: showsError } = await supabase
+          .from('shows')
+          .select(`
+            id,
+            date,
+            title,
+            view_count,
+            artist:artists(name, slug, image_url),
+            venue:venues(name, city)
+          `)
+          .eq('status', 'upcoming')
+          .order('view_count', { ascending: false })
+          .limit(limit)
+
+        if (showsError) throw showsError
+
+        return showsData?.map((show: any) => ({
+          ...show,
+          trendingScore: show.view_count || 0,
+          totalVotes: 0,
+          uniqueVoters: 0,
+          artist: {
+            ...show.artist,
+            imageUrl: show.artist?.image_url
+          }
+        })) || []
+      }
+
+      return data?.map((show: any) => ({
+        ...show,
+        trendingScore: show.trending_score || 0,
+        totalVotes: show.total_votes || 0,
+        uniqueVoters: show.unique_voters || 0,
+        artist: {
+          ...show.artist,
+          imageUrl: show.artist?.image_url
+        }
+      })) || []
+    } catch (error) {
+      console.error('Error fetching trending shows:', error)
+      return []
+    }
+  }
+
+  async addSongToSetlist(setlistId: string, input: { songId: string; position?: number; notes?: string }) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('User must be logged in to add songs')
+      }
+
+      // Get current setlist info
+      const { data: setlist, error: setlistError } = await supabase
+        .from('setlists')
+        .select('id, setlist_songs!inner(position)')
+        .eq('id', setlistId)
+        .single()
+
+      if (setlistError) throw setlistError
+
+      // Determine position
+      const maxPosition = setlist.setlist_songs?.length || 0
+      const position = input.position || maxPosition + 1
+
+      // Insert new setlist song
+      const { data, error } = await supabase
+        .from('setlist_songs')
+        .insert({
+          setlist_id: setlistId,
+          song_id: input.songId,
+          position: position,
+          vote_count: 0,
+          notes: input.notes || null
+        })
+        .select(`
+          id,
+          position,
+          vote_count,
+          notes,
+          song:songs(id, title, album, album_image_url)
+        `)
+        .single()
+
+      if (error) throw error
+
+      return {
+        addSongToSetlist: {
+          ...data,
+          voteCount: data.vote_count,
+          song: {
+            ...data.song,
+            albumImageUrl: data.song?.album_image_url
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error adding song to setlist:', error)
+      throw error
+    }
+  }
+
+  async getMyArtists() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        return { myArtists: [] }
+      }
+
+      const { data, error } = await supabase
+        .from('user_follows_artist')
+        .select(`
+          followed_at,
+          artist:artists(
+            id,
+            name,
+            slug,
+            image_url,
+            genres
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('followed_at', { ascending: false })
+
+      if (error) throw error
+
+      return {
+        myArtists: data?.map(follow => ({
+          artist: {
+            ...follow.artist,
+            imageUrl: follow.artist?.image_url
+          },
+          followedAt: follow.followed_at
+        })) || []
+      }
+    } catch (error) {
+      console.error('Error fetching followed artists:', error)
+      return { myArtists: [] }
     }
   }
 }

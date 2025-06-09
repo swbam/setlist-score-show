@@ -26,7 +26,7 @@ export function Header() {
   }
 
   return (
-    <header className="bg-background border-b border-border"> {/* Use theme variables */}
+    <header className="bg-gray-900 border-b border-gray-800">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -74,7 +74,7 @@ export function Header() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="pl-9 pr-3 py-1.5 bg-muted border border-border rounded-lg text-sm focus:outline-none focus:border-teal-500 transition-colors w-48 text-foreground"
+                className="pl-9 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-teal-500 transition-colors w-48 text-white placeholder-gray-400"
               />
             </form>
             

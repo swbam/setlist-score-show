@@ -36,13 +36,13 @@ interface ShowsResponse {
 export default function ShowsPage() {
   const client = useGraphQLClient()
 
-  const { data, isLoading } = useQuery<ShowsResponse>({
+  const { data, isLoading } = useQuery({
     queryKey: ['shows'],
     queryFn: async () => {
       return client.request(GET_SHOWS, {
         limit: 20,
         status: 'upcoming'
-      })
+      }) as Promise<ShowsResponse>
     }
   })
 

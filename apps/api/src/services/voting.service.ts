@@ -2,7 +2,7 @@
 import { PrismaClient } from '@setlist/database'
 import Redis from 'ioredis'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { TRPCError } from '@trpc/server'
+import { GraphQLError } from 'graphql'
 
 interface VoteInput {
   userId: string
@@ -30,9 +30,8 @@ export class VotingService {
     }
     
     if (attempts > 5) {
-      throw new TRPCError({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'Rate limit exceeded. Try again in a minute.'
+      throw new GraphQLError('Rate limit exceeded. Try again in a minute.', {
+        extensions: { code: 'TOO_MANY_REQUESTS' }
       })
     }
 
@@ -55,16 +54,14 @@ export class VotingService {
     ])
 
     if (dailyVotes >= 50) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Daily vote limit reached (50 votes)'
+      throw new GraphQLError('Daily vote limit reached (50 votes)', {
+        extensions: { code: 'FORBIDDEN' }
       })
     }
 
     if (showVotes >= 10) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Show vote limit reached (10 votes per show)'
+      throw new GraphQLError('Show vote limit reached (10 votes per show)', {
+        extensions: { code: 'FORBIDDEN' }
       })
     }
 
@@ -81,9 +78,8 @@ export class VotingService {
       })
 
       if (existingVote) {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'Already voted for this song'
+        throw new GraphQLError('Already voted for this song', {
+          extensions: { code: 'CONFLICT' }
         })
       }
 

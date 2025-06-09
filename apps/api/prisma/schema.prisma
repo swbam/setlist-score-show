@@ -23,8 +23,9 @@ model Artist {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  shows Show[]
-  songs Song[]
+  shows     Show[]
+  songs     Song[]
+  followers UserFollowsArtist[]
 
   @@unique([spotifyId, ticketmasterId])
   @@map("artists")
@@ -151,8 +152,9 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  votes         Vote[]
-  voteAnalytics VoteAnalytics[]
+  votes           Vote[]
+  voteAnalytics   VoteAnalytics[]
+  followedArtists UserFollowsArtist[]
 
   @@map("users")
 }
@@ -206,4 +208,19 @@ model SyncHistory {
   completedAt    DateTime? @map("completed_at")
 
   @@map("sync_history")
+}
+
+model UserFollowsArtist {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  artistId   String   @map("artist_id")
+  followedAt DateTime @default(now()) @map("followed_at")
+  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, artistId])
+  @@index([userId])
+  @@index([artistId])
+  @@map("user_follows_artist")
 }

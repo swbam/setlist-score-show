@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
           'Content-Type': 'application/json',
           'x-cron-secret': process.env.CRON_SECRET || ''
         },

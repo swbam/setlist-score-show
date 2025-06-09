@@ -75,6 +75,22 @@ async function handleQueryWithAdapter(query: string, variables: any = {}) {
     return adapter.getUserVotes(variables.showId)
   }
   
+  if (query.includes('GetArtistSongs')) {
+    return adapter.getArtistSongs(variables.artistId, variables.limit, variables.offset)
+  }
+  
+  if (query.includes('GetTrendingShows')) {
+    return adapter.getTrendingShows(variables.limit)
+  }
+  
+  if (query.includes('AddSongToSetlist')) {
+    return adapter.addSongToSetlist(variables.setlistId, variables.input)
+  }
+  
+  if (query.includes('GetMyArtists') || query.includes('myArtists')) {
+    return adapter.getMyArtists()
+  }
+  
   // Default fallback
   console.warn('Unhandled query, returning empty result:', query)
   return {}

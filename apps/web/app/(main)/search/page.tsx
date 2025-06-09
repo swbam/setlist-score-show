@@ -34,7 +34,7 @@ function SearchPageContent() {
     enabled: !!debouncedQuery,
   })
 
-  const results = data?.search
+  const results = (data as any)?.search
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -83,10 +83,44 @@ function SearchPageContent() {
                 </h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {results.artists.map((artist: any) => (
-                    <Link
+                    <button
                       key={artist.id}
-                      href={`/artists/${artist.slug}`}
-                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover flex items-center gap-4"
+                      onClick={async () => {
+                        // If artist is from API, import it first
+                        if (artist.isFromApi) {
+                          try {
+                            console.log('Importing artist from Ticketmaster:', artist.name)
+                            
+                            // Call API to import artist
+                            const response = await fetch('/api/import-artist', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                ticketmasterId: artist.ticketmasterId,
+                                name: artist.name,
+                                imageUrl: artist.imageUrl,
+                                slug: artist.slug
+                              })
+                            })
+                            
+                            if (!response.ok) {
+                              throw new Error('Failed to import artist')
+                            }
+                            
+                            const data = await response.json()
+                            
+                            // Navigate to artist page
+                            window.location.href = `/artists/${data.artist.slug}`
+                          } catch (error) {
+                            console.error('Error importing artist:', error)
+                            alert('Failed to import artist. Please try again.')
+                          }
+                        } else {
+                          // Artist already in DB, just navigate
+                          window.location.href = `/artists/${artist.slug}`
+                        }
+                      }}
+                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover flex items-center gap-4 w-full text-left"
                     >
                       {artist.imageUrl && (
                         <img
@@ -95,11 +129,18 @@ function SearchPageContent() {
                           className="w-16 h-16 rounded-full object-cover"
                         />
                       )}
-                      <div>
+                      <div className="flex-1">
                         <h3 className="font-semibold text-lg">{artist.name}</h3>
-                        <p className="text-sm text-gray-400">Artist</p>
+                        <p className="text-sm text-gray-400">
+                          {artist.isFromApi ? 'Click to import from Ticketmaster' : 'Artist'}
+                        </p>
                       </div>
-                    </Link>
+                      {artist.isFromApi && (
+                        <span className="text-xs bg-teal-600 text-white px-2 py-1 rounded">
+                          Import
+                        </span>
+                      )}
+                    </button>
                   ))}
                 </div>
               </section>

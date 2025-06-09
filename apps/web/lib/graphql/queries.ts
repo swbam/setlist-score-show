@@ -41,14 +41,6 @@ export const GET_SHOW_WITH_SETLIST = gql`
         name
         slug
         imageUrl
-        songs {
-          id
-          title
-          album
-          albumImageUrl
-          durationMs
-          spotifyUrl
-        }
       }
       venue {
         id
@@ -146,8 +138,8 @@ export const CAST_VOTE = gql`
 `
 
 export const ADD_SONG_TO_SETLIST = gql`
-  mutation AddSongToSetlist($setlistId: ID!, $songId: ID!) {
-    addSongToSetlist(setlistId: $setlistId, songId: $songId) {
+  mutation AddSongToSetlist($setlistId: ID!, $input: AddSongToSetlistInput!) {
+    addSongToSetlist(setlistId: $setlistId, input: $input) {
       id
       position
       voteCount
@@ -220,27 +212,44 @@ export const SEARCH_ALL = gql`
   }
 `
 
+// Song queries
+export const GET_ARTIST_SONGS = gql`
+  query GetArtistSongs($artistId: ID!, $limit: Int = 50, $offset: Int = 0) {
+    songs(filter: { artistId: $artistId }, limit: $limit, offset: $offset) {
+      edges {
+        node {
+          id
+          title
+          album
+          albumImageUrl
+          durationMs
+          popularity
+          spotifyUrl
+        }
+      }
+    }
+  }
+`
+
 // Trending query
 export const GET_TRENDING_SHOWS = gql`
   query GetTrendingShows($limit: Int!) {
     trendingShows(limit: $limit) {
-      show {
-        id
-        date
-        title
-        artist {
-          name
-          slug
-          imageUrl
-        }
-        venue {
-          name
-          city
-        }
-      }
+      id
+      date
+      title
       trendingScore
       totalVotes
       uniqueVoters
+      artist {
+        name
+        slug
+        imageUrl
+      }
+      venue {
+        name
+        city
+      }
     }
   }
 `

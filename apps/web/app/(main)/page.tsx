@@ -1,6 +1,180 @@
+'use client' // Add this line to make it a client component for data fetching and state
+
 import Link from 'next/link'
+import { useEffect, useState } from 'react' // Import useEffect and useState
+import { supabase } from '@/lib/supabase' // Import supabase client
+import { TrendingShows } from '@/components/shows/TrendingShows' // Import TrendingShows component
+
+// Make sure the TrendingShow interface matches the one in TrendingShows.tsx
+// Based on previous tool output for TrendingShows.tsx, the interface is:
+interface TrendingShow {
+  show: {
+    id: string;
+    date: string;
+    artist: {
+      id: string;
+      name: string;
+      imageUrl?: string;
+    };
+    venue: {
+      id: string;
+      name: string;
+      city: string;
+    };
+  };
+  totalVotes: number;
+  uniqueVoters: number;
+  trendingScore: number;
+}
 
 export default function HomePage() {
+  const [trendingShows, setTrendingShows] = useState<TrendingShow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchTrendingShows = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        // First, get the trending data from the materialized view
+        const { data: trendingData, error: trendingError } = await supabase
+          .from('trending_shows')
+          .select('*')
+          .order('trending_score', { ascending: false })
+          .limit(10)
+
+        if (trendingError) {
+          throw trendingError
+        }
+
+        if (!trendingData || trendingData.length === 0) {
+          setTrendingShows([])
+          return
+        }
+
+        // Extract unique show IDs
+        const showIds = trendingData.map(t => t.show_id)
+
+        // Fetch full show details with artist and venue info
+        const { data: showsData, error: showsError } = await supabase
+          .from('shows')
+          .select(`
+            id,
+            date,
+            title,
+            artist:artists(
+              id,
+              name,
+              image_url
+            ),
+            venue:venues(
+              id,
+              name,
+              city
+            )
+          `)
+          .in('id', showIds)
+
+        if (showsError) {
+          throw showsError
+        }
+
+        // Create a map of show details
+        const showsMap = new Map(showsData.map(show => [show.id, show]))
+
+        // Combine trending data with show details
+        const mappedData: TrendingShow[] = trendingData
+          .map((trending: any) => {
+            const show = showsMap.get(trending.show_id)
+            if (!show) return null
+
+            return {
+              show: {
+                id: show.id,
+                date: show.date,
+                artist: {
+                  id: show.artist?.id,
+                  name: show.artist?.name,
+                  imageUrl: show.artist?.image_url,
+                },
+                venue: {
+                  id: show.venue?.id,
+                  name: show.venue?.name,
+                  city: show.venue?.city,
+                },
+              },
+              totalVotes: trending.total_votes,
+              uniqueVoters: trending.unique_voters,
+              trendingScore: trending.trending_score,
+            }
+          })
+          .filter(Boolean) // Remove any null entries
+
+        setTrendingShows(mappedData)
+      } catch (err: any) {
+        console.error('Error fetching trending shows:', err)
+        
+        // Fallback to showing regular upcoming shows if trending view fails
+        try {
+          const { data: fallbackShows, error: fallbackError } = await supabase
+            .from('shows')
+            .select(`
+              id,
+              date,
+              title,
+              view_count,
+              artist:artists(
+                id,
+                name,
+                image_url
+              ),
+              venue:venues(
+                id,
+                name,
+                city
+              )
+            `)
+            .eq('status', 'upcoming')
+            .gte('date', new Date().toISOString())
+            .order('view_count', { ascending: false })
+            .limit(10)
+
+          if (fallbackError) throw fallbackError
+
+          const fallbackMapped: TrendingShow[] = (fallbackShows || []).map(show => ({
+            show: {
+              id: show.id,
+              date: show.date,
+              artist: {
+                id: show.artist?.id,
+                name: show.artist?.name,
+                imageUrl: show.artist?.image_url,
+              },
+              venue: {
+                id: show.venue?.id,
+                name: show.venue?.name,
+                city: show.venue?.city,
+              },
+            },
+            totalVotes: 0,
+            uniqueVoters: 0,
+            trendingScore: show.view_count || 0,
+          }))
+
+          setTrendingShows(fallbackMapped)
+          setError('Using fallback data - trending view not available')
+        } catch (fallbackErr: any) {
+          setError(fallbackErr.message || 'Failed to fetch shows.')
+        }
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchTrendingShows()
+  }, [])
+
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Hero Section */}
@@ -26,6 +200,15 @@ export default function HomePage() {
               Find Artists
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Trending Shows Section */}
+      <section className="py-16 bg-gray-900">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 gradient-text">Trending Shows</h2>
+          {error && <p className="text-red-500 text-center">{error}</p>}
+          <TrendingShows shows={trendingShows} isLoading={isLoading} />
         </div>
       </section>
 

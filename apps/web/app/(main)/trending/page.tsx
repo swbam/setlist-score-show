@@ -17,7 +17,34 @@ export default function TrendingPage() {
     }
   })
 
-  const trendingShows = data?.trendingShows || []
+  const rawData = (data as any)?.trendingShows || (data as any) || []
+  
+  // Transform the data structure to match what the component expects
+  const trendingShows = Array.isArray(rawData) ? rawData.map((show: any) => {
+    // If it's already in the correct format, return as is
+    if (show.show && show.totalVotes !== undefined) {
+      return show
+    }
+    
+    // Otherwise transform it
+    return {
+      show: {
+        id: show.id,
+        date: show.date,
+        artist: {
+          name: show.artist?.name || 'Unknown Artist',
+          imageUrl: show.artist?.imageUrl
+        },
+        venue: {
+          name: show.venue?.name || 'Unknown Venue',
+          city: show.venue?.city || 'Unknown City'
+        }
+      },
+      totalVotes: show.totalVotes || 0,
+      uniqueVoters: show.uniqueVoters || 0,
+      trendingScore: show.trendingScore || 0
+    }
+  }) : []
 
   return (
     <div className="min-h-screen bg-gray-950">

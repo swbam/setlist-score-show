@@ -92,6 +92,15 @@ extend type Query {
   
   # Get user's notification settings
   notificationSettings: UserPreferences!
+  
+  # Get user's followed artists
+  myArtists: [FollowedArtist!]!
+}
+
+# Type for followed artist
+type FollowedArtist {
+  artist: Artist!
+  followedAt: DateTime!
 }
 
 # Mutations
@@ -115,6 +124,15 @@ extend type Mutation {
   
   # Disconnect Spotify account
   disconnectSpotify: User!
+  
+  # Follow an artist
+  followArtist(artistId: ID!): FollowedArtist!
+  
+  # Unfollow an artist
+  unfollowArtist(artistId: ID!): AuthResult!
+  
+  # Import followed artists from Spotify
+  importSpotifyArtists: [FollowedArtist!]!
   
   # Delete user account
   deleteAccount(

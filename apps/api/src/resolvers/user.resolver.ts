@@ -15,6 +15,25 @@ export const userResolvers: IResolvers = {
       })
     },
 
+    myArtists: async (_parent, _args, { user, prisma }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      const follows = await prisma.userFollowsArtist.findMany({
+        where: { userId: user.id },
+        include: { artist: true },
+        orderBy: { followedAt: 'desc' },
+      })
+
+      return follows.map(follow => ({
+        artist: follow.artist,
+        followedAt: follow.followedAt,
+      }))
+    },
+
     user: async (_parent, { id }, { user, prisma }) => {
       if (!user) {
         throw new GraphQLError('Authentication required', {
@@ -211,6 +230,180 @@ export const userResolvers: IResolvers = {
       })
     },
 
+    followArtist: async (_parent, { artistId }, { user, prisma }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      // Check if artist exists
+      const artist = await prisma.artist.findUnique({
+        where: { id: artistId },
+      })
+
+      if (!artist) {
+        throw new GraphQLError('Artist not found', {
+          extensions: { code: 'NOT_FOUND' },
+        })
+      }
+
+      // Check if already following
+      const existing = await prisma.userFollowsArtist.findUnique({
+        where: {
+          userId_artistId: {
+            userId: user.id,
+            artistId: artistId,
+          },
+        },
+      })
+
+      if (existing) {
+        return {
+          artist,
+          followedAt: existing.followedAt,
+        }
+      }
+
+      // Create new follow
+      const follow = await prisma.userFollowsArtist.create({
+        data: {
+          userId: user.id,
+          artistId: artistId,
+        },
+        include: { artist: true },
+      })
+
+      return {
+        artist: follow.artist,
+        followedAt: follow.followedAt,
+      }
+    },
+
+    unfollowArtist: async (_parent, { artistId }, { user, prisma }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      try {
+        await prisma.userFollowsArtist.delete({
+          where: {
+            userId_artistId: {
+              userId: user.id,
+              artistId: artistId,
+            },
+          },
+        })
+
+        return {
+          success: true,
+          user: null,
+          message: 'Artist unfollowed successfully',
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          user: null,
+          message: 'Failed to unfollow artist',
+        }
+      }
+    },
+
+    importSpotifyArtists: async (_parent, _args, { user, prisma, spotify }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        })
+      }
+
+      // Check if user has Spotify connected
+      const userWithSpotify = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { spotifyId: true },
+      })
+
+      if (!userWithSpotify?.spotifyId) {
+        throw new GraphQLError('Spotify account not connected', {
+          extensions: { code: 'PRECONDITION_FAILED' },
+        })
+      }
+
+      try {
+        // Get user's top artists from Spotify
+        const topArtists = await spotify.getUserTopItems('artists', {
+          limit: 50,
+          time_range: 'long_term',
+        })
+
+        const followedArtists = []
+
+        for (const spotifyArtist of topArtists.items) {
+          // Check if artist exists in our database
+          let artist = await prisma.artist.findUnique({
+            where: { spotifyId: spotifyArtist.id },
+          })
+
+          if (!artist) {
+            // Create artist if doesn't exist
+            const slug = spotifyArtist.name.toLowerCase()
+              .replace(/[^a-z0-9\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-')
+              .trim()
+
+            artist = await prisma.artist.create({
+              data: {
+                spotifyId: spotifyArtist.id,
+                name: spotifyArtist.name,
+                slug: slug,
+                imageUrl: spotifyArtist.images[0]?.url || null,
+                genres: spotifyArtist.genres,
+                popularity: spotifyArtist.popularity || 0,
+                followers: spotifyArtist.followers?.total || 0,
+              },
+            })
+          }
+
+          // Check if already following
+          const existingFollow = await prisma.userFollowsArtist.findUnique({
+            where: {
+              userId_artistId: {
+                userId: user.id,
+                artistId: artist.id,
+              },
+            },
+          })
+
+          if (!existingFollow) {
+            // Create follow relationship
+            const follow = await prisma.userFollowsArtist.create({
+              data: {
+                userId: user.id,
+                artistId: artist.id,
+              },
+              include: { artist: true },
+            })
+
+            followedArtists.push({
+              artist: follow.artist,
+              followedAt: follow.followedAt,
+            })
+          }
+        }
+
+        return followedArtists
+      } catch (error: any) {
+        throw new GraphQLError('Failed to import Spotify artists', {
+          extensions: { 
+            code: 'EXTERNAL_SERVICE_ERROR',
+            details: error.message,
+          },
+        })
+      }
+    },
+
     deleteAccount: async (_parent, { confirmation }, { user, prisma }) => {
       if (!user) {
         throw new GraphQLError('Authentication required', {
@@ -255,10 +448,10 @@ export const userResolvers: IResolvers = {
         // Create default preferences if they don't exist
         prefs = await prisma.userPreferences.create({
           data: {
-            user_id: parent.id,
-            email_notifications: true,
-            push_notifications: false,
-            show_completed_shows: false,
+            userId: parent.id,
+            emailNotifications: true,
+            pushNotifications: false,
+            showCompletedShows: false,
             theme: 'SYSTEM',
             favoriteGenres: [],
           },

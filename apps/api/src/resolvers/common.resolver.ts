@@ -4,6 +4,56 @@ import { GraphQLScalarType, Kind } from 'graphql'
 import { SetlistFmClient } from '../lib/setlistfm'
 import { TicketmasterClient } from '../lib/ticketmaster'
 
+// Helper function to populate setlist with songs
+async function populateSetlistWithSongs(prisma: any, setlistId: string, artistId: string) {
+  try {
+    // Check if setlist already has songs
+    const existingSongs = await prisma.setlistSong.count({
+      where: { setlistId }
+    })
+
+    if (existingSongs > 0) {
+      console.log(`Setlist ${setlistId} already has ${existingSongs} songs`)
+      return
+    }
+
+    // Get artist's top songs
+    const topSongs = await prisma.song.findMany({
+      where: { artistId },
+      orderBy: { popularity: 'desc' },
+      take: 20
+    })
+
+    if (topSongs.length === 0) {
+      console.log(`No songs found for artist ${artistId}, attempting to fetch some`)
+      return
+    }
+
+    // Select 15-20 random songs from top songs
+    const numberOfSongs = Math.floor(Math.random() * 6) + 15 // 15-20 songs
+    const selectedSongs = topSongs
+      .sort(() => Math.random() - 0.5)
+      .slice(0, numberOfSongs)
+
+    // Add songs to setlist
+    const setlistSongs = selectedSongs.map((song, index) => ({
+      setlistId,
+      songId: song.id,
+      position: index + 1,
+      voteCount: 0
+    }))
+
+    await prisma.setlistSong.createMany({
+      data: setlistSongs,
+      skipDuplicates: true
+    })
+
+    console.log(`✅ Added ${setlistSongs.length} songs to setlist ${setlistId}`)
+  } catch (error) {
+    console.error(`Error populating setlist with songs:`, error)
+  }
+}
+
 // Helper function to sync artist shows from Ticketmaster
 async function syncArtistShows(artistId: string, { prisma, ticketmaster }: any) {
   try {
@@ -78,7 +128,7 @@ async function syncArtistShows(artistId: string, { prisma, ticketmaster }: any) 
         })
         
         // Create default setlist
-        await prisma.setlist.upsert({
+        const setlist = await prisma.setlist.upsert({
           where: {
             showId_orderIndex: {
               showId: show.id,
@@ -92,6 +142,9 @@ async function syncArtistShows(artistId: string, { prisma, ticketmaster }: any) 
           },
           update: {}
         })
+        
+        // Populate setlist with songs
+        await populateSetlistWithSongs(prisma, setlist.id, artistId)
         
         console.log(`✅ Created/updated show: ${event.name} on ${event.dates.start.localDate}`)
       } catch (showError) {

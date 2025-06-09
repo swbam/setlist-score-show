@@ -10,6 +10,7 @@ type Setlist {
   # Relations
   show: Show!
   songs: [SetlistSong!]!
+  setlistSongs: [SetlistSong!]!
   
   # Computed fields
   songCount: Int!

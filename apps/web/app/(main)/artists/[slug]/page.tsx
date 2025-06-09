@@ -20,7 +20,7 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
 
   if (isLoading) return <ArtistPageSkeleton />
   
-  if (error || !data?.artistBySlug) {
+  if (error || !(data as any)?.artistBySlug) {
     notFound()
   }
 

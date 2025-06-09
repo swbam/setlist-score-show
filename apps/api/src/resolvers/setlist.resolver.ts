@@ -199,7 +199,14 @@ export const setlistResolvers: IResolvers = {
       return true
     },
 
-    addSongToSetlist: async (_parent, { setlistId, songId, position }, { prisma, user }) => {
+    addSongToSetlist: async (_parent, { setlistId, input }, { prisma, user }) => {
+      if (!input) {
+        throw new GraphQLError('Input is required', {
+          extensions: { code: 'BAD_REQUEST' }
+        })
+      }
+      
+      const { songId, position } = input
       if (!user) {
         throw new GraphQLError('Authentication required', {
           extensions: { code: 'UNAUTHENTICATED' }
@@ -364,14 +371,36 @@ export const setlistResolvers: IResolvers = {
   },
 
   Setlist: {
-    show: async (parent, _args, { loaders }) => {
-      return loaders.show.load(parent.showId)
+    show: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.show) {
+        return loaders.show.load(parent.showId)
+      }
+      return prisma.show.findUnique({
+        where: { id: parent.showId },
+        include: {
+          artist: true,
+          venue: true
+        }
+      })
     },
 
     songs: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.findMany({
         where: { setlistId: parent.id },
-        orderBy: { position: 'asc' }
+        orderBy: { position: 'asc' },
+        include: {
+          song: true
+        }
+      })
+    },
+
+    setlistSongs: async (parent, _args, { prisma }) => {
+      return prisma.setlistSong.findMany({
+        where: { setlistId: parent.id },
+        orderBy: { position: 'asc' },
+        include: {
+          song: true
+        }
       })
     },
 
@@ -400,12 +429,33 @@ export const setlistResolvers: IResolvers = {
   },
 
   SetlistSong: {
-    setlist: async (parent, _args, { loaders }) => {
-      return loaders.setlist.load(parent.setlistId)
+    setlist: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.setlist) {
+        return loaders.setlist.load(parent.setlistId)
+      }
+      return prisma.setlist.findUnique({
+        where: { id: parent.setlistId },
+        include: {
+          show: {
+            include: {
+              artist: true,
+              venue: true
+            }
+          }
+        }
+      })
     },
 
-    song: async (parent, _args, { loaders }) => {
-      return loaders.song.load(parent.songId)
+    song: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.song) {
+        return loaders.song.load(parent.songId)
+      }
+      return prisma.song.findUnique({
+        where: { id: parent.songId },
+        include: {
+          artist: true
+        }
+      })
     },
 
     hasVoted: async (parent, _args, { prisma, user }) => {

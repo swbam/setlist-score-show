@@ -197,29 +197,41 @@ export const voteResolvers: IResolvers = {
         })
       }
 
+      // Get the songId from setlistSong
+      const setlistSong = await prisma.setlistSong.findUnique({
+        where: { id: setlistSongId },
+        select: { songId: true }
+      })
+
+      if (!setlistSong) {
+        throw new GraphQLError('Setlist song not found', {
+          extensions: { code: 'NOT_FOUND' },
+        })
+      }
+
       const votingService = new VotingService(prisma, redis, supabase)
       
       try {
         const result = await votingService.castVote({
           userId: user.id,
           showId: showId,
-          songId: '', // We don't have songId in this simplified interface
+          songId: setlistSong.songId,
           setlistSongId: setlistSongId,
         })
         
         return result
       } catch (error: any) {
-        if (error.code === 'TOO_MANY_REQUESTS') {
+        if (error.extensions?.code === 'TOO_MANY_REQUESTS') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'TOO_MANY_REQUESTS' },
           })
         }
-        if (error.code === 'FORBIDDEN') {
+        if (error.extensions?.code === 'FORBIDDEN') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'FORBIDDEN' },
           })
         }
-        if (error.code === 'CONFLICT') {
+        if (error.extensions?.code === 'CONFLICT') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'CONFLICT' },
           })

@@ -101,33 +101,72 @@ export const showResolvers: IResolvers = {
         orderBy: orderByMap[orderBy || 'DATE_ASC'],
         take: limit,
         skip: offset,
+        include: {
+          artist: true,
+          venue: true,
+        },
       })
 
       return shows
     },
 
     trendingShows: async (_parent, { limit = 10, timeframe = 'WEEK' }, { prisma }) => {
-      const timeframeMap = {
-        DAY: 1,
-        WEEK: 7,
-        MONTH: 30,
-        ALL_TIME: 365 * 10, // Effectively all time
-      }
+      // Fetch from trending_shows materialized view
+      const trendingData = await prisma.$queryRaw`
+        SELECT 
+          ts.show_id,
+          ts.total_votes,
+          ts.unique_voters,
+          ts.trending_score,
+          s.id,
+          s.date,
+          s.title,
+          s.status,
+          s.ticketmaster_url,
+          s.view_count,
+          a.id as artist_id,
+          a.name as artist_name,
+          a.slug as artist_slug,
+          a.image_url as artist_image_url,
+          v.id as venue_id,
+          v.name as venue_name,
+          v.city as venue_city,
+          v.state as venue_state,
+          v.country as venue_country
+        FROM trending_shows ts
+        JOIN shows s ON ts.show_id = s.id
+        JOIN artists a ON s.artist_id = a.id
+        JOIN venues v ON s.venue_id = v.id
+        WHERE s.status IN ('upcoming', 'ongoing')
+        ORDER BY ts.trending_score DESC
+        LIMIT ${limit}
+      `
 
-      const daysAgo = timeframeMap[timeframe]
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - daysAgo)
-
-      return prisma.show.findMany({
-        where: {
-          date: { gte: startDate },
-          status: { in: ['upcoming', 'ongoing'] },
+      // Transform raw data to match GraphQL schema
+      return (trendingData as any[]).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        title: row.title,
+        status: row.status,
+        ticketmasterUrl: row.ticketmaster_url,
+        viewCount: row.view_count,
+        totalVotes: parseInt(row.total_votes),
+        uniqueVoters: parseInt(row.unique_voters),
+        trendingScore: parseFloat(row.trending_score),
+        artist: {
+          id: row.artist_id,
+          name: row.artist_name,
+          slug: row.artist_slug,
+          imageUrl: row.artist_image_url,
         },
-        orderBy: [
-          { viewCount: 'desc' },
-        ],
-        take: limit,
-      })
+        venue: {
+          id: row.venue_id,
+          name: row.venue_name,
+          city: row.venue_city,
+          state: row.venue_state,
+          country: row.venue_country,
+        },
+      }))
     },
 
     showsNearLocation: async (_parent, { latitude, longitude, radiusMiles = 50, limit = 20 }, { prisma }) => {
@@ -334,12 +373,22 @@ export const showResolvers: IResolvers = {
   },
 
   Show: {
-    artist: async (parent, _args, { loaders }) => {
-      return loaders.artist.load(parent.artistId)
+    artist: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.artist) {
+        return loaders.artist.load(parent.artistId)
+      }
+      return prisma.artist.findUnique({
+        where: { id: parent.artistId }
+      })
     },
 
-    venue: async (parent, _args, { loaders }) => {
-      return loaders.venue.load(parent.venueId)
+    venue: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.venue) {
+        return loaders.venue.load(parent.venueId)
+      }
+      return prisma.venue.findUnique({
+        where: { id: parent.venueId }
+      })
     },
 
     setlists: async (parent, _args, { prisma }) => {
@@ -439,25 +488,43 @@ export const showResolvers: IResolvers = {
   },
 
   Setlist: {
-    show: async (parent, _args, { loaders }) => {
-      return loaders.show.load(parent.showId)
+    show: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.show) {
+        return loaders.show.load(parent.showId)
+      }
+      return prisma.show.findUnique({
+        where: { id: parent.showId }
+      })
     },
 
     songs: async (parent, _args, { prisma }) => {
       return prisma.setlistSong.findMany({
         where: { setlistId: parent.id },
         orderBy: { position: 'asc' },
+        include: {
+          song: true
+        }
       })
     },
   },
 
   SetlistSong: {
-    setlist: async (parent, _args, { loaders }) => {
-      return loaders.setlist.load(parent.setlistId)
+    setlist: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.setlist) {
+        return loaders.setlist.load(parent.setlistId)
+      }
+      return prisma.setlist.findUnique({
+        where: { id: parent.setlistId }
+      })
     },
 
-    song: async (parent, _args, { loaders }) => {
-      return loaders.song.load(parent.songId)
+    song: async (parent, _args, { prisma, loaders }) => {
+      if (loaders?.song) {
+        return loaders.song.load(parent.songId)
+      }
+      return prisma.song.findUnique({
+        where: { id: parent.songId }
+      })
     },
 
     hasVoted: async (parent, _args, { prisma, user }) => {

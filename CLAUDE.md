@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
+IMPORTANT: NEVER REPLY THAT THE APP IS FULLY COMPLETE AND FUNCTIONAL. STICK TO THE TODO LIST AND INSTRUCTIONS.MD FILE and implement it 100%
+
 ## Project Overview
 
 Setlist Score Show is a crowdsourced concert setlist voting platform built as a Turborepo monorepo with Next.js frontend, Fastify/GraphQL backend, and Supabase for database and real-time features.

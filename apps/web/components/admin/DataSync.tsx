@@ -17,7 +17,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Loader2
+  Loader2,
+  TrendingUp,
+  Trash2,
+  Database
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -36,7 +39,7 @@ export function DataSync() {
     refetchInterval: 5000 // Poll every 5 seconds
   });
 
-  const { mutate: triggerSync, isLoading: isSyncing } = useMutation({
+  const { mutate: triggerSync, isPending: isSyncing } = useMutation({
     mutationFn: async ({ type, params }: { type: string; params?: any }) => {
       const response = await fetch('/api/admin/sync/trigger', {
         method: 'POST',
@@ -47,7 +50,7 @@ export function DataSync() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['admin', 'sync']);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'sync'] });
     }
   });
 

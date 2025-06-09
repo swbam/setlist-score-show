@@ -23,7 +23,7 @@ export default function ArtistsPage() {
     enabled: true,
   })
 
-  const artists = data?.artists || []
+  const artists = (data as any)?.artists || []
 
   return (
     <div className="min-h-screen bg-gray-950">

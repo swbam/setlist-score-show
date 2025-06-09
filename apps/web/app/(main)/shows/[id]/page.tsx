@@ -3,25 +3,33 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_SHOW_WITH_SETLIST, GET_USER_VOTES, CAST_VOTE } from '@/lib/graphql/queries'
+import { GET_SHOW_WITH_SETLIST, GET_USER_VOTES, CAST_VOTE, GET_ARTIST_SONGS, ADD_SONG_TO_SETLIST } from '@/lib/graphql/queries'
 import { useRealtimeVotes } from '@/hooks/useRealtimeVotes'
 import { VotingSection } from '@/components/voting/VotingSection'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button' // Added
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog" // Added
-import { Input } from "@/components/ui/input" // Added
-import { PlusCircle, Calendar, MapPin, Users, ExternalLink } from 'lucide-react' // Added PlusCircle
+import { Button } from '@/components/ui/button'
+import { Input } from "@/components/ui/input"
+import { PlusCircle, Calendar, MapPin, Users, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
+
+// Temporary simple dialog components until UI package is available
+const Dialog = ({ open, onOpenChange, children }: any) => (
+  open ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
+      <div className="relative bg-gray-900 rounded-lg max-w-md w-full mx-4">{children}</div>
+    </div>
+  ) : null
+)
+
+const DialogTrigger = ({ asChild, children }: any) => children
+const DialogContent = ({ children, className }: any) => <div className={className}>{children}</div>
+const DialogHeader = ({ children }: any) => <div className="p-6 pb-0">{children}</div>
+const DialogTitle = ({ children, className }: any) => <h2 className={`text-lg font-semibold ${className}`}>{children}</h2>
+const DialogFooter = ({ children }: any) => <div className="p-6 pt-0 flex gap-2 justify-end">{children}</div>
+const DialogClose = ({ asChild, children }: any) => children
 
 interface Song { // Renamed from SetlistSong for clarity, or create a new one for catalog
   id: string
@@ -32,11 +40,12 @@ interface Song { // Renamed from SetlistSong for clarity, or create a new one fo
 interface SetlistSong {
   id: string
   position: number
-  vote_count: number
+  votes: number
+  hasVoted: boolean
+  canVote: boolean
   song: {
     id: string
-    title: string
-    name?: string // Some APIs use name instead of title
+    name: string
     album: string
     duration_ms: number
     spotify_url?: string
@@ -72,7 +81,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     }
   })
 
-  const show = showData?.show
+  const show = (showData as any)?.show
 
   // Fetch user's votes for this show
   const { data: userVotesData } = useQuery({
@@ -80,7 +89,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryFn: async () => {
       if (!user?.id) return []
       const data = await client.request(GET_USER_VOTES, { showId: params.id })
-      return data.userVotes?.map((v: any) => v.setlist_song_id) || []
+      return (data as any).userVotes?.map((v: any) => v.setlist_song_id) || []
     },
     enabled: !!user?.id
   })
@@ -102,10 +111,10 @@ export default function ShowPage({ params }: { params: { id: string } }) {
       return client.request(CAST_VOTE, { showId, setlistSongId })
     },
     onSuccess: (data) => {
-      if (data.castVote?.votesRemaining) {
+      if ((data as any).castVote?.votesRemaining) {
         setVoteLimits({
-          showVotesRemaining: data.castVote.votesRemaining.show,
-          dailyVotesRemaining: data.castVote.votesRemaining.daily
+          showVotesRemaining: (data as any).castVote.votesRemaining.show,
+          dailyVotesRemaining: (data as any).castVote.votesRemaining.daily
         })
       }
     }
@@ -116,36 +125,45 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryKey: ['artistSongs', show?.artist?.id],
     queryFn: async () => {
       if (!show?.artist?.id) return []
-      // TODO: Replace with actual GraphQL query for songs by artistId
-      // For now, using a placeholder. This should call the 'songs' query with artistId filter.
-      // const data = await client.request(GET_ARTIST_SONGS_QUERY, { artistId: show.artist.id })
-      // return data.artistSongs || []
-      // Placeholder:
-      const { data: songsFromDb, error } = await supabase
-        .from('songs')
-        .select('id, title, album')
-        .eq('artist_id', show.artist.id)
-      if (error) {
+      try {
+        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id })
+        return (data as any).songs?.edges?.map((edge: any) => edge.node) || []
+      } catch (error) {
         console.error("Error fetching artist songs:", error)
-        return []
+        // Fallback to direct Supabase query
+        const { data: songsFromDb, error: dbError } = await supabase
+          .from('songs')
+          .select('id, title, album')
+          .eq('artist_id', show.artist.id)
+        if (dbError) {
+          console.error("Fallback error:", dbError)
+          return []
+        }
+        return songsFromDb as Song[]
       }
-      return songsFromDb as Song[]
     },
     enabled: !!show?.artist?.id && isAddSongDialogOpen, // Only fetch when dialog is open and artistId is available
   })
 
   const addSongMutation = useMutation({
     mutationFn: async ({ setlistId, songId, position }: { setlistId: string; songId: string; position: number }) => {
-      // TODO: Replace with actual GraphQL mutation 'addSongToSetlist'
-      // return client.request(ADD_SONG_TO_SETLIST_MUTATION, { setlistId, songId, position })
-      // Placeholder:
-      const { data, error } = await supabase
-        .from('setlist_songs')
-        .insert([{ setlist_id: setlistId, song_id: songId, position: position, vote_count: 0 }])
-        .select()
-        .single()
-      if (error) throw error
-      return data
+      try {
+        const data = await client.request(ADD_SONG_TO_SETLIST, { 
+          setlistId, 
+          input: { songId, position } 
+        })
+        return (data as any).addSongToSetlist
+      } catch (error) {
+        console.error("GraphQL mutation failed, falling back to Supabase:", error)
+        // Fallback to direct Supabase query
+        const { data, error: dbError } = await supabase
+          .from('setlist_songs')
+          .insert([{ setlist_id: setlistId, song_id: songId, position: position, vote_count: 0 }])
+          .select()
+          .single()
+        if (dbError) throw dbError
+        return data
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['show', params.id] }) // Refetch show data to update setlist
@@ -224,18 +242,18 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   }
 
   // Transform data for VotingSection
-  const songs: SetlistSong[] = show.setlists?.[0]?.setlist_songs?.map((ss: any) => ({
+  const songs: SetlistSong[] = show?.setlists?.[0]?.setlistSongs?.map((ss: any) => ({
     id: ss.id,
     position: ss.position,
-    votes: voteCounts[ss.id] || ss.vote_count || 0,
+    votes: voteCounts[ss.id] || ss.voteCount || 0,
     hasVoted: userVotes.has(ss.id),
     canVote: voteLimits.showVotesRemaining > 0 && !userVotes.has(ss.id),
     song: {
       id: ss.song.id,
       name: ss.song.title || ss.song.name,
       album: ss.song.album || 'Unknown Album',
-      duration_ms: ss.song.duration_ms || 180000, // Default 3 minutes
-      spotify_url: ss.song.spotify_url
+      duration_ms: ss.song.durationMs || 180000, // Default 3 minutes
+      spotify_url: ss.song.spotifyUrl
     }
   })) || []
 
