@@ -1,6 +1,5 @@
 {
-  "installCommand": "npm install -g pnpm && pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @setlist/database generate && pnpm --filter @setlist/web build",
-  "framework": "nextjs",
-  "outputDirectory": "apps/web/.next"
+  "installCommand": "cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @setlist/database generate && pnpm --filter @setlist/web build",
+  "framework": "nextjs"
 }
