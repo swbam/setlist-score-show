@@ -315,32 +315,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="mb-8">
           <h2 className="text-4xl font-headline font-bold gradient-text">Setlist Voting</h2>
-          {show?.setlists?.[0]?.id && user && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <select
-                className="bg-input border border-border text-foreground px-4 py-3 rounded-xl font-body w-full sm:w-64 focus:outline-none focus:border-primary transition-colors"
-                value={selectedSongToAdd?.id || ''}
-                onChange={(e) => {
-                  const song = artistSongsData?.find((s: any) => s.id === e.target.value) || null
-                  setSelectedSongToAdd(song)
-                }}
-              >
-                <option value="">Select a song</option>
-                {artistSongsData?.slice().sort((a: any, b: any) => a.title.localeCompare(b.title)).map((song: any) => (
-                  <option key={song.id} value={song.id}>{song.title}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleAddSongToSetlist}
-                disabled={!selectedSongToAdd || addSongMutation.isPending}
-                className="btn-black px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
-              >
-                {addSongMutation.isPending ? 'Adding...' : 'Add to Setlist'}
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Voting section */}
@@ -350,6 +326,13 @@ export default function ShowPage({ params }: { params: { id: string } }) {
           isLoading={isLoading}
           showId={params.id}
           voteLimits={voteLimits}
+          artistSongs={artistSongsData}
+          selectedSongToAdd={selectedSongToAdd}
+          onSongSelect={setSelectedSongToAdd}
+          onAddSong={handleAddSongToSetlist}
+          isAddingSong={addSongMutation.isPending}
+          user={user}
+          showData={show}
         />
         </div>
       </div>
