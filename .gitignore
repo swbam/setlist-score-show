@@ -29,10 +29,10 @@ lerna-debug.log*
 .pnpm-debug.log*
 
 # Local env files
-.env
 .env*.local
 !.env.example
 *.local
+.env
 
 # Vercel
 .vercel

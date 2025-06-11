@@ -306,7 +306,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Main content */}
-      <div className="w-full max-w-7xl mx-auto px-4 py-12">
+      <div className="bg-slate-950/50 min-h-screen">
+        <div className="w-full max-w-7xl mx-auto px-4 py-12">
         {/* Connection status */}
         {!isConnected && (
           <div className="mb-6 p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body">
@@ -350,6 +351,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
           showId={params.id}
           voteLimits={voteLimits}
         />
+        </div>
       </div>
 
       {/* Live activity indicator */}

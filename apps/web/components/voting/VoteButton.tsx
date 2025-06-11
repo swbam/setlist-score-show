@@ -50,10 +50,10 @@ export function VoteButton({
       onClick={handleVote}
       disabled={hasVoted || isVoting || disabled}
       className={cn(
-        "relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200",
+        "relative flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-medium transition-all duration-200 min-w-[60px]",
         hasVoted
-          ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
-          : "bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700"
+          ? "bg-gray-700 text-gray-300 cursor-default"
+          : "bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 hover:border-gray-600"
       )}
     >
       <AnimatePresence mode="wait">
@@ -62,21 +62,21 @@ export function VoteButton({
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             exit={{ scale: 0, rotate: 180 }}
-            className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg"
+            className="absolute inset-0 flex items-center justify-center bg-gray-700 rounded-lg"
           >
-            <Check className="w-5 h-5 text-white" />
+            <Check className="w-4 h-4 text-green-400" />
           </motion.div>
         ) : (
           <>
-            <ChevronUp className={cn(
-              "w-5 h-5 transition-transform",
-              hasVoted && "text-white"
-            )} />
-            <span className="min-w-[3ch] text-center">{currentVotes}</span>
-            {!hasVoted && <span className="text-sm opacity-70">Vote</span>}
+            <ChevronUp className="w-4 h-4" />
+            <span className="text-sm">{currentVotes}</span>
           </>
         )}
       </AnimatePresence>
+      
+      {hasVoted && (
+        <span className="text-xs opacity-60 ml-1">Vote</span>
+      )}
     </motion.button>
   )
 }

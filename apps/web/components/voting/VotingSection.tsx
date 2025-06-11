@@ -91,22 +91,6 @@ export function VotingSection({
           <p className="text-lg text-muted-foreground font-body mb-6">
             Vote for songs you want to hear at this show
           </p>
-          
-          {/* Add Song Section */}
-          <div className="flex items-center gap-4 mb-6">
-            <span className="text-base font-body text-foreground">Add a song to this setlist:</span>
-            <div className="flex items-center gap-3">
-              <select className="bg-input border border-border text-foreground px-4 py-2 rounded-lg font-body min-w-64 focus:outline-none focus:border-primary transition-colors">
-                <option value="">Select a song</option>
-                {/* Song options would be populated here */}
-              </select>
-              <button className="btn-secondary px-6 py-2">
-                Add to Setlist
-              </button>
-            </div>
-          </div>
-          
-          <p className="text-sm text-muted-foreground font-body">127 songs available in the catalog</p>
         </div>
 
         {/* Vote Limits Warning */}
