@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "framework": null,
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../../packages/database && pnpm prisma generate && cd ../.. && pnpm --filter @setlist/web build",
+  "framework": "nextjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @setlist/database generate && pnpm --filter @setlist/web build",
   "devCommand": "cd ../.. && pnpm --filter @setlist/web dev",
   "outputDirectory": ".next"
 }
