@@ -150,7 +150,8 @@ export function VotingSection({
                     "text-lg font-headline font-bold",
                     index === 0 && sortBy === 'votes' 
                       ? "text-yellow-500" 
-                      : "text-muted-foreground"
+                      : "text-muted-foreground" 
+                      
                   )}>
                     {sortBy === 'votes' ? index + 1 : setlistSong.position}
                   </span>
