@@ -1,0 +1,21 @@
+{
+  "buildCommand": "pnpm --filter @setlist/web build",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "outputDirectory": "apps/web/.next",
+  "functions": {
+    "apps/web/app/**/*.ts": {
+      "runtime": "nodejs18.x"
+    },
+    "apps/web/app/**/*.tsx": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}
