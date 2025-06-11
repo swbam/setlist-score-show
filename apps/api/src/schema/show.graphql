@@ -114,10 +114,10 @@ input ShowFilter {
 }
 
 enum ShowStatus {
-  UPCOMING
-  ONGOING
-  COMPLETED
-  CANCELLED
+  upcoming
+  ongoing
+  completed
+  cancelled
 }
 
 enum ShowOrderBy {

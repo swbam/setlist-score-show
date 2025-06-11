@@ -185,10 +185,32 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     }))
 
     try {
-      await voteMutation.mutateAsync({
-        showId: params.id,
-        setlistSongId
+      // Call the vote API route directly with all required parameters
+      const response = await fetch('/api/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          songId,
+          showId: params.id,
+          setlistSongId
+        }),
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to vote')
+      }
+
+      // Update vote limits from response
+      if (data.votesRemaining) {
+        setVoteLimits({
+          showVotesRemaining: data.votesRemaining.show,
+          dailyVotesRemaining: data.votesRemaining.daily
+        })
+      }
 
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: ['userVotes', params.id] })

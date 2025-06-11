@@ -156,10 +156,10 @@ export interface VoteAnalytics {
 
 // Enums
 export enum ShowStatus {
-  UPCOMING = 'UPCOMING',
-  ONGOING = 'ONGOING',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
+  UPCOMING = 'upcoming',
+  ONGOING = 'ongoing',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
 }
 
 export enum VoteType {
