@@ -2,7 +2,7 @@
   "version": 2,
   "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @setlist/database generate && pnpm --filter @setlist/web build",
-  "devCommand": "cd ../.. && pnpm --filter @setlist/web dev",
-  "outputDirectory": ".next"
+  "buildCommand": "pnpm build --filter @setlist/web",
+  "devCommand": "pnpm --filter @setlist/web dev",
+  "outputDirectory": "apps/web/.next"
 }
