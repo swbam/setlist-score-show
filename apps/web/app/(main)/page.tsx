@@ -176,26 +176,29 @@ export default function HomePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative py-24 px-4">
+      <section className="relative py-32 px-4 bg-gradient-to-b from-background to-muted/30">
         <div className="container mx-auto text-center">
-          <h1 className="text-5xl font-bold mb-6 gradient-text">
-            Vote on Concert Setlists
+          <h1 className="text-6xl font-headline font-bold mb-8 gradient-text leading-tight">
+            Unleash Your Musical Voice
           </h1>
-          <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
+          <h2 className="text-2xl font-headline font-medium mb-6 text-foreground/80">
+            Vote on Concert Setlists
+          </h2>
+          <p className="text-xl text-muted-foreground mb-12 max-w-3xl mx-auto font-body leading-relaxed">
             Help shape the setlist for upcoming concerts by voting on the songs you want to hear most
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <Link
               href="/shows"
-              className="px-8 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity duration-200"
+              className="btn-primary text-lg px-10 py-4"
             >
-              Browse Shows
+              Discover Shows
             </Link>
             <Link
               href="/artists"
-              className="px-8 py-3 bg-gray-800 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors duration-200"
+              className="btn-secondary text-lg px-10 py-4"
             >
               Find Artists
             </Link>
@@ -204,43 +207,43 @@ export default function HomePage() {
       </section>
 
       {/* Trending Shows Section */}
-      <section className="py-16 bg-gray-900">
+      <section className="py-24 bg-muted/20">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12 gradient-text">Trending Shows</h2>
-          {error && <p className="text-red-500 text-center">{error}</p>}
+          <h2 className="text-4xl font-headline font-bold text-center mb-16 gradient-text">Trending Shows</h2>
+          {error && <p className="text-destructive text-center font-body">{error}</p>}
           <TrendingShows shows={trendingShows} isLoading={isLoading} />
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="py-16 bg-gray-900/50">
+      <section className="py-24 bg-gradient-to-b from-background to-muted/10">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-white">1</span>
+          <h2 className="text-4xl font-headline font-bold text-center mb-16 text-foreground">How It Works</h2>
+          <div className="grid md:grid-cols-3 gap-12 max-w-5xl mx-auto">
+            <div className="text-center group">
+              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
+                <span className="text-2xl font-headline font-bold gradient-text">1</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">Find a Show</h3>
-              <p className="text-gray-400">
+              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">Find a Show</h3>
+              <p className="text-muted-foreground font-body leading-relaxed">
                 Search for upcoming concerts from your favorite artists
               </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-white">2</span>
+            <div className="text-center group">
+              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
+                <span className="text-2xl font-headline font-bold gradient-text">2</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">Vote for Songs</h3>
-              <p className="text-gray-400">
+              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">Vote for Songs</h3>
+              <p className="text-muted-foreground font-body leading-relaxed">
                 Cast your votes for the songs you want to hear live
               </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-white">3</span>
+            <div className="text-center group">
+              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
+                <span className="text-2xl font-headline font-bold gradient-text">3</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">See Results</h3>
-              <p className="text-gray-400">
+              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">See Results</h3>
+              <p className="text-muted-foreground font-body leading-relaxed">
                 Watch in real-time as votes come in and influence the setlist
               </p>
             </div>

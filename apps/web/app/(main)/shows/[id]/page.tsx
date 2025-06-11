@@ -10,26 +10,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Input } from "@/components/ui/input"
-import { PlusCircle, Calendar, MapPin, Users, ExternalLink } from 'lucide-react'
+import { Calendar, MapPin, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
-
-// Temporary simple dialog components until UI package is available
-const Dialog = ({ open, onOpenChange, children }: any) => (
-  open ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-      <div className="relative bg-gray-900 rounded-lg max-w-md w-full mx-4">{children}</div>
-    </div>
-  ) : null
-)
-
-const DialogTrigger = ({ asChild, children }: any) => children
-const DialogContent = ({ children, className }: any) => <div className={className}>{children}</div>
-const DialogHeader = ({ children }: any) => <div className="p-6 pb-0">{children}</div>
-const DialogTitle = ({ children, className }: any) => <h2 className={`text-lg font-semibold ${className}`}>{children}</h2>
-const DialogFooter = ({ children }: any) => <div className="p-6 pt-0 flex gap-2 justify-end">{children}</div>
-const DialogClose = ({ asChild, children }: any) => children
 
 interface Song { // Renamed from SetlistSong for clarity, or create a new one for catalog
   id: string
@@ -69,8 +51,6 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     showVotesRemaining: 10,
     dailyVotesRemaining: 50
   })
-  const [isAddSongDialogOpen, setIsAddSongDialogOpen] = useState(false)
-  const [songSearchTerm, setSongSearchTerm] = useState('')
   const [selectedSongToAdd, setSelectedSongToAdd] = useState<Song | null>(null)
 
   // Fetch show data with songs
@@ -126,7 +106,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryFn: async () => {
       if (!show?.artist?.id) return []
       try {
-        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id })
+        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit: 500 })
         return (data as any).songs?.edges?.map((edge: any) => edge.node) || []
       } catch (error) {
         console.error("Error fetching artist songs:", error)
@@ -142,7 +122,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
         return songsFromDb as Song[]
       }
     },
-    enabled: !!show?.artist?.id && isAddSongDialogOpen, // Only fetch when dialog is open and artistId is available
+    enabled: !!show?.artist?.id,
   })
 
   const addSongMutation = useMutation({
@@ -167,9 +147,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['show', params.id] }) // Refetch show data to update setlist
-      setIsAddSongDialogOpen(false)
       setSelectedSongToAdd(null)
-      setSongSearchTerm('')
     },
     onError: (error) => {
       console.error("Error adding song:", error)
@@ -258,100 +236,109 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   })) || []
 
   return (
-    <div className="min-h-screen bg-gray-950">
-      {/* Show header with gradient */}
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 p-8 text-white">
-        <div className="container mx-auto">
-          <h1 className="text-4xl font-bold mb-2">{show.artist.name}</h1>
-          <div className="flex flex-wrap items-center gap-4 text-white/90">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              <span>{show.venue.name}</span>
+    <div className="min-h-screen bg-background">
+      {/* Show header with gradient - inspired by artist page design */}
+      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-16 px-4">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="flex items-start gap-8">
+            {/* Artist Image */}
+            <div className="flex-shrink-0">
+              {show.artist.image_url ? (
+                <img
+                  src={show.artist.image_url}
+                  alt={show.artist.name}
+                  className="w-64 h-64 rounded-full object-cover border-4 border-border shadow-strong"
+                />
+              ) : (
+                <div className="w-64 h-64 rounded-full bg-muted border-4 border-border flex items-center justify-center shadow-strong">
+                  <span className="text-6xl font-headline font-bold gradient-text">
+                    {show.artist.name.charAt(0)}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>
-                {new Date(show.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </span>
+
+            {/* Show Info */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-6xl font-headline font-bold mb-4 gradient-text leading-tight">
+                {show.artist.name}
+              </h1>
+              
+              <div className="flex flex-wrap items-center gap-6 mb-8 text-lg text-muted-foreground font-body">
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-6 h-6 text-primary" />
+                  <span className="font-medium">{show.venue.name}, {show.venue.city}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-6 h-6 text-primary" />
+                  <span className="font-medium">
+                    {new Date(show.date).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-4">
+                <button className="btn-white flex items-center gap-3 px-8 py-4">
+                  <span>Vote on Setlist</span>
+                </button>
+                
+                {show.ticketmaster_url && (
+                  <Link
+                    href={show.ticketmaster_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-black flex items-center gap-3 px-8 py-4"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                    <span>Get Tickets</span>
+                  </Link>
+                )}
+              </div>
             </div>
-            {show.ticketmaster_url && (
-              <Link 
-                href={show.ticketmaster_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-white/80 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>Get Tickets</span>
-              </Link>
-            )}
           </div>
         </div>
       </div>
 
       {/* Main content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full max-w-7xl mx-auto px-4 py-12">
         {/* Connection status */}
         {!isConnected && (
-          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-800/50 rounded-lg text-yellow-200">
+          <div className="mb-6 p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body">
             Connecting to live updates...
           </div>
         )}
 
-        <div className="mb-6 flex justify-between items-center">
-          <h2 className="text-3xl font-bold gradient-text">Setlist Voting</h2>
+        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <h2 className="text-4xl font-headline font-bold gradient-text">Setlist Voting</h2>
           {show?.setlists?.[0]?.id && user && (
-            <Dialog open={isAddSongDialogOpen} onOpenChange={setIsAddSongDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="gradient-border text-teal-400 hover:text-teal-300">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Song
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] bg-gray-900 border-gray-800">
-                <DialogHeader>
-                  <DialogTitle className="gradient-text">Add Song to Setlist</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <Input
-                    placeholder="Search songs..."
-                    value={songSearchTerm}
-                    onChange={(e) => setSongSearchTerm(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {isLoadingArtistSongs && <p className="text-gray-400">Loading songs...</p>}
-                    {artistSongsData?.filter(song => song.title.toLowerCase().includes(songSearchTerm.toLowerCase()))
-                      .map(song => (
-                        <div
-                          key={song.id}
-                          onClick={() => setSelectedSongToAdd(song)}
-                          className={`p-2 rounded cursor-pointer hover:bg-gray-700 ${selectedSongToAdd?.id === song.id ? 'bg-teal-600 text-white' : 'text-gray-300'}`}
-                        >
-                          <p className="font-medium">{song.title}</p>
-                          {song.album && <p className="text-xs text-gray-500">{song.album}</p>}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="ghost">Cancel</Button>
-                  </DialogClose>
-                  <Button
-                    onClick={handleAddSongToSetlist}
-                    disabled={!selectedSongToAdd || addSongMutation.isPending}
-                    className="bg-gradient-to-r from-teal-500 to-cyan-500 text-white"
-                  >
-                    {addSongMutation.isPending ? 'Adding...' : 'Add Song'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <select
+                className="bg-input border border-border text-foreground px-4 py-3 rounded-xl font-body w-full sm:w-64 focus:outline-none focus:border-primary transition-colors"
+                value={selectedSongToAdd?.id || ''}
+                onChange={(e) => {
+                  const song = artistSongsData?.find((s: any) => s.id === e.target.value) || null
+                  setSelectedSongToAdd(song)
+                }}
+              >
+                <option value="">Select a song</option>
+                {artistSongsData?.slice().sort((a: any, b: any) => a.title.localeCompare(b.title)).map((song: any) => (
+                  <option key={song.id} value={song.id}>{song.title}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddSongToSetlist}
+                disabled={!selectedSongToAdd || addSongMutation.isPending}
+                className="btn-black px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
+              >
+                {addSongMutation.isPending ? 'Adding...' : 'Add to Setlist'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -374,17 +361,34 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 // Loading skeleton
 function ShowPageSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 p-8">
-        <div className="container mx-auto">
-          <Skeleton className="h-10 w-64 mb-2" />
-          <Skeleton className="h-6 w-48" />
+    <div className="min-h-screen bg-background">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-16 px-4">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="flex items-start gap-8">
+            {/* Artist Image Skeleton */}
+            <div className="flex-shrink-0">
+              <div className="w-64 h-64 rounded-full bg-muted border-4 border-border animate-pulse" />
+            </div>
+            
+            {/* Show Info Skeleton */}
+            <div className="flex-1 min-w-0">
+              <div className="h-16 w-96 bg-muted rounded-lg mb-4 animate-pulse" />
+              <div className="flex gap-6 mb-8">
+                <div className="h-6 w-48 bg-muted rounded-lg animate-pulse" />
+                <div className="h-6 w-56 bg-muted rounded-lg animate-pulse" />
+              </div>
+              <div className="flex gap-4">
+                <div className="h-12 w-40 bg-muted rounded-xl animate-pulse" />
+                <div className="h-12 w-32 bg-muted rounded-xl animate-pulse" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full max-w-7xl mx-auto px-4 py-12">
         <div className="space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-32 w-full bg-muted rounded-2xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -416,9 +420,9 @@ function LiveActivityIndicator({ showId }: { showId: string }) {
   }, [showId])
 
   return (
-    <div className="fixed bottom-4 right-4 bg-gray-800 rounded-full px-4 py-2 flex items-center gap-2">
-      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-      <span className="text-sm">
+    <div className="fixed bottom-6 right-6 glass px-6 py-3 flex items-center gap-3 border border-border">
+      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
+      <span className="text-sm font-body font-medium text-foreground">
         {activeUsers} {activeUsers === 1 ? 'person' : 'people'} voting now
       </span>
     </div>

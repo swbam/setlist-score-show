@@ -42,16 +42,60 @@ export default function ProfilePage() {
     }
   }
 
-  // Mock stats - in a real app, these would come from the API
-  const stats = {
-    totalVotes: 342,
-    showsVoted: 28,
-    artistsFollowed: 15,
+  const [stats, setStats] = useState({
+    totalVotes: 0,
+    showsVoted: 0,
+    artistsFollowed: 0,
     memberSince: new Date(user.created_at || Date.now()).toLocaleDateString('en-US', {
       month: 'long',
       year: 'numeric'
     })
-  }
+  })
+
+  // Fetch user stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return
+      
+      try {
+        const { supabase } = await import('@/lib/supabase')
+        
+        // Get total votes
+        const { count: voteCount } = await supabase
+          .from('votes')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+        
+        // Get unique shows voted on
+        const { data: showsData } = await supabase
+          .from('votes')
+          .select('show_id')
+          .eq('user_id', user.id)
+        
+        const uniqueShows = new Set(showsData?.map(v => v.show_id) || [])
+        
+        // Get artists followed
+        const { count: artistCount } = await supabase
+          .from('user_follows_artist')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+        
+        setStats({
+          totalVotes: voteCount || 0,
+          showsVoted: uniqueShows.size,
+          artistsFollowed: artistCount || 0,
+          memberSince: new Date(user.created_at || Date.now()).toLocaleDateString('en-US', {
+            month: 'long',
+            year: 'numeric'
+          })
+        })
+      } catch (error) {
+        console.error('Error fetching user stats:', error)
+      }
+    }
+    
+    fetchStats()
+  }, [user])
 
   return (
     <div className="min-h-screen bg-gray-950">

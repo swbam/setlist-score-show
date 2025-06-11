@@ -35,8 +35,11 @@ export function useGraphQLClient() {
           
           return await client.request(query, variables)
         }
-      } catch (error) {
-        console.warn('GraphQL API not available, using Supabase adapter:', error.message)
+      } catch (error: any) {
+        // Only log if it's not a network error (API might be down)
+        if (!error.message?.includes('ECONNREFUSED')) {
+          console.warn('GraphQL API error, using Supabase adapter:', error.message)
+        }
       }
       
       // Fallback to Supabase adapter

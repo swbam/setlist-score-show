@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VoteButton } from './VoteButton';
 import { Badge } from '@/components/ui/badge';
-import { Music, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Song {
@@ -86,7 +86,7 @@ export function VotingSection({
             className={cn(
               "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
               sortBy === 'votes' 
-                ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white" 
+                ? "bg-gray-600 text-white" 
                 : "bg-gray-800 text-gray-400 hover:text-white"
             )}
           >
@@ -98,7 +98,7 @@ export function VotingSection({
             className={cn(
               "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
               sortBy === 'position' 
-                ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white" 
+                ? "bg-gray-600 text-white" 
                 : "bg-gray-800 text-gray-400 hover:text-white"
             )}
           >
@@ -134,8 +134,8 @@ export function VotingSection({
               transition={{ duration: 0.3, delay: index * 0.05 }}
               className={cn(
                 "gradient-card rounded-lg p-4 border border-gray-800",
-                "hover:border-teal-500/30 transition-all duration-300",
-                setlistSong.hasVoted && "ring-1 ring-teal-500/50"
+                "hover:border-gray-600/30 transition-all duration-300",
+                setlistSong.hasVoted && "ring-1 ring-gray-500/50"
               )}
             >
               <div className="flex items-center justify-between gap-4">
@@ -144,7 +144,7 @@ export function VotingSection({
                   <div className={cn(
                     "flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold",
                     index === 0 && sortBy === 'votes' 
-                      ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white"
+                      ? "bg-gray-600 text-white"
                       : "bg-gray-800 text-gray-400"
                   )}>
                     {sortBy === 'votes' ? `#${index + 1}` : setlistSong.position}
@@ -153,7 +153,6 @@ export function VotingSection({
                   {/* Song Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <Music className="w-4 h-4 text-teal-500 flex-shrink-0" />
                       <h3 className="font-semibold text-lg truncate">
                         {setlistSong.song.name}
                       </h3>
@@ -191,7 +190,7 @@ export function VotingSection({
                 <div className="mt-3">
                   <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                     <motion.div
-                      className="h-full bg-gradient-to-r from-teal-500 to-cyan-500"
+                      className="h-full bg-gray-500"
                       initial={{ width: 0 }}
                       animate={{ 
                         width: `${(setlistSong.votes / Math.max(...songs.map(s => s.votes), 1)) * 100}%` 

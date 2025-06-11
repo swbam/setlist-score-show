@@ -22,8 +22,9 @@ model Artist {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  shows Show[]
-  songs Song[]
+  shows       Show[]
+  songs       Song[]
+  userArtists UserArtist[]
 
   @@unique([spotifyId, ticketmasterId])
   @@map("artists")
@@ -68,11 +69,12 @@ model Show {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  artist        Artist         @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  venue         Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  setlists      Setlist[]
-  votes         Vote[]
-  voteAnalytics VoteAnalytics[]
+  artist          Artist          @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  venue           Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  setlists        Setlist[]
+  votes           Vote[]
+  voteAnalytics   VoteAnalytics[]
+  playedSetlists  PlayedSetlist[]
 
   @@unique([artistId, venueId, date])
   @@index([date, status])
@@ -96,8 +98,9 @@ model Song {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  artist       Artist         @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  setlistSongs SetlistSong[]
+  artist             Artist             @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  setlistSongs       SetlistSong[]
+  playedSetlistSongs PlayedSetlistSong[]
 
   @@unique([artistId, title, album])
   @@index([artistId, title])
@@ -152,6 +155,7 @@ model User {
 
   votes         Vote[]
   voteAnalytics VoteAnalytics[]
+  userArtists   UserArtist[]
 
   @@map("users")
 }
@@ -191,7 +195,6 @@ model VoteAnalytics {
   @@unique([userId, showId], name: "unique_user_show_analytics")
   @@map("vote_analytics")
 }
-
 model SyncHistory {
   id             String    @id @default(uuid())
   syncType       String    @map("sync_type")
@@ -205,4 +208,50 @@ model SyncHistory {
   completedAt    DateTime? @map("completed_at")
 
   @@map("sync_history")
+}
+
+model PlayedSetlist {
+  id           String   @id @default(uuid())
+  showId       String   @map("show_id")
+  setlistfmId  String?  @unique @map("setlistfm_id")
+  playedDate   DateTime @map("played_date") @db.Date
+  importedAt   DateTime @default(now()) @map("imported_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  show               Show                 @relation(fields: [showId], references: [id], onDelete: Cascade)
+  playedSetlistSongs PlayedSetlistSong[]
+
+  @@map("played_setlists")
+}
+
+model PlayedSetlistSong {
+  id               String   @id @default(uuid())
+  playedSetlistId  String   @map("played_setlist_id")
+  songId           String   @map("song_id")
+  position         Int
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  playedSetlist PlayedSetlist @relation(fields: [playedSetlistId], references: [id], onDelete: Cascade)
+  song          Song          @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([playedSetlistId, position])
+  @@unique([playedSetlistId, songId])
+  @@map("played_setlist_songs")
+}
+
+model UserArtist {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  artistId  String   @map("artist_id")
+  rank      Int?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artistId])
+  @@map("user_artists")
 }

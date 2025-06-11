@@ -47,39 +47,41 @@ export default function ShowsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold mb-8 gradient-text">Upcoming Shows</h1>
+    <div className="min-h-screen bg-background">
+      <div className="w-full max-w-7xl mx-auto px-4 py-12">
+        <h1 className="text-5xl font-headline font-bold mb-12 gradient-text">Upcoming Shows</h1>
         
         {isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-64" />
+              <div key={i} className="h-80 bg-muted rounded-3xl animate-pulse" />
             ))}
           </div>
         ) : !data?.shows?.length ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">No upcoming shows found.</p>
+          <div className="text-center py-20">
+            <p className="text-muted-foreground text-xl font-body">No upcoming shows found.</p>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {data.shows.map((show) => (
               <Link
                 key={show.id}
                 href={`/shows/${show.id}`}
-                className="gradient-card rounded-lg p-6 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover"
+                className="card-base p-8 group block"
               >
                 <div className="flex flex-col h-full">
-                  <h2 className="text-xl font-bold mb-2">{show.artist.name}</h2>
+                  <h2 className="text-2xl font-headline font-bold mb-4 text-foreground group-hover:gradient-text transition-all duration-300">
+                    {show.artist.name}
+                  </h2>
                   
-                  <div className="space-y-2 text-sm text-gray-400 mb-4 flex-1">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>{show.venue.name}</span>
+                  <div className="space-y-3 text-base text-muted-foreground mb-6 flex-1 font-body">
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-accent" />
+                      <span className="font-medium">{show.venue.name}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>
+                    <div className="flex items-center gap-3">
+                      <Calendar className="w-5 h-5 text-accent" />
+                      <span className="font-medium">
                         {new Date(show.date).toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',
@@ -89,17 +91,17 @@ export default function ShowsPage() {
                       </span>
                     </div>
                     {show.venue.city && (
-                      <div className="text-gray-500">
+                      <div className="text-muted-foreground/70 font-medium">
                         {show.venue.city}, {show.venue.state || show.venue.country}
                       </div>
                     )}
                   </div>
                   
-                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800">
-                    <span className="text-sm text-gray-500">
+                  <div className="flex items-center justify-between mt-auto pt-6 border-t border-border/30">
+                    <span className="text-sm text-muted-foreground font-body">
                       {show.viewCount || 0} views
                     </span>
-                    <span className="text-sm font-medium text-teal-400">
+                    <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
                       Vote Now →
                     </span>
                   </div>

@@ -3,13 +3,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
 import { GET_ARTIST } from '@/lib/graphql/queries'
-import { Calendar, MapPin, Users, Music, ExternalLink } from 'lucide-react'
+import { Calendar, MapPin, Users, Music, ExternalLink, Heart } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { notFound } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
 
 export default function ArtistPage({ params }: { params: { slug: string } }) {
   const client = useGraphQLClient()
+  const { user } = useAuth()
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isFollowLoading, setIsFollowLoading] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['artist', params.slug],
@@ -18,13 +25,75 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
     }
   })
 
+  const artist = (data as any)?.artistBySlug
+
+  // Check if user is following this artist
+  useEffect(() => {
+    const checkFollowing = async () => {
+      if (!user || !artist) return
+      
+      const { data: follows } = await supabase
+        .from('user_follows_artist')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('artist_id', artist.id)
+        .single()
+      
+      setIsFollowing(!!follows)
+    }
+    
+    checkFollowing()
+  }, [user, artist])
+
+  const handleFollow = async () => {
+    if (!user || !artist) {
+      toast.error('Please sign in to follow artists')
+      return
+    }
+    
+    setIsFollowLoading(true)
+    
+    try {
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await supabase
+          .from('user_follows_artist')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('artist_id', artist.id)
+        
+        if (error) throw error
+        
+        setIsFollowing(false)
+        toast.success(`Unfollowed ${artist.name}`)
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from('user_follows_artist')
+          .insert({
+            user_id: user.id,
+            artist_id: artist.id
+          })
+        
+        if (error) throw error
+        
+        setIsFollowing(true)
+        toast.success(`Now following ${artist.name}`)
+      }
+    } catch (error) {
+      toast.error('Failed to update follow status')
+      console.error('Follow error:', error)
+    } finally {
+      setIsFollowLoading(false)
+    }
+  }
+
   if (isLoading) return <ArtistPageSkeleton />
   
-  if (error || !(data as any)?.artistBySlug) {
+  if (error || !artist) {
     notFound()
   }
 
-  const artist = (data as any).artistBySlug
   const upcomingShows = artist.shows?.filter((show: any) => 
     new Date(show.date) > new Date()
   ) || []
@@ -75,6 +144,41 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
 
               {/* Actions */}
               <div className="flex gap-4 justify-center md:justify-start">
+                <button
+                  onClick={handleFollow}
+                  disabled={isFollowLoading}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isFollowing 
+                      ? 'bg-gray-700 text-white hover:bg-gray-600' 
+                      : 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <Heart className={`w-5 h-5 ${isFollowing ? 'fill-current' : ''}`} />
+                  {isFollowLoading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    const response = await fetch('/api/sync-artist', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ artistId: artist.id })
+                    })
+                    if (response.ok) {
+                      toast.success('Artist data synced successfully')
+                      window.location.reload()
+                    } else {
+                      toast.error('Failed to sync artist data')
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sync Latest Data
+                </button>
+                
                 {artist.spotifyId && (
                   <Link
                     href={`https://open.spotify.com/artist/${artist.spotifyId}`}

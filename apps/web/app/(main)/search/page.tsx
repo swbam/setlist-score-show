@@ -15,6 +15,7 @@ function SearchPageContent() {
   const [searchQuery, setSearchQuery] = useState(initialQuery)
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
   const client = useGraphQLClient()
+  const [importingArtist, setImportingArtist] = useState(false)
 
   // Debounce search query
   useEffect(() => {
@@ -35,6 +36,43 @@ function SearchPageContent() {
   })
 
   const results = (data as any)?.search
+
+  const handleArtistImport = async (artist: any) => {
+    if (artist.isFromApi) {
+      try {
+        console.log('Importing artist from Ticketmaster:', artist.name)
+        
+        setImportingArtist(true)
+        const response = await fetch('/api/import-artist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketmasterId: artist.ticketmasterId,
+            name: artist.name,
+            imageUrl: artist.imageUrl,
+            slug: artist.slug
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to import artist')
+        }
+        
+        const data = await response.json()
+        
+        // Navigate to artist page
+        window.location.href = `/artists/${data.artist.slug}`
+      } catch (error) {
+        console.error('Error importing artist:', error)
+        alert('Failed to import artist. Please try again.')
+      } finally {
+        setImportingArtist(false)
+      }
+    } else {
+      // Artist already in DB, just navigate
+      window.location.href = `/artists/${artist.slug}`
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -85,58 +123,29 @@ function SearchPageContent() {
                   {results.artists.map((artist: any) => (
                     <button
                       key={artist.id}
-                      onClick={async () => {
-                        // If artist is from API, import it first
-                        if (artist.isFromApi) {
-                          try {
-                            console.log('Importing artist from Ticketmaster:', artist.name)
-                            
-                            // Call API to import artist
-                            const response = await fetch('/api/import-artist', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                ticketmasterId: artist.ticketmasterId,
-                                name: artist.name,
-                                imageUrl: artist.imageUrl,
-                                slug: artist.slug
-                              })
-                            })
-                            
-                            if (!response.ok) {
-                              throw new Error('Failed to import artist')
-                            }
-                            
-                            const data = await response.json()
-                            
-                            // Navigate to artist page
-                            window.location.href = `/artists/${data.artist.slug}`
-                          } catch (error) {
-                            console.error('Error importing artist:', error)
-                            alert('Failed to import artist. Please try again.')
-                          }
-                        } else {
-                          // Artist already in DB, just navigate
-                          window.location.href = `/artists/${artist.slug}`
-                        }
-                      }}
-                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover flex items-center gap-4 w-full text-left"
+                      onClick={() => handleArtistImport(artist)}
+                      disabled={importingArtist}
+                      className="card-base p-8 flex items-center gap-6 w-full text-left group"
                     >
                       {artist.imageUrl && (
-                        <img
-                          src={artist.imageUrl}
-                          alt={artist.name}
-                          className="w-16 h-16 rounded-full object-cover"
-                        />
+                        <div className="flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
+                          <img
+                            src={artist.imageUrl}
+                            alt={artist.name}
+                            className="w-20 h-20 rounded-2xl object-cover border border-border shadow-medium"
+                          />
+                        </div>
                       )}
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{artist.name}</h3>
-                        <p className="text-sm text-gray-400">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-2xl font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300">
+                          {artist.name}
+                        </h3>
+                        <p className="text-base text-muted-foreground font-body">
                           {artist.isFromApi ? 'Click to import from Ticketmaster' : 'Artist'}
                         </p>
                       </div>
                       {artist.isFromApi && (
-                        <span className="text-xs bg-teal-600 text-white px-2 py-1 rounded">
+                        <span className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-xl font-medium">
                           Import
                         </span>
                       )}

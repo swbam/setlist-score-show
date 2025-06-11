@@ -11,7 +11,14 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = createRouteHandlerClient({ cookies })
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    // Ensure cookie refresh by calling getSession
+    await supabase.auth.getSession()
+
+    if (error) {
+      console.error('Supabase auth exchange error:', error)
+    }
     
     // If there's a specific redirect path, use it
     if (redirect) {

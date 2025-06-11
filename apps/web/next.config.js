@@ -24,6 +24,19 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: '*.ticketmaster.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.spotify.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.ticketm.net',
+      },
+      
+      {
+        protocol: 'https',
         hostname: '*.mzstatic.com',
       },
       {
