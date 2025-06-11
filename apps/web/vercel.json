@@ -1,20 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "cd ../.. && pnpm turbo build --filter=web",
-  "installCommand": "cd ../.. && pnpm install",
-  "outputDirectory": ".next",
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next_public_supabase_anon_key",
-    "NEXT_PUBLIC_API_URL": "@next_public_api_url",
-    "SPOTIFY_CLIENT_ID": "@spotify_client_id",
-    "SPOTIFY_CLIENT_SECRET": "@spotify_client_secret",
-    "SETLIST_FM_API_KEY": "@setlist_fm_api_key",
-    "TICKETMASTER_API_KEY": "@ticketmaster_api_key"
-  },
-  "functions": {
-    "app/api/trpc/[trpc]/route.ts": {
-      "maxDuration": 30
-    }
-  }
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm run build"
 }
