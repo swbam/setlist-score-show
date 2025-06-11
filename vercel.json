@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "apps/web/package.json",
+      "use": "@vercel/next",
+      "config": {
+        "distDir": "apps/web/.next"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "apps/web/$1"
+    }
+  ],
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @setlist/database generate && pnpm --filter @setlist/web build",
+  "outputDirectory": "apps/web/.next"
+} 
