@@ -18,15 +18,15 @@ interface ArtistGridProps {
 
 export function ArtistGrid({ artists }: ArtistGridProps) {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {artists.map((artist) => (
         <Link
           key={artist.id}
           href={`/artists/${artist.slug}`}
-          className="group gradient-card rounded-lg overflow-hidden border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover"
+          className="group card-base overflow-hidden"
         >
           {/* Artist Image */}
-          <div className="aspect-square relative bg-gray-800 overflow-hidden">
+          <div className="aspect-square relative bg-muted overflow-hidden">
             {artist.imageUrl ? (
               <Image
                 src={artist.imageUrl}
@@ -36,26 +36,26 @@ export function ArtistGrid({ artists }: ArtistGridProps) {
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Users className="w-16 h-16 text-gray-600" />
+                <Users className="w-16 h-16 text-muted-foreground" />
               </div>
             )}
             
             {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-60" />
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />
           </div>
 
           {/* Artist Info */}
-          <div className="p-4">
-            <h3 className="font-bold text-lg mb-2 group-hover:text-teal-400 transition-colors">
+          <div className="p-6">
+            <h3 className="text-xl font-headline font-bold mb-3 text-foreground group-hover:gradient-text transition-all duration-300">
               {artist.name}
             </h3>
             
             {artist.genres?.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-3">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {artist.genres.slice(0, 2).map((genre, index) => (
                   <span
                     key={index}
-                    className="text-xs px-2 py-1 bg-gray-800 rounded-full text-gray-400"
+                    className="text-xs px-3 py-1 bg-muted/60 rounded-full text-muted-foreground font-body"
                   >
                     {genre}
                   </span>
@@ -63,16 +63,16 @@ export function ArtistGrid({ artists }: ArtistGridProps) {
               </div>
             )}
 
-            <div className="flex items-center justify-between text-sm text-gray-400">
+            <div className="flex items-center justify-between text-sm text-muted-foreground font-body">
               {artist.followers && (
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4" />
-                  <span>{formatNumber(artist.followers)} followers</span>
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-accent" />
+                  <span className="font-medium">{formatNumber(artist.followers)} followers</span>
                 </div>
               )}
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                <span className="text-teal-400">View Shows</span>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                <span className="text-primary font-medium">View Shows</span>
               </div>
             </div>
           </div>

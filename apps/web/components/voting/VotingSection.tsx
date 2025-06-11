@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VoteButton } from './VoteButton';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { TrendingUp, Clock, AlertCircle, Music, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Song {
@@ -59,163 +59,231 @@ export function VotingSection({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const totalVotes = songs.reduce((sum, s) => sum + s.votes, 0);
+  const votedUsersCount = 127; // This would come from props or API
+  const votingCloseTime = "2d 14h"; // This would be calculated from show date
+
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-24 bg-gray-800 rounded-lg animate-pulse" />
-        ))}
+      <div className="flex gap-8">
+        <div className="flex-1">
+          <div className="h-12 bg-muted rounded-lg animate-pulse mb-8" />
+          <div className="space-y-3">
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+        <div className="w-80">
+          <div className="h-64 bg-muted rounded-lg animate-pulse" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold gradient-text">Vote for Songs</h2>
-          <p className="text-gray-400 mt-1">
-            Help choose the setlist by voting for your favorite songs
+    <div className="flex gap-8">
+      {/* Main Voting Area */}
+      <div className="flex-1">
+        {/* Header */}
+        <div className="mb-8">
+          <h2 className="text-4xl font-headline font-bold mb-3 text-foreground">What do you want to hear?</h2>
+          <p className="text-lg text-muted-foreground font-body mb-6">
+            Vote for songs you want to hear at this show
           </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSortBy('votes')}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-              sortBy === 'votes' 
-                ? "bg-gray-600 text-white" 
-                : "bg-gray-800 text-gray-400 hover:text-white"
-            )}
-          >
-            <TrendingUp className="w-4 h-4 inline mr-1" />
-            Popular
-          </button>
-          <button
-            onClick={() => setSortBy('position')}
-            className={cn(
-              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-              sortBy === 'position' 
-                ? "bg-gray-600 text-white" 
-                : "bg-gray-800 text-gray-400 hover:text-white"
-            )}
-          >
-            <Clock className="w-4 h-4 inline mr-1" />
-            Original
-          </button>
-        </div>
-      </div>
-
-      {/* Vote Limits Warning */}
-      {voteLimits && voteLimits.showVotesRemaining === 0 && (
-        <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-yellow-200 font-medium">Vote limit reached</p>
-            <p className="text-yellow-300/80 text-sm mt-1">
-              You've used all your votes for this show. Come back tomorrow to vote again!
-            </p>
+          
+          {/* Add Song Section */}
+          <div className="flex items-center gap-4 mb-6">
+            <span className="text-base font-body text-foreground">Add a song to this setlist:</span>
+            <div className="flex items-center gap-3">
+              <select className="bg-input border border-border text-foreground px-4 py-2 rounded-lg font-body min-w-64 focus:outline-none focus:border-primary transition-colors">
+                <option value="">Select a song</option>
+                {/* Song options would be populated here */}
+              </select>
+              <button className="btn-secondary px-6 py-2">
+                Add to Setlist
+              </button>
+            </div>
           </div>
+          
+          <p className="text-sm text-muted-foreground font-body">127 songs available in the catalog</p>
         </div>
-      )}
 
-      {/* Songs List */}
-      <AnimatePresence mode="popLayout">
-        <div className="space-y-3">
-          {sortedSongs.map((setlistSong, index) => (
-            <motion.div
-              key={setlistSong.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className={cn(
-                "gradient-card rounded-lg p-4 border border-gray-800",
-                "hover:border-gray-600/30 transition-all duration-300",
-                setlistSong.hasVoted && "ring-1 ring-gray-500/50"
-              )}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  {/* Rank Badge */}
-                  <div className={cn(
-                    "flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold",
+        {/* Vote Limits Warning */}
+        {voteLimits && voteLimits.showVotesRemaining === 0 && (
+          <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4 flex items-start gap-3 mb-6">
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-yellow-200 font-medium">Vote limit reached</p>
+              <p className="text-yellow-300/80 text-sm mt-1">
+                You've used all your votes for this show. Come back tomorrow to vote again!
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Songs Table */}
+        <div className="space-y-0">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border/30 font-body">
+            <div className="col-span-1">#</div>
+            <div className="col-span-7">SONG</div>
+            <div className="col-span-2 text-center">VOTES</div>
+            <div className="col-span-2"></div>
+          </div>
+
+          {/* Songs List */}
+          <AnimatePresence mode="popLayout">
+            {sortedSongs.map((setlistSong, index) => (
+              <motion.div
+                key={setlistSong.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3, delay: index * 0.02 }}
+                className="grid grid-cols-12 gap-4 px-4 py-4 border-b border-border/20 hover:bg-muted/20 transition-colors group"
+              >
+                {/* Rank Number */}
+                <div className="col-span-1 flex items-center">
+                  <span className={cn(
+                    "text-lg font-headline font-bold",
                     index === 0 && sortBy === 'votes' 
-                      ? "bg-gray-600 text-white"
-                      : "bg-gray-800 text-gray-400"
+                      ? "text-yellow-500" 
+                      : "text-muted-foreground"
                   )}>
-                    {sortBy === 'votes' ? `#${index + 1}` : setlistSong.position}
-                  </div>
+                    {sortBy === 'votes' ? index + 1 : setlistSong.position}
+                  </span>
+                </div>
 
-                  {/* Song Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-lg truncate">
-                        {setlistSong.song.name}
-                      </h3>
-                      {setlistSong.hasVoted && (
-                        <Badge variant="secondary" className="text-xs">
-                          Voted
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <p className="text-sm text-gray-400 truncate">
+                {/* Song Info */}
+                <div className="col-span-7 flex items-center gap-3">
+                  <Music className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-lg text-foreground font-body truncate">
+                      {setlistSong.song.name}
+                    </h3>
+                    {setlistSong.song.album && (
+                      <p className="text-sm text-muted-foreground font-body truncate">
                         {setlistSong.song.album}
                       </p>
-                      <span className="text-xs text-gray-500">
-                        {formatDuration(setlistSong.song.duration_ms)}
-                      </span>
-                    </div>
+                    )}
                   </div>
+                  {setlistSong.hasVoted && (
+                    <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-md font-medium ml-auto">
+                      Voted
+                    </span>
+                  )}
+                </div>
+
+                {/* Vote Count */}
+                <div className="col-span-2 flex items-center justify-center">
+                  <span className="text-lg font-medium text-foreground">
+                    {setlistSong.votes}
+                  </span>
                 </div>
 
                 {/* Vote Button */}
-                <VoteButton
-                  songId={setlistSong.song.id}
-                  showId={showId}
-                  currentVotes={setlistSong.votes}
-                  hasVoted={setlistSong.hasVoted}
-                  position={setlistSong.position}
-                  onVote={(songId) => onVote(songId, setlistSong.id)}
-                  disabled={!setlistSong.canVote}
-                />
-              </div>
-
-              {/* Progress Bar */}
-              {songs.length > 0 && (
-                <div className="mt-3">
-                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-full bg-gray-500"
-                      initial={{ width: 0 }}
-                      animate={{ 
-                        width: `${(setlistSong.votes / Math.max(...songs.map(s => s.votes), 1)) * 100}%` 
-                      }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                    />
-                  </div>
+                <div className="col-span-2 flex items-center justify-center">
+                  <VoteButton
+                    songId={setlistSong.song.id}
+                    showId={showId}
+                    currentVotes={setlistSong.votes}
+                    hasVoted={setlistSong.hasVoted}
+                    position={setlistSong.position}
+                    onVote={(songId) => onVote(songId, setlistSong.id)}
+                    disabled={!setlistSong.canVote}
+                  />
                 </div>
-              )}
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-      </AnimatePresence>
+      </div>
 
-      {/* Total Stats */}
-      <div className="mt-8 pt-6 border-t border-gray-800">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">
-            Total songs: <span className="text-white font-medium">{songs.length}</span>
-          </span>
-          <span className="text-gray-400">
-            Total votes: <span className="text-white font-medium">
-              {songs.reduce((sum, s) => sum + s.votes, 0)}
-            </span>
-          </span>
+      {/* Right Sidebar - Voting Stats */}
+      <div className="w-80 space-y-6">
+        {/* Voting Stats Card */}
+        <div className="card-base p-6">
+          <h3 className="text-xl font-headline font-bold mb-6 text-foreground flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Voting Stats
+          </h3>
+          
+          {/* Total Votes */}
+          <div className="mb-6">
+            <p className="text-sm text-muted-foreground font-body mb-1">Total Votes</p>
+            <p className="text-3xl font-headline font-bold text-foreground">{totalVotes}</p>
+          </div>
+
+          {/* Free Votes Used */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground font-body">Free Votes Used</p>
+              <button className="text-xs text-primary hover:underline font-body">Log in for more</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-xl font-headline font-bold text-foreground">
+                {voteLimits ? `${3 - voteLimits.showVotesRemaining}/3` : '1/3'}
+              </p>
+            </div>
+            <div className="w-full bg-secondary/30 rounded-full h-1 mt-2">
+              <div 
+                className="bg-primary h-1 rounded-full transition-all duration-300"
+                style={{ width: voteLimits ? `${((3 - voteLimits.showVotesRemaining) / 3) * 100}%` : '33%' }}
+              />
+            </div>
+          </div>
+
+          {/* Voting Closes In */}
+          <div className="mb-6">
+            <p className="text-sm text-muted-foreground font-body mb-1">Voting Closes In</p>
+            <p className="text-xl font-headline font-bold text-foreground">{votingCloseTime}</p>
+          </div>
+
+          {/* Fans Voted */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+            <Users className="w-4 h-4" />
+            <span><span className="font-semibold text-foreground">{votedUsersCount}</span> fans have voted</span>
+          </div>
+        </div>
+
+        {/* How It Works Card */}
+        <div className="card-base p-6">
+          <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            How It Works
+          </h3>
+          
+          <div className="space-y-4 text-sm font-body">
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">1</span>
+              <p className="text-muted-foreground">
+                Vote for songs you want to hear at this show. The most voted songs rise to the top of the list.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">2</span>
+              <p className="text-muted-foreground">
+                Anyone can add songs to the setlist! Select from the dropdown above to help build the perfect concert.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">3</span>
+              <p className="text-muted-foreground">
+                Non-logged in users can vote for up to 3 songs. Create an account to vote for unlimited songs!
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">4</span>
+              <p className="text-muted-foreground">
+                Voting closes 2 hours before the show
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

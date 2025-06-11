@@ -203,23 +203,23 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
         {/* Upcoming Shows */}
         {upcomingShows.length > 0 && (
           <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-6">Upcoming Shows</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <h2 className="text-3xl font-headline font-bold mb-8 gradient-text">Upcoming Shows</h2>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {upcomingShows.map((show: any) => (
                 <Link
                   key={show.id}
                   href={`/shows/${show.id}`}
-                  className="gradient-card rounded-lg p-6 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover"
+                  className="card-base p-8 group block"
                 >
                   <div className="flex flex-col h-full">
-                    <div className="space-y-2 text-sm text-gray-400 mb-4 flex-1">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        <span>{show.venue.name}</span>
+                    <div className="space-y-3 text-base text-muted-foreground mb-6 flex-1 font-body">
+                      <div className="flex items-center gap-3">
+                        <MapPin className="w-5 h-5 text-accent" />
+                        <span className="font-medium">{show.venue.name}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
-                        <span>
+                      <div className="flex items-center gap-3">
+                        <Calendar className="w-5 h-5 text-accent" />
+                        <span className="font-medium">
                           {new Date(show.date).toLocaleDateString('en-US', {
                             weekday: 'short',
                             month: 'short',
@@ -229,14 +229,14 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                         </span>
                       </div>
                       {show.venue.city && (
-                        <div className="text-gray-500">
+                        <div className="text-muted-foreground/70 font-medium">
                           {show.venue.city}, {show.venue.state || show.venue.country}
                         </div>
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800">
-                      <span className="text-sm font-medium text-teal-400">
+                    <div className="flex items-center justify-between mt-auto pt-6 border-t border-border/30">
+                      <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
                         Vote Now →
                       </span>
                     </div>
@@ -250,22 +250,24 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
         {/* Past Shows */}
         {pastShows.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold mb-6">Past Shows</h2>
-            <div className="space-y-3">
+            <h2 className="text-3xl font-headline font-bold mb-8 gradient-text">Past Shows</h2>
+            <div className="space-y-4">
               {pastShows.slice(0, 10).map((show: any) => (
                 <Link
                   key={show.id}
                   href={`/shows/${show.id}`}
-                  className="block gradient-card rounded-lg p-4 border border-gray-800 hover:border-gray-700 transition-all duration-300"
+                  className="block card-base p-6 group"
                 >
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="font-medium">{show.venue.name}</p>
-                      <p className="text-sm text-gray-400">
+                      <p className="text-lg font-headline font-semibold text-foreground group-hover:gradient-text transition-all duration-300">
+                        {show.venue.name}
+                      </p>
+                      <p className="text-base text-muted-foreground font-body mt-1">
                         {show.venue.city}, {show.venue.state || show.venue.country}
                       </p>
                     </div>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-base text-muted-foreground font-body">
                       {new Date(show.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
