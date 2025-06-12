@@ -4,16 +4,16 @@
 
 @layer base {
   :root {
-    --background: 0 0% 3.9%;
+    --background: 0 0% 0%;
     --foreground: 0 0% 98%;
     
-    --card: 0 0% 3.9%;
+    --card: 210 40% 8%;
     --card-foreground: 0 0% 98%;
     
-    --popover: 0 0% 3.9%;
+    --popover: 210 40% 8%;
     --popover-foreground: 0 0% 98%;
     
-    --primary: 173 80% 40%;
+    --primary: 210 20% 45%;
     --primary-foreground: 0 0% 98%;
     
     --secondary: 0 0% 14.9%;
@@ -22,22 +22,24 @@
     --muted: 0 0% 14.9%;
     --muted-foreground: 0 0% 63.9%;
     
-    --accent: 172 66% 50%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 210 20% 35%;
+    --accent-foreground: 0 0% 98%;
     
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: 173 80% 40%;
+    --ring: 210 20% 45%;
     
     --radius: 0.5rem;
     
     /* Gradient definitions */
-    --gradient-primary: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
-    --gradient-hover: linear-gradient(135deg, #0f766e 0%, #0891b2 100%);
-    --gradient-active: linear-gradient(135deg, #134e4a 0%, #0c4a6e 100%);
+    --gradient-primary: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    --gradient-hover: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    --gradient-active: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    --gradient-background: linear-gradient(135deg, #000000 0%, #0f172a 50%, #1e293b 100%);
+    --gradient-subtle: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%);
   }
 }
 
@@ -50,10 +52,10 @@
   }
   
   .gradient-text {
-    @apply bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-slate-400 to-slate-500 bg-clip-text text-transparent;
   }
   
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-xl hover:shadow-teal-500/10 hover:-translate-y-1;
+    @apply transition-all duration-300 hover:shadow-xl hover:shadow-slate-500/20 hover:-translate-y-1;
   }
 }

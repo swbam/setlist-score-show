@@ -101,7 +101,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-950">
       <div className="container mx-auto px-4 py-8">
         {/* Profile Header */}
-        <div className="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-2xl p-8 mb-8">
+        <div className="bg-gradient-to-br from-black via-slate-900 to-slate-800 rounded-2xl p-8 mb-8">
           <div className="flex items-center gap-6">
             <div className="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
               <User className="w-12 h-12 text-white" />
@@ -116,13 +116,13 @@ export default function ProfilePage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="gradient-card rounded-lg p-6 border border-gray-800">
-            <Vote className="w-8 h-8 text-teal-500 mb-4" />
+                          <Vote className="w-8 h-8 text-slate-400 mb-4" />
             <div className="text-3xl font-bold mb-1">{stats.totalVotes}</div>
             <div className="text-gray-400">Total Votes</div>
           </div>
           
           <div className="gradient-card rounded-lg p-6 border border-gray-800">
-            <Calendar className="w-8 h-8 text-cyan-500 mb-4" />
+                          <Calendar className="w-8 h-8 text-slate-400 mb-4" />
             <div className="text-3xl font-bold mb-1">{stats.showsVoted}</div>
             <div className="text-gray-400">Shows Voted</div>
           </div>

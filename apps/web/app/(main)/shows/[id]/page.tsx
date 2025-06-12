@@ -260,20 +260,20 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Show header with gradient - inspired by artist page design */}
-      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-16 px-4">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-7xl mx-auto">
-          <div className="flex items-start gap-8">
+          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
             {/* Artist Image */}
             <div className="flex-shrink-0">
               {show.artist.image_url ? (
                 <img
                   src={show.artist.image_url}
                   alt={show.artist.name}
-                  className="w-64 h-64 rounded-full object-cover border-4 border-border shadow-strong"
+                  className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full object-cover border-4 border-border shadow-strong"
                 />
               ) : (
-                <div className="w-64 h-64 rounded-full bg-muted border-4 border-border flex items-center justify-center shadow-strong">
-                  <span className="text-6xl font-headline font-bold gradient-text">
+                <div className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full bg-muted border-4 border-border flex items-center justify-center shadow-strong">
+                  <span className="text-2xl sm:text-4xl lg:text-6xl font-headline font-bold gradient-text">
                     {show.artist.name.charAt(0)}
                   </span>
                 </div>
@@ -281,19 +281,21 @@ export default function ShowPage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Show Info */}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-6xl font-headline font-bold mb-4 gradient-text leading-tight">
+            <div className="flex-1 min-w-0 text-center lg:text-left">
+              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-headline font-bold mb-4 gradient-text leading-tight">
                 {show.artist.name}
               </h1>
               
-              <div className="flex flex-wrap items-center gap-6 mb-8 text-lg text-muted-foreground font-body">
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-6 h-6 text-primary" />
-                  <span className="font-medium">{show.venue.name}, {show.venue.city}</span>
+              <div className="flex flex-col sm:flex-row lg:flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 mb-6 sm:mb-8 text-base sm:text-lg text-muted-foreground font-body">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-primary flex-shrink-0" />
+                  <span className="font-medium text-center lg:text-left">
+                    {show.venue.name}, {show.venue.city}
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Calendar className="w-6 h-6 text-primary" />
-                  <span className="font-medium">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-primary flex-shrink-0" />
+                  <span className="font-medium text-center lg:text-left text-sm sm:text-base">
                     {new Date(show.date).toLocaleDateString('en-US', {
                       weekday: 'long',
                       year: 'numeric',
@@ -305,8 +307,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap gap-4">
-                <button className="btn-white flex items-center gap-3 px-8 py-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
+                <button className="btn-white flex items-center justify-center gap-3 px-6 sm:px-8 py-3 sm:py-4 text-sm sm:text-base">
                   <span>Vote on Setlist</span>
                 </button>
                 
@@ -315,9 +317,9 @@ export default function ShowPage({ params }: { params: { id: string } }) {
                     href={show.ticketmaster_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-black flex items-center gap-3 px-8 py-4"
+                    className="btn-black flex items-center justify-center gap-3 px-6 sm:px-8 py-3 sm:py-4 text-sm sm:text-base"
                   >
-                    <ExternalLink className="w-5 h-5" />
+                    <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
                     <span>Get Tickets</span>
                   </Link>
                 )}
@@ -329,16 +331,16 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
       {/* Main content */}
       <div className="bg-slate-950/50 min-h-screen">
-        <div className="w-full max-w-7xl mx-auto px-4 py-12">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Connection status */}
         {!isConnected && (
-          <div className="mb-6 p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body text-sm sm:text-base">
             Connecting to live updates...
           </div>
         )}
 
-        <div className="mb-8">
-          <h2 className="text-4xl font-headline font-bold gradient-text">Setlist Voting</h2>
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold gradient-text">Setlist Voting</h2>
         </div>
 
         {/* Voting section */}
@@ -427,9 +429,9 @@ function LiveActivityIndicator({ showId }: { showId: string }) {
   }, [showId])
 
   return (
-    <div className="fixed bottom-6 right-6 glass px-6 py-3 flex items-center gap-3 border border-border">
-      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-      <span className="text-sm font-body font-medium text-foreground">
+    <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 glass px-3 sm:px-6 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 border border-border">
+      <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-400 rounded-full animate-pulse" />
+      <span className="text-xs sm:text-sm font-body font-medium text-foreground">
         {activeUsers} {activeUsers === 1 ? 'person' : 'people'} voting now
       </span>
     </div>

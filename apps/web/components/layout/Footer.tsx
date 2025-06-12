@@ -9,7 +9,7 @@ export function Footer() {
           {/* Logo & Description */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <Music2 className="w-6 h-6 text-teal-500" />
+              <Music2 className="w-6 h-6 text-slate-400" />
               <span className="text-lg font-bold gradient-text">SetlistScore</span>
             </div>
             <p className="text-sm text-gray-400">

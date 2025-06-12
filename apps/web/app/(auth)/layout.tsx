@@ -6,7 +6,7 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Background gradient effect */}
-      <div className="fixed inset-0 bg-gradient-to-br from-teal-600/20 via-transparent to-cyan-600/20 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-br from-black/40 via-slate-900/20 to-slate-800/40 pointer-events-none" />
       
       {/* Content */}
       <div className="relative z-10">

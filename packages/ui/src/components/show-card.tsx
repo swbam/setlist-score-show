@@ -49,7 +49,7 @@ export function ShowCard({
       <Card 
         onClick={onClick}
         className={cn(
-          "overflow-hidden hover:shadow-xl hover:shadow-teal-500/10 transition-all duration-300",
+          "overflow-hidden hover:shadow-xl hover:shadow-slate-500/20 transition-all duration-300",
           className
         )}
       >
@@ -61,7 +61,7 @@ export function ShowCard({
               className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
             />
             {trendingScore > 50 && (
-              <div className="absolute top-2 right-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+              <div className="absolute top-2 right-2 bg-white text-black px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
                 Trending
               </div>
             )}
@@ -74,16 +74,16 @@ export function ShowCard({
         <CardContent>
           <div className="space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4 text-teal-500" />
+              <CalendarIcon className="h-4 w-4 text-slate-400" />
               <span>{formattedDate}</span>
             </div>
             <div className="flex items-center gap-2">
-              <MapPinIcon className="h-4 w-4 text-teal-500" />
+              <MapPinIcon className="h-4 w-4 text-slate-400" />
               <span>{location}</span>
             </div>
             {voteCount > 0 && (
               <div className="flex items-center gap-2">
-                <UsersIcon className="h-4 w-4 text-teal-500" />
+                <UsersIcon className="h-4 w-4 text-slate-400" />
                 <span>{voteCount} votes</span>
               </div>
             )}

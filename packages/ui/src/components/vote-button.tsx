@@ -1,73 +1,68 @@
 import { useState } from 'react'
-import { cn } from '../lib/utils'
-import { ChevronUp, Check } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from "../lib/utils";
+import { Button } from "./button";
 
 interface VoteButtonProps {
   songId: string
   showId: string
-  currentVotes: number
+  voteCount: number
   hasVoted: boolean
-  position: number
   onVote: (songId: string, showId: string) => Promise<{ success: boolean }>
   isVoting?: boolean
+  disabled?: boolean
+  className?: string
 }
 
-export function VoteButton({ 
-  songId, 
-  showId, 
-  currentVotes, 
-  hasVoted, 
-  position,
+export function VoteButton({
+  songId,
+  showId,
+  voteCount,
+  hasVoted,
   onVote,
-  isVoting = false
+  isVoting = false,
+  disabled = false,
+  className,
 }: VoteButtonProps) {
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [currentVotes, setCurrentVotes] = useState(voteCount)
 
   const handleVote = async () => {
     if (hasVoted || isVoting) return
     
     const result = await onVote(songId, showId)
     if (result.success) {
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 2000)
+      setCurrentVotes(prev => prev + 1)
     }
   }
 
   return (
-    <motion.button
-      whileHover={{ scale: hasVoted ? 1 : 1.05 }}
-      whileTap={{ scale: hasVoted ? 1 : 0.95 }}
+    <Button
       onClick={handleVote}
-      disabled={hasVoted || isVoting}
+      disabled={disabled || hasVoted || isVoting}
+      variant={hasVoted ? "default" : "outline"}
       className={cn(
-        "relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200",
+        "relative overflow-hidden transition-all duration-300 group",
         hasVoted
-          ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
-          : "bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700"
+          ? "bg-white text-black shadow-lg border-2 border-gray-300"
+          : "bg-transparent text-white border-gray-600 hover:bg-white hover:text-black",
+        className
       )}
     >
-      <AnimatePresence mode="wait">
-        {showSuccess ? (
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            exit={{ scale: 0, rotate: 180 }}
-            className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg"
-          >
-            <Check className="w-5 h-5 text-white" />
-          </motion.div>
-        ) : (
-          <>
-            <ChevronUp className={cn(
-              "w-5 h-5 transition-transform",
-              hasVoted && "text-white"
-            )} />
-            <span className="min-w-[3ch] text-center">{currentVotes}</span>
-            {!hasVoted && <span className="text-sm opacity-70">Vote</span>}
-          </>
+      {hasVoted && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center bg-white rounded-lg"
+          style={{ zIndex: 1 }}
+        />
+      )}
+      <span className="relative z-10 flex items-center gap-2">
+        <span className="text-sm font-medium">
+          {hasVoted ? "Voted" : "Vote"}
+        </span>
+        {currentVotes > 0 && (
+          <span className="text-xs opacity-80">
+            ({currentVotes})
+          </span>
         )}
-      </AnimatePresence>
-    </motion.button>
-  )
+      </span>
+    </Button>
+  );
 }

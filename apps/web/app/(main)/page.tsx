@@ -252,7 +252,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-r from-teal-600 to-cyan-600 text-white">
+      <section className="py-16 bg-gradient-to-br from-black via-slate-900 to-slate-800 text-white">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">
             Ready to influence your favorite concerts?

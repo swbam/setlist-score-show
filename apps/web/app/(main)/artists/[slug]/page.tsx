@@ -105,37 +105,37 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
     <div className="min-h-screen bg-gray-950">
       {/* Artist Header */}
       <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="flex flex-col items-center gap-6 sm:gap-8">
             {/* Artist Image */}
             {artist.imageUrl && (
               <img
                 src={artist.imageUrl}
                 alt={artist.name}
-                className="w-48 h-48 rounded-full object-cover shadow-xl"
+                className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full object-cover shadow-xl"
               />
             )}
             
             {/* Artist Info */}
-            <div className="flex-1 text-center md:text-left">
-              <h1 className="text-4xl md:text-5xl font-bold mb-4 gradient-text">
+            <div className="flex-1 text-center">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 gradient-text px-2">
                 {artist.name}
               </h1>
               
               {/* Stats */}
-              <div className="flex flex-wrap gap-6 justify-center md:justify-start mb-6">
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center mb-6 px-4">
                 {artist.followers && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 justify-center">
                     <Users className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-300">
+                    <span className="text-gray-300 text-sm sm:text-base">
                       {artist.followers.toLocaleString()} followers
                     </span>
                   </div>
                 )}
                 {artist.genres?.length > 0 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 justify-center">
                     <Music className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-300">
+                    <span className="text-gray-300 text-sm sm:text-base">
                       {artist.genres.slice(0, 3).join(', ')}
                     </span>
                   </div>
@@ -143,18 +143,19 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-4 justify-center md:justify-start">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
                 <button
                   onClick={handleFollow}
                   disabled={isFollowLoading}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
                     isFollowing 
                       ? 'bg-gray-700 text-white hover:bg-gray-600' 
                       : 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  <Heart className={`w-5 h-5 ${isFollowing ? 'fill-current' : ''}`} />
-                  {isFollowLoading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}
+                  <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFollowing ? 'fill-current' : ''}`} />
+                  <span className="hidden sm:inline">{isFollowLoading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}</span>
+                  <span className="sm:hidden">{isFollowing ? 'Following' : 'Follow'}</span>
                 </button>
                 
                 <button
@@ -171,12 +172,13 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                       toast.error('Failed to sync artist data')
                     }
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors text-sm sm:text-base"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Sync Latest Data
+                  <span className="hidden sm:inline">Sync Latest Data</span>
+                  <span className="sm:hidden">Sync</span>
                 </button>
                 
                 {artist.spotifyId && (
@@ -184,12 +186,13 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                     href={`https://open.spotify.com/artist/${artist.spotifyId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#1DB954] text-white rounded-lg font-medium hover:bg-[#1aa34a] transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1DB954] text-white rounded-lg font-medium hover:bg-[#1aa34a] transition-colors text-sm sm:text-base"
                   >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                     </svg>
-                    Listen on Spotify
+                    <span className="hidden sm:inline">Listen on Spotify</span>
+                    <span className="sm:hidden">Spotify</span>
                   </Link>
                 )}
               </div>
@@ -199,27 +202,27 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
       </div>
 
       {/* Shows */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Upcoming Shows */}
         {upcomingShows.length > 0 && (
-          <section className="mb-12">
-            <h2 className="text-3xl font-headline font-bold mb-8 gradient-text">Upcoming Shows</h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <section className="mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold mb-6 sm:mb-8 gradient-text">Upcoming Shows</h2>
+            <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {upcomingShows.map((show: any) => (
                 <Link
                   key={show.id}
                   href={`/shows/${show.id}`}
-                  className="card-base p-8 group block"
+                  className="card-base p-4 sm:p-6 lg:p-8 group block"
                 >
                   <div className="flex flex-col h-full">
-                    <div className="space-y-3 text-base text-muted-foreground mb-6 flex-1 font-body">
-                      <div className="flex items-center gap-3">
-                        <MapPin className="w-5 h-5 text-accent" />
-                        <span className="font-medium">{show.venue.name}</span>
+                    <div className="space-y-2 sm:space-y-3 text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 flex-1 font-body">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
+                        <span className="font-medium truncate">{show.venue.name}</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Calendar className="w-5 h-5 text-accent" />
-                        <span className="font-medium">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
+                        <span className="font-medium text-xs sm:text-sm">
                           {new Date(show.date).toLocaleDateString('en-US', {
                             weekday: 'short',
                             month: 'short',
@@ -229,14 +232,14 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                         </span>
                       </div>
                       {show.venue.city && (
-                        <div className="text-muted-foreground/70 font-medium">
+                        <div className="text-muted-foreground/70 font-medium text-xs sm:text-sm pl-6 sm:pl-8">
                           {show.venue.city}, {show.venue.state || show.venue.country}
                         </div>
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between mt-auto pt-6 border-t border-border/30">
-                      <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
+                    <div className="flex items-center justify-between mt-auto pt-4 sm:pt-6 border-t border-border/30">
+                      <span className="text-xs sm:text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
                         Vote Now →
                       </span>
                     </div>
@@ -250,24 +253,24 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
         {/* Past Shows */}
         {pastShows.length > 0 && (
           <section>
-            <h2 className="text-3xl font-headline font-bold mb-8 gradient-text">Past Shows</h2>
-            <div className="space-y-4">
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold mb-6 sm:mb-8 gradient-text">Past Shows</h2>
+            <div className="space-y-3 sm:space-y-4">
               {pastShows.slice(0, 10).map((show: any) => (
                 <Link
                   key={show.id}
                   href={`/shows/${show.id}`}
-                  className="block card-base p-6 group"
+                  className="block card-base p-4 sm:p-6 group"
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-lg font-headline font-semibold text-foreground group-hover:gradient-text transition-all duration-300">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base sm:text-lg font-headline font-semibold text-foreground group-hover:gradient-text transition-all duration-300 truncate">
                         {show.venue.name}
                       </p>
-                      <p className="text-base text-muted-foreground font-body mt-1">
+                      <p className="text-sm sm:text-base text-muted-foreground font-body mt-1 truncate">
                         {show.venue.city}, {show.venue.state || show.venue.country}
                       </p>
                     </div>
-                    <p className="text-base text-muted-foreground font-body">
+                    <p className="text-sm sm:text-base text-muted-foreground font-body shrink-0">
                       {new Date(show.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -283,8 +286,8 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
 
         {/* No shows message */}
         {!upcomingShows.length && !pastShows.length && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">No shows found for this artist.</p>
+          <div className="text-center py-8 sm:py-12 px-4">
+            <p className="text-gray-400 text-base sm:text-lg">No shows found for this artist.</p>
           </div>
         )}
       </div>

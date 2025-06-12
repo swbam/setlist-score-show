@@ -6,6 +6,7 @@ import { useAuth } from './useAuth'
 interface VoteInput {
   songId: string
   showId: string
+  setlistSongId: string
 }
 
 interface VoteResult {
@@ -23,7 +24,7 @@ export function useVoting() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
-  const vote = async ({ songId, showId }: VoteInput): Promise<VoteResult> => {
+  const vote = async ({ songId, showId, setlistSongId }: VoteInput): Promise<VoteResult> => {
     if (!user) {
       return { success: false, error: 'Please sign in to vote' }
     }
@@ -40,7 +41,7 @@ export function useVoting() {
         body: JSON.stringify({
           songId,
           showId,
-          userId: user.id,
+          setlistSongId,
         }),
       })
 

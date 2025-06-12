@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 interface VoteButtonProps {
   songId: string
   showId: string
+  setlistSongId?: string
   currentVotes: number
   hasVoted: boolean
   position: number
@@ -18,6 +19,7 @@ interface VoteButtonProps {
 export function VoteButton({ 
   songId, 
   showId, 
+  setlistSongId,
   currentVotes, 
   hasVoted, 
   position,
@@ -34,8 +36,8 @@ export function VoteButton({
       await onVote(songId)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
-    } else {
-      const result = await vote({ songId, showId })
+    } else if (setlistSongId) {
+      const result = await vote({ songId, showId, setlistSongId })
       if (result.success) {
         setShowSuccess(true)
         setTimeout(() => setShowSuccess(false), 2000)

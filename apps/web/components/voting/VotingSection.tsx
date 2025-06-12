@@ -231,6 +231,7 @@ export function VotingSection({
                     <VoteButton
                       songId={setlistSong.song.id}
                       showId={showId}
+                      setlistSongId={setlistSong.id}
                       currentVotes={setlistSong.votes}
                       hasVoted={setlistSong.hasVoted}
                       position={setlistSong.position}
