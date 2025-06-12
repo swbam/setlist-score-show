@@ -123,89 +123,104 @@ export class SyncService {
   }
 
   async syncUpcomingShows(options: SyncOptions = {}) {
-    const { artistIds, dateRange, forceUpdate } = options
-    
-    // Default to next 90 days
-    const startDate = dateRange?.start || new Date()
-    const endDate = dateRange?.end || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    const limit = pLimit(3) // Max 3 concurrent API calls
+    const results: any[] = []
 
-    // Get artists to sync
+    // Get date range for shows to sync
+    const startDate = options.dateRange?.start || new Date()
+    const endDate = options.dateRange?.end || (() => {
+      const end = new Date()
+      end.setDate(end.getDate() + 90) // Next 3 months
+      return end
+    })()
+
+    // Get all artists that need show syncing
+    const where: any = {}
+    if (options.artistIds) {
+      where.id = { in: options.artistIds }
+    }
+
     const artists = await this.prisma.artist.findMany({
-      where: artistIds ? { id: { in: artistIds } } : undefined
+      where,
+      include: {
+        shows: {
+          where: {
+            date: { gte: startDate, lte: endDate }
+          }
+        }
+      }
     })
 
-    const results = []
+    console.log(`🎯 Syncing shows for ${artists.length} artists between ${startDate.toISOString()} and ${endDate.toISOString()}`)
 
-    for (const artist of artists) {
-      try {
-        // Check if we should skip based on last sync
-        if (!forceUpdate) {
-          const lastSync = await this.prisma.syncHistory.findFirst({
-            where: {
-              entityId: artist.id,
-              syncType: 'ticketmaster',
-              status: 'completed',
-              completedAt: {
-                gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours
+    // Process each artist
+    const processingPromises = artists.map(artist =>
+      limit(async () => {
+        try {
+          console.log(`🎤 Syncing shows for ${artist.name}`)
+
+          // Sync from Ticketmaster for upcoming shows
+          if (artist.ticketmasterId) {
+            const tmShows = await this.ticketmaster.getArtistEvents(
+              artist.ticketmasterId,
+              {
+                startDate,
+                endDate,
+                size: 50
               }
+            )
+
+                         for (const event of tmShows) {
+               await this.upsertShow(artist.id, event)
+             }
+
+            results.push({
+              artistId: artist.id,
+              source: 'ticketmaster',
+              showsFound: tmShows.length
+            })
+          }
+
+          // Also check Setlist.fm for recent shows (limit to last month for past shows)
+          if (artist.setlistfmMbid) {
+            // For past shows, only sync last month
+            const oneMonthAgo = new Date()
+            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+            
+            const setlistStartDate = new Date(Math.max(oneMonthAgo.getTime(), startDate.getTime()))
+            
+            const setlists = await this.setlistFm.getArtistSetlists(
+              artist.setlistfmMbid
+            )
+
+            // Filter to shows within our date range (upcoming + last month for past)
+            const relevantSetlists = setlists.filter(s => {
+              const showDate = new Date(s.eventDate)
+              return showDate >= setlistStartDate && showDate <= endDate
+            })
+
+            for (const setlist of relevantSetlists) {
+              await this.upsertShowFromSetlist(artist.id, setlist)
             }
-          })
-          
-          if (lastSync) {
-            console.log(`Skipping ${artist.name} - synced recently`)
-            continue
-          }
-        }
 
-        // Sync from Ticketmaster
-        if (artist.ticketmasterId) {
-          const shows = await this.ticketmaster.getArtistEvents(
-            artist.ticketmasterId,
-            { startDate, endDate }
-          )
-
-          for (const show of shows) {
-            await this.upsertShow(artist.id, show)
+            results.push({
+              artistId: artist.id,
+              source: 'setlistfm',
+              showsFound: relevantSetlists.length
+            })
           }
 
+        } catch (error) {
+          console.error(`Failed to sync shows for ${artist.name}:`, error)
           results.push({
             artistId: artist.id,
-            source: 'ticketmaster',
-            showsFound: shows.length
+            error: error.message
           })
         }
+      })
+    )
 
-        // Also check Setlist.fm for recent shows
-        if (artist.setlistfmMbid) {
-          const setlists = await this.setlistFm.getArtistSetlists(
-            artist.setlistfmMbid
-          )
-
-          // Filter to upcoming shows only
-          const upcomingSetlists = setlists.filter(s => 
-            new Date(s.eventDate) >= startDate &&
-            new Date(s.eventDate) <= endDate
-          )
-
-          for (const setlist of upcomingSetlists) {
-            await this.upsertShowFromSetlist(artist.id, setlist)
-          }
-
-          results.push({
-            artistId: artist.id,
-            source: 'setlistfm',
-            showsFound: upcomingSetlists.length
-          })
-        }
-
-      } catch (error) {
-        console.error(`Failed to sync shows for ${artist.name}:`, error)
-        results.push({
-          artistId: artist.id,
-          error: error.message
-        })
-      }
-    }
+    await Promise.allSettled(processingPromises)
 
     // Broadcast sync complete
     await this.supabase.channel('admin')

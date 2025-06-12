@@ -6,6 +6,7 @@ import { GET_ARTIST } from '@/lib/graphql/queries'
 import { Calendar, MapPin, Users, Music, ExternalLink, Heart } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { notFound } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
@@ -94,12 +95,18 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
     notFound()
   }
 
+  const now = new Date()
+  const oneMonthAgo = new Date()
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+
   const upcomingShows = artist.shows?.filter((show: any) => 
-    new Date(show.date) > new Date()
+    new Date(show.date) > now
   ) || []
-  const pastShows = artist.shows?.filter((show: any) => 
-    new Date(show.date) <= new Date()
-  ) || []
+  
+  const pastShows = artist.shows?.filter((show: any) => {
+    const showDate = new Date(show.date)
+    return showDate <= now && showDate >= oneMonthAgo
+  }).slice(0, 10) || [] // Limit to 10 most recent
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -143,42 +150,23 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
                 <button
                   onClick={handleFollow}
                   disabled={isFollowLoading}
                   className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                    isFollowing 
-                      ? 'bg-gray-700 text-white hover:bg-gray-600' 
-                      : 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600'
+                    isFollowing
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-white text-gray-900 hover:bg-gray-100'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFollowing ? 'fill-current' : ''}`} />
-                  <span className="hidden sm:inline">{isFollowLoading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}</span>
-                  <span className="sm:hidden">{isFollowing ? 'Following' : 'Follow'}</span>
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    const response = await fetch('/api/sync-artist', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ artistId: artist.id })
-                    })
-                    if (response.ok) {
-                      toast.success('Artist data synced successfully')
-                      window.location.reload()
-                    } else {
-                      toast.error('Failed to sync artist data')
-                    }
-                  }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors text-sm sm:text-base"
-                >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span className="hidden sm:inline">Sync Latest Data</span>
-                  <span className="sm:hidden">Sync</span>
+                  <span className="hidden sm:inline">
+                    {isFollowLoading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}
+                  </span>
+                  <span className="sm:hidden">
+                    {isFollowLoading ? '...' : isFollowing ? '✓' : '+'}
+                  </span>
                 </button>
                 
                 {artist.spotifyId && (
@@ -201,95 +189,108 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
         </div>
       </div>
 
-      {/* Shows */}
+      {/* Shows Tabs */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Upcoming Shows */}
-        {upcomingShows.length > 0 && (
-          <section className="mb-8 sm:mb-12">
-            <h2 className="text-2xl sm:text-3xl font-headline font-bold mb-6 sm:mb-8 gradient-text">Upcoming Shows</h2>
-            <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {upcomingShows.map((show: any) => (
-                <Link
-                  key={show.id}
-                  href={`/shows/${show.id}`}
-                  className="card-base p-4 sm:p-6 lg:p-8 group block"
-                >
-                  <div className="flex flex-col h-full">
-                    <div className="space-y-2 sm:space-y-3 text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 flex-1 font-body">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
-                        <span className="font-medium truncate">{show.venue.name}</span>
+        <Tabs defaultValue="upcoming" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6 sm:mb-8">
+            <TabsTrigger value="upcoming" className="text-sm sm:text-base">
+              Upcoming Shows ({upcomingShows.length})
+            </TabsTrigger>
+            <TabsTrigger value="past" className="text-sm sm:text-base">
+              Recent Shows ({pastShows.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="upcoming" className="space-y-4 sm:space-y-6">
+            {upcomingShows.length > 0 ? (
+              <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {upcomingShows.map((show: any) => (
+                  <Link
+                    key={show.id}
+                    href={`/shows/${show.id}`}
+                    className="card-base p-4 sm:p-6 lg:p-8 group block"
+                  >
+                    <div className="flex flex-col h-full">
+                      <div className="space-y-2 sm:space-y-3 text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 flex-1 font-body">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
+                          <span className="font-medium truncate">{show.venue.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
+                          <span className="font-medium text-xs sm:text-sm">
+                            {new Date(show.date).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                        {show.venue.city && (
+                          <div className="text-muted-foreground/70 font-medium text-xs sm:text-sm pl-6 sm:pl-8">
+                            {show.venue.city}, {show.venue.state || show.venue.country}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
-                        <span className="font-medium text-xs sm:text-sm">
-                          {new Date(show.date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
+                      
+                      <div className="flex items-center justify-between mt-auto pt-4 sm:pt-6 border-t border-border/30">
+                        <span className="text-xs sm:text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
+                          Vote Now →
                         </span>
                       </div>
-                      {show.venue.city && (
-                        <div className="text-muted-foreground/70 font-medium text-xs sm:text-sm pl-6 sm:pl-8">
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 sm:py-12 px-4">
+                <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 text-base sm:text-lg">No upcoming shows scheduled.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="past" className="space-y-4 sm:space-y-6">
+            {pastShows.length > 0 ? (
+              <div className="space-y-3 sm:space-y-4">
+                <p className="text-sm text-gray-400 mb-4">
+                  Showing recent shows from the last month
+                </p>
+                {pastShows.map((show: any) => (
+                  <Link
+                    key={show.id}
+                    href={`/shows/${show.id}`}
+                    className="block card-base p-4 sm:p-6 group"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base sm:text-lg font-headline font-semibold text-foreground group-hover:gradient-text transition-all duration-300 truncate">
+                          {show.venue.name}
+                        </p>
+                        <p className="text-sm sm:text-base text-muted-foreground font-body mt-1 truncate">
                           {show.venue.city}, {show.venue.state || show.venue.country}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center justify-between mt-auto pt-4 sm:pt-6 border-t border-border/30">
-                      <span className="text-xs sm:text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
-                        Vote Now →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Past Shows */}
-        {pastShows.length > 0 && (
-          <section>
-            <h2 className="text-2xl sm:text-3xl font-headline font-bold mb-6 sm:mb-8 gradient-text">Past Shows</h2>
-            <div className="space-y-3 sm:space-y-4">
-              {pastShows.slice(0, 10).map((show: any) => (
-                <Link
-                  key={show.id}
-                  href={`/shows/${show.id}`}
-                  className="block card-base p-4 sm:p-6 group"
-                >
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base sm:text-lg font-headline font-semibold text-foreground group-hover:gradient-text transition-all duration-300 truncate">
-                        {show.venue.name}
-                      </p>
-                      <p className="text-sm sm:text-base text-muted-foreground font-body mt-1 truncate">
-                        {show.venue.city}, {show.venue.state || show.venue.country}
+                        </p>
+                      </div>
+                      <p className="text-sm sm:text-base text-muted-foreground font-body shrink-0">
+                        {new Date(show.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
                       </p>
                     </div>
-                    <p className="text-sm sm:text-base text-muted-foreground font-body shrink-0">
-                      {new Date(show.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* No shows message */}
-        {!upcomingShows.length && !pastShows.length && (
-          <div className="text-center py-8 sm:py-12 px-4">
-            <p className="text-gray-400 text-base sm:text-lg">No shows found for this artist.</p>
-          </div>
-        )}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 sm:py-12 px-4">
+                <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 text-base sm:text-lg">No recent shows in the last month.</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

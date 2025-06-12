@@ -94,7 +94,38 @@ export async function POST(request: NextRequest) {
     const spotifyToken = await getSpotifyToken()
     const spotifyArtist = await searchSpotifyArtist(name, spotifyToken)
     
-    // 3. Create artist in database
+    // 3. Try to get Setlist.fm MBID
+    let setlistfmMbid = null
+    try {
+      const setlistFmApiKey = process.env.SETLIST_FM_API_KEY
+      if (setlistFmApiKey) {
+        const setlistResponse = await fetch(
+          `https://api.setlist.fm/rest/1.0/search/artists?artistName=${encodeURIComponent(name)}&sort=relevance`,
+          {
+            headers: {
+              'Accept': 'application/json',
+              'x-api-key': setlistFmApiKey
+            }
+          }
+        )
+        
+        if (setlistResponse.ok) {
+          const setlistData = await setlistResponse.json()
+          if (setlistData.artist && setlistData.artist.length > 0) {
+            // Find best match
+            const bestMatch = setlistData.artist.find((sf: any) => 
+              sf.name.toLowerCase() === name.toLowerCase()
+            ) || setlistData.artist[0]
+            setlistfmMbid = bestMatch.mbid
+            console.log(`✅ Found Setlist.fm MBID for ${name}: ${setlistfmMbid}`)
+          }
+        }
+      }
+    } catch (sfError) {
+      console.log(`⚠️ Could not find Setlist.fm MBID for ${name}:`, sfError)
+    }
+    
+    // 4. Create artist in database
     const { data: artist, error: artistError } = await supabase
       .from('artists')
       .insert({
@@ -103,6 +134,7 @@ export async function POST(request: NextRequest) {
         image_url: imageUrl || spotifyArtist?.images?.[0]?.url,
         ticketmaster_id: ticketmasterId,
         spotify_id: spotifyArtist?.id,
+        setlistfm_mbid: setlistfmMbid,
         genres: spotifyArtist?.genres || [],
         popularity: spotifyArtist?.popularity || 0,
         followers: spotifyArtist?.followers?.total || 0
@@ -115,7 +147,7 @@ export async function POST(request: NextRequest) {
       throw artistError
     }
     
-    // 4. Import top songs from Spotify
+    // 5. Import top songs from Spotify
     if (spotifyArtist?.id) {
       const topTracks = await getSpotifyArtistTopTracks(spotifyArtist.id, spotifyToken)
       
@@ -143,11 +175,11 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // 5. Fetch upcoming shows from Ticketmaster
+    // 6. Fetch upcoming shows from Ticketmaster
     const tmShows = await getTicketmasterShows(ticketmasterId)
     console.log(`Found ${tmShows.length} shows from Ticketmaster`)
     
-    // 6. Process each show
+    // 7. Process each show
     for (const tmShow of tmShows) {
       try {
         // Create venue if it doesn't exist
@@ -261,7 +293,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // 7. TODO: Fetch past setlists from Setlist.fm (requires API key)
+    // 8. TODO: Fetch past setlists from Setlist.fm (requires API key)
     
     return NextResponse.json({ 
       artist,
