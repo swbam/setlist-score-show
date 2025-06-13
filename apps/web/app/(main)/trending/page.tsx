@@ -50,14 +50,14 @@ export default function TrendingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-4 py-12">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-5xl font-headline font-bold mb-6 gradient-text flex items-center gap-4">
-            <TrendingUp className="w-10 h-10" />
+        <div className="mb-8 sm:mb-10 lg:mb-12">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold mb-4 sm:mb-6 gradient-text flex items-center gap-3 sm:gap-4">
+            <TrendingUp className="w-8 h-8 sm:w-10 sm:h-10" />
             Trending Shows
           </h1>
-          <p className="text-muted-foreground text-xl font-body">
+          <p className="text-muted-foreground text-base sm:text-lg lg:text-xl font-body">
             The hottest shows based on voting activity and engagement
           </p>
         </div>

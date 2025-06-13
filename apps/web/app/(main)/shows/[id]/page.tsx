@@ -76,14 +76,23 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
   // Update user votes state
   useEffect(() => {
-    if (userVotesData) {
+    if (user && userVotesData) {
       setUserVotes(new Set(userVotesData))
       setVoteLimits(prev => ({
         ...prev,
         showVotesRemaining: Math.max(0, 10 - userVotesData.length)
       }))
+    } else if (!user) {
+      // Load votes from localStorage for non-logged-in users
+      const voteKey = `setlist_votes_${params.id}`
+      const existingVotes = JSON.parse(localStorage.getItem(voteKey) || '[]')
+      setUserVotes(new Set(existingVotes))
+      setVoteLimits({
+        showVotesRemaining: Math.max(0, 3 - existingVotes.length),
+        dailyVotesRemaining: Math.max(0, 3 - existingVotes.length)
+      })
     }
-  }, [userVotesData])
+  }, [userVotesData, user, params.id])
 
   // Set up vote mutation
   const voteMutation = useMutation({
@@ -106,7 +115,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryFn: async () => {
       if (!show?.artist?.id) return []
       try {
-        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit: 500 })
+        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit: 1000 })
         return (data as any).songs?.edges?.map((edge: any) => edge.node) || []
       } catch (error) {
         console.error("Error fetching artist songs:", error)
@@ -168,24 +177,53 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   }
 
 
-  // Handle voting
+  // Handle voting - now supports non-logged-in users with localStorage tracking
   const handleVote = async (songId: string, setlistSongId: string) => {
+    // Check if user is not logged in - use localStorage for vote tracking
     if (!user) {
-      // Show login prompt
-      alert('Please sign in to vote')
-      return
+      const voteKey = `setlist_votes_${params.id}`
+      const existingVotes = JSON.parse(localStorage.getItem(voteKey) || '[]')
+      
+      // Check if user already voted (max 3 votes for non-logged-in users)
+      if (existingVotes.length >= 3) {
+        alert('You have used all 3 free votes. Sign in for unlimited voting!')
+        return
+      }
+      
+      // Check if already voted for this song
+      if (existingVotes.includes(setlistSongId)) {
+        alert('You have already voted for this song')
+        return
+      }
     }
 
     // Optimistic update
     optimisticVoteUpdate(setlistSongId)
     setUserVotes(prev => new Set([...prev, setlistSongId]))
-    setVoteLimits(prev => ({
-      ...prev,
-      showVotesRemaining: Math.max(0, prev.showVotesRemaining - 1)
-    }))
+    
+    if (user) {
+      setVoteLimits(prev => ({
+        ...prev,
+        showVotesRemaining: Math.max(0, prev.showVotesRemaining - 1)
+      }))
+    }
 
     try {
-      // Call the vote API route directly with all required parameters
+      // For non-logged-in users, update localStorage and call vote API
+      if (!user) {
+        const voteKey = `setlist_votes_${params.id}`
+        const existingVotes = JSON.parse(localStorage.getItem(voteKey) || '[]')
+        existingVotes.push(setlistSongId)
+        localStorage.setItem(voteKey, JSON.stringify(existingVotes))
+        
+        // Update local vote limits for non-logged-in users
+        setVoteLimits(prev => ({
+          showVotesRemaining: Math.max(0, 3 - existingVotes.length),
+          dailyVotesRemaining: Math.max(0, 3 - existingVotes.length)
+        }))
+      }
+
+      // Call the vote API route - now works for both logged-in and non-logged-in users
       const response = await fetch('/api/vote', {
         method: 'POST',
         headers: {
@@ -194,7 +232,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({
           songId,
           showId: params.id,
-          setlistSongId
+          setlistSongId,
+          isAnonymous: !user
         }),
       })
 
@@ -204,8 +243,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
         throw new Error(data.error || 'Failed to vote')
       }
 
-      // Update vote limits from response
-      if (data.votesRemaining) {
+      // Update vote limits from response for logged-in users
+      if (user && data.votesRemaining) {
         setVoteLimits({
           showVotesRemaining: data.votesRemaining.show,
           dailyVotesRemaining: data.votesRemaining.daily
@@ -213,7 +252,9 @@ export default function ShowPage({ params }: { params: { id: string } }) {
       }
 
       // Refresh data
-      await queryClient.invalidateQueries({ queryKey: ['userVotes', params.id] })
+      if (user) {
+        await queryClient.invalidateQueries({ queryKey: ['userVotes', params.id] })
+      }
       await refreshVoteCounts()
     } catch (error) {
       // Revert on error
@@ -224,10 +265,24 @@ export default function ShowPage({ params }: { params: { id: string } }) {
         newSet.delete(setlistSongId)
         return newSet
       })
-      setVoteLimits(prev => ({
-        ...prev,
-        showVotesRemaining: prev.showVotesRemaining + 1
-      }))
+      
+      if (!user) {
+        // Revert localStorage for non-logged-in users
+        const voteKey = `setlist_votes_${params.id}`
+        const existingVotes = JSON.parse(localStorage.getItem(voteKey) || '[]')
+        const updatedVotes = existingVotes.filter((id: string) => id !== setlistSongId)
+        localStorage.setItem(voteKey, JSON.stringify(updatedVotes))
+        
+        setVoteLimits(prev => ({
+          showVotesRemaining: Math.max(0, 3 - updatedVotes.length),
+          dailyVotesRemaining: Math.max(0, 3 - updatedVotes.length)
+        }))
+      } else {
+        setVoteLimits(prev => ({
+          ...prev,
+          showVotesRemaining: prev.showVotesRemaining + 1
+        }))
+      }
     }
   }
 
@@ -260,7 +315,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Show header with gradient - inspired by artist page design */}
-      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
             {/* Artist Image */}
@@ -369,30 +424,30 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 function ShowPageSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="bg-gradient-to-b from-background via-muted/30 to-background py-16 px-4">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-7xl mx-auto">
-          <div className="flex items-start gap-8">
+          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
             {/* Artist Image Skeleton */}
             <div className="flex-shrink-0">
-              <div className="w-64 h-64 rounded-full bg-muted border-4 border-border animate-pulse" />
+              <div className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full bg-muted border-4 border-border animate-pulse" />
             </div>
             
             {/* Show Info Skeleton */}
-            <div className="flex-1 min-w-0">
-              <div className="h-16 w-96 bg-muted rounded-lg mb-4 animate-pulse" />
-              <div className="flex gap-6 mb-8">
-                <div className="h-6 w-48 bg-muted rounded-lg animate-pulse" />
-                <div className="h-6 w-56 bg-muted rounded-lg animate-pulse" />
+            <div className="flex-1 min-w-0 text-center lg:text-left">
+              <div className="h-12 sm:h-16 w-full max-w-96 bg-muted rounded-lg mb-4 animate-pulse mx-auto lg:mx-0" />
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8 justify-center lg:justify-start">
+                <div className="h-6 w-48 bg-muted rounded-lg animate-pulse mx-auto lg:mx-0" />
+                <div className="h-6 w-56 bg-muted rounded-lg animate-pulse mx-auto lg:mx-0" />
               </div>
-              <div className="flex gap-4">
-                <div className="h-12 w-40 bg-muted rounded-xl animate-pulse" />
-                <div className="h-12 w-32 bg-muted rounded-xl animate-pulse" />
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
+                <div className="h-12 w-40 bg-muted rounded-xl animate-pulse mx-auto lg:mx-0" />
+                <div className="h-12 w-32 bg-muted rounded-xl animate-pulse mx-auto lg:mx-0" />
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="w-full max-w-7xl mx-auto px-4 py-12">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="space-y-4">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-32 w-full bg-muted rounded-2xl animate-pulse" />

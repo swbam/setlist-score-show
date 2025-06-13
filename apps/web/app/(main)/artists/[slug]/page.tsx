@@ -111,7 +111,7 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Artist Header */}
-      <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
+      <div className="bg-gradient-to-b from-gray-900 to-[#122727] border-b border-gray-800">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="flex flex-col items-center gap-6 sm:gap-8">
             {/* Artist Image */}
@@ -299,7 +299,7 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
 function ArtistPageSkeleton() {
   return (
     <div className="min-h-screen bg-gray-950">
-      <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
+      <div className="bg-gradient-to-b from-gray-900 to-[#122727] border-b border-gray-800">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
             <Skeleton className="w-48 h-48 rounded-full" />

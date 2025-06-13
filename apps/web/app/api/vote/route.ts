@@ -8,83 +8,88 @@ export async function POST(request: NextRequest) {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
-    // Get authenticated user
+    const body = await request.json()
+    const { songId, showId, setlistSongId, isAnonymous } = body
+    
+    // Get authenticated user (optional for anonymous voting)
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    
-    const body = await request.json()
-    const { songId, showId, setlistSongId } = body
-    const userId = user.id
+    // For anonymous voting, we don't require authentication
+    const userId = user?.id || null
+    const isUserAnonymous = isAnonymous || !userId
 
     // Validate input
-    if (!songId || !showId || !setlistSongId || !userId) {
+    if (!songId || !showId || !setlistSongId) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
-    // Check vote limits
-    const { data: existingVotes, error: voteLimitError } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('show_id', showId)
+    // Check vote limits - only for authenticated users
+    let existingVotes: any[] = []
+    if (userId) {
+      const { data: votes, error: voteLimitError } = await supabase
+        .from('votes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('show_id', showId)
 
-    if (voteLimitError) {
-      console.error('Vote limit check error:', voteLimitError)
-      return NextResponse.json(
-        { error: 'Failed to check vote limits' },
-        { status: 500 }
-      )
+      if (voteLimitError) {
+        console.error('Vote limit check error:', voteLimitError)
+        return NextResponse.json(
+          { error: 'Failed to check vote limits' },
+          { status: 500 }
+        )
+      }
+
+      existingVotes = votes || []
+
+      if (existingVotes.length >= 10) {
+        return NextResponse.json(
+          { error: 'Vote limit reached for this show' },
+          { status: 400 }
+        )
+      }
+
+      // Check if already voted for this song
+      const { data: existingVote } = await supabase
+        .from('votes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('setlist_song_id', setlistSongId)
+        .single()
+
+      if (existingVote) {
+        return NextResponse.json(
+          { error: 'Already voted for this song' },
+          { status: 400 }
+        )
+      }
     }
 
-    if (existingVotes && existingVotes.length >= 10) {
-      return NextResponse.json(
-        { error: 'Vote limit reached for this show' },
-        { status: 400 }
-      )
-    }
+    // Create vote - for anonymous users, we don't store in votes table, just update count
+    let vote = null
+    if (userId) {
+      const { data: voteData, error: voteError } = await supabase
+        .from('votes')
+        .insert({
+          user_id: userId,
+          setlist_song_id: setlistSongId,
+          show_id: showId,
+          vote_type: 'up',
+        })
+        .select()
+        .single()
 
-    // Check if already voted for this song
-    const { data: existingVote } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('setlist_song_id', setlistSongId)
-      .single()
-
-    if (existingVote) {
-      return NextResponse.json(
-        { error: 'Already voted for this song' },
-        { status: 400 }
-      )
-    }
-
-    // Create vote
-    const { data: vote, error: voteError } = await supabase
-      .from('votes')
-      .insert({
-        user_id: userId,
-        setlist_song_id: setlistSongId,
-        show_id: showId,
-        vote_type: 'up',
-      })
-      .select()
-      .single()
-
-    if (voteError) {
-      console.error('Vote creation error:', voteError)
-      return NextResponse.json(
-        { error: 'Failed to create vote' },
-        { status: 500 }
-      )
+      if (voteError) {
+        console.error('Vote creation error:', voteError)
+        return NextResponse.json(
+          { error: 'Failed to create vote' },
+          { status: 500 }
+        )
+      }
+      vote = voteData
     }
 
     // Update vote count using RPC function
@@ -112,8 +117,10 @@ export async function POST(request: NextRequest) {
 
       if (manualUpdateError) {
         console.error('Manual vote count update error:', manualUpdateError)
-        // Try to rollback the vote
-        await supabase.from('votes').delete().eq('id', vote.id)
+        // Try to rollback the vote for authenticated users
+        if (vote?.id) {
+          await supabase.from('votes').delete().eq('id', vote.id)
+        }
         return NextResponse.json(
           { error: 'Failed to update vote count' },
           { status: 500 }
@@ -122,11 +129,14 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        voteId: vote.id,
+        voteId: vote?.id || null,
         newVoteCount: updatedSong.vote_count,
-        votesRemaining: {
+        votesRemaining: userId ? {
           show: 10 - (existingVotes?.length || 0) - 1,
           daily: 50
+        } : {
+          show: 3,
+          daily: 3
         }
       })
     }
@@ -143,22 +153,28 @@ export async function POST(request: NextRequest) {
       // Default to assuming count was incremented
       return NextResponse.json({
         success: true,
-        voteId: vote.id,
+        voteId: vote?.id || null,
         newVoteCount: 1,
-        votesRemaining: {
+        votesRemaining: userId ? {
           show: 10 - (existingVotes?.length || 0) - 1,
           daily: 50
+        } : {
+          show: 3,
+          daily: 3
         }
       })
     }
 
     return NextResponse.json({
       success: true,
-      voteId: vote.id,
+      voteId: vote?.id || null,
       newVoteCount: updatedSong.vote_count,
-      votesRemaining: {
+      votesRemaining: userId ? {
         show: 10 - (existingVotes?.length || 0) - 1,
         daily: 50 // This would need proper calculation
+      } : {
+        show: 3,
+        daily: 3
       }
     })
   } catch (error) {

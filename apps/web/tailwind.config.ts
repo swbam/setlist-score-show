@@ -19,7 +19,7 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				sans: ['Overpass', 'system-ui', '-apple-system', 'sans-serif'],
+				sans: ['var(--font-overpass)', 'system-ui', '-apple-system', 'sans-serif'],
 			},
 			colors: {
 				// Dark greys for backgrounds

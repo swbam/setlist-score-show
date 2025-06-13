@@ -32,9 +32,9 @@ interface ShowCardGridProps {
 export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="card-base h-80 animate-pulse" />
+          <div key={i} className="card-base h-64 sm:h-72 animate-pulse" />
         ))}
       </div>
     )
@@ -49,15 +49,15 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {shows.map((item) => (
         <Link
           key={item.show.id}
           href={`/shows/${item.show.id}`}
           className="card-base overflow-hidden group"
         >
-          {/* Artist Image */}
-          <div className="aspect-[4/3] relative bg-muted overflow-hidden">
+          {/* Artist Image - Much smaller height */}
+          <div className="aspect-[16/9] sm:aspect-[3/2] relative bg-muted overflow-hidden">
             {item.show.artist.imageUrl ? (
               <img
                 src={item.show.artist.imageUrl}
@@ -66,7 +66,7 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                <span className="text-2xl font-headline font-bold text-muted-foreground/50">
+                <span className="text-xl sm:text-2xl font-headline font-bold text-muted-foreground/50">
                   {item.show.artist.name.charAt(0)}
                 </span>
               </div>
@@ -74,9 +74,9 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
             
             {/* Trending Badge */}
             {item.trendingScore > 10 && (
-              <div className="absolute top-3 right-3 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+              <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-primary text-primary-foreground px-2 sm:px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
-                Trending
+                <span className="hidden sm:inline">Trending</span>
               </div>
             )}
             
@@ -85,21 +85,21 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
           </div>
 
           {/* Show Info */}
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {/* Artist Name - Main Headline */}
-            <h3 className="text-lg font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
+            <h3 className="text-base sm:text-lg font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
               {item.show.artist.name}
             </h3>
             
             {/* Tour Name - Subheadline (if exists) */}
             {item.show.title && (
-              <h4 className="text-sm font-headline font-medium mb-3 text-muted-foreground line-clamp-1">
+              <h4 className="text-xs sm:text-sm font-headline font-medium mb-2 sm:mb-3 text-muted-foreground line-clamp-1">
                 {item.show.title}
               </h4>
             )}
             
             {/* Venue & Date */}
-            <div className="space-y-1 text-xs text-muted-foreground font-body mb-3">
+            <div className="space-y-1 text-xs text-muted-foreground font-body mb-2 sm:mb-3">
               <div className="flex items-center gap-2">
                 <MapPin className="w-3 h-3 text-accent flex-shrink-0" />
                 <span className="font-medium line-clamp-1">{item.show.venue.name}</span>

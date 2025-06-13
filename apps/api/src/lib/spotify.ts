@@ -234,6 +234,46 @@ export class SpotifyClient {
     }
   }
 
+  async getAllArtistAlbums(
+    artistId: string,
+    options: { include_groups?: string } = {}
+  ): Promise<SpotifyApi.AlbumObjectSimplified[]> {
+    const allAlbums: SpotifyApi.AlbumObjectSimplified[] = [];
+    let offset = 0;
+    const limit = 50; // Spotify's maximum per request
+    
+    try {
+      while (true) {
+        const responseBody = await this._request<SpotifyApi.ArtistsAlbumsResponse>(() =>
+          this.spotify.getArtistAlbums(artistId, {
+            limit,
+            offset,
+            include_groups: options.include_groups || 'album,single,compilation',
+          })
+        );
+        
+        if (!responseBody.items || responseBody.items.length === 0) {
+          break;
+        }
+        
+        allAlbums.push(...responseBody.items);
+        
+        // If we got fewer items than the limit, we've reached the end
+        if (responseBody.items.length < limit) {
+          break;
+        }
+        
+        offset += limit;
+      }
+      
+      logger.info(`Retrieved ${allAlbums.length} albums for artist ${artistId}`);
+      return allAlbums;
+    } catch (error) {
+      logger.error('Failed to get all artist albums:', { artistId, error });
+      return allAlbums; // Return what we've collected so far
+    }
+  }
+
   async getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
     try {
       const responseBody = await this._request<SpotifyApi.AlbumTracksResponse>(() =>
@@ -350,8 +390,10 @@ export class SpotifyClient {
     if (!artist) {
       throw new Error(`Artist not found for ID: ${artistId}`);
     }
-    const albumsResponseItems = await this.getArtistAlbums(artistId, { include_groups: 'album,single,compilation' });
+    const albumsResponseItems = await this.getAllArtistAlbums(artistId, { include_groups: 'album,single,compilation' });
     const tracks: SpotifyTrack[] = [];
+
+    logger.info(`Processing ${albumsResponseItems.length} albums for ${artist.name}`);
 
     for (const album of albumsResponseItems) {
       const albumTracks = await this.getAlbumTracks(album.id);
@@ -369,6 +411,7 @@ export class SpotifyClient {
       }
     });
 
+    logger.info(`Collected ${tracks.length} total tracks, ${trackMap.size} unique tracks for ${artist.name}`);
     return { artist, albums: albumsResponseItems, tracks: Array.from(trackMap.values()) };
   }
 
@@ -413,6 +456,13 @@ export class SpotifyService {
     options?: { limit?: number; offset?: number; include_groups?: string }
   ): Promise<SpotifyApi.AlbumObjectSimplified[]> {
     return this.client.getArtistAlbums(artistId, options);
+  }
+
+  async getAllArtistAlbums(
+    artistId: string,
+    options?: { include_groups?: string }
+  ): Promise<SpotifyApi.AlbumObjectSimplified[]> {
+    return this.client.getAllArtistAlbums(artistId, options);
   }
 
   async getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {

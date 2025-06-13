@@ -115,28 +115,29 @@ export const showResolvers: IResolvers = {
       const trendingData = await prisma.$queryRaw`
         WITH ranked_shows AS (
           SELECT 
-            tsv.show_id,
+            tsv.id,
             tsv.total_votes,
             tsv.unique_voters,
             tsv.trending_score,
-            tsv.show_date,
-            tsv.show_title,
-            tsv.show_status,
-            tsv.show_ticketmaster_url,
-            tsv.show_view_count,
+            tsv.date,
+            tsv.title,
+            tsv.status,
+            tsv.view_count,
             tsv.artist_id,
-            tsv.artist_name,
-            tsv.artist_slug,
-            tsv.artist_image_url,
             tsv.venue_id,
-            tsv.venue_name,
-            tsv.venue_city,
-            tsv.venue_state,
-            tsv.venue_country,
+            a.name as artist_name,
+            a.slug as artist_slug,
+            a.image_url as artist_image_url,
+            v.name as venue_name,
+            v.city as venue_city,
+            v.state as venue_state,
+            v.country as venue_country,
             ROW_NUMBER() OVER (PARTITION BY tsv.artist_id ORDER BY tsv.trending_score DESC) as rn
           FROM trending_shows_view tsv
-          WHERE tsv.show_status IN ('upcoming', 'ongoing')
-            AND tsv.show_date >= CURRENT_DATE
+          JOIN artists a ON tsv.artist_id = a.id
+          JOIN venues v ON tsv.venue_id = v.id
+          WHERE tsv.status IN ('upcoming', 'ongoing')
+            AND tsv.date >= CURRENT_DATE
         )
         SELECT *
         FROM ranked_shows
@@ -147,12 +148,12 @@ export const showResolvers: IResolvers = {
 
       // Transform raw data to match GraphQL schema
       return (trendingData as any[]).map((row: any) => ({
-        id: row.show_id,
-        date: row.show_date,
-        title: row.show_title,
-        status: row.show_status,
-        ticketmasterUrl: row.show_ticketmaster_url,
-        viewCount: row.show_view_count,
+        id: row.id,
+        date: row.date,
+        title: row.title,
+        status: row.status,
+        ticketmasterUrl: null, // Not available in the view
+        viewCount: row.view_count,
         totalVotes: parseInt(row.total_votes || '0'),
         uniqueVoters: parseInt(row.unique_voters || '0'),
         trendingScore: parseFloat(row.trending_score || '0'),
@@ -311,11 +312,7 @@ export const showResolvers: IResolvers = {
     },
 
     addSongToSetlist: async (_parent, { setlistId, songId }, { prisma, user }) => {
-      if (!user) {
-        throw new GraphQLError('Authentication required', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        })
-      }
+      // Remove authentication requirement - allow anyone to add songs
 
       const setlist = await prisma.setlist.findUnique({
         where: { id: setlistId },

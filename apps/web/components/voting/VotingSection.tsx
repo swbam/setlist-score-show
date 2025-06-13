@@ -84,7 +84,7 @@ export function VotingSection({
 
   if (isLoading) {
     return (
-      <div className="flex gap-8">
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
         <div className="flex-1">
           <div className="h-12 bg-muted rounded-lg animate-pulse mb-8" />
           <div className="space-y-3">
@@ -93,7 +93,7 @@ export function VotingSection({
             ))}
           </div>
         </div>
-        <div className="w-80">
+        <div className="w-full lg:w-80">
           <div className="h-64 bg-muted rounded-lg animate-pulse" />
         </div>
       </div>
@@ -101,16 +101,16 @@ export function VotingSection({
   }
 
   return (
-    <div className="flex gap-8">
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
       {/* Main Voting Area */}
-      <div className="flex-1">
+      <div className="flex-1 order-2 lg:order-1">
         {/* Main Setlist Card */}
-        <div className="card-base p-6">
+        <div className="card-base p-4 sm:p-6">
           {/* Header with dropdown */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
             <div>
-              <h2 className="text-2xl font-headline font-bold mb-2 text-foreground">What do you want to hear?</h2>
-              <p className="text-muted-foreground font-body">
+              <h2 className="text-xl sm:text-2xl font-headline font-bold mb-2 text-foreground">What do you want to hear?</h2>
+              <p className="text-sm sm:text-base text-muted-foreground font-body">
                 Vote for songs you want to hear at this show
               </p>
             </div>
@@ -124,10 +124,10 @@ export function VotingSection({
           </div>
 
           {/* Add Song Section */}
-          {showData?.setlists?.[0]?.id && user && (
+          {showData?.setlists?.[0]?.id && (
             <div className="mb-6 pb-6 border-b border-border/30">
               <p className="text-sm text-muted-foreground font-body mb-3">Add a song to this setlist:</p>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <select
                   className="bg-input border border-border text-foreground px-4 py-2 rounded-lg font-body flex-1 focus:outline-none focus:border-primary transition-colors"
                   value={selectedSongToAdd?.id || ''}
@@ -144,9 +144,9 @@ export function VotingSection({
                 <button
                   onClick={onAddSong}
                   disabled={!selectedSongToAdd || isAddingSong}
-                  className="bg-muted hover:bg-muted/80 text-foreground px-4 py-2 rounded-lg font-body disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-muted hover:bg-muted/80 text-foreground px-4 py-2 rounded-lg font-body disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                 >
-                                     {isAddingSong ? 'Adding...' : 'Add to Setlist'}
+                  {isAddingSong ? 'Adding...' : 'Add to Setlist'}
                 </button>
               </div>
               <p className="text-xs text-muted-foreground font-body mt-2">{availableSongs.length} songs available in the catalog</p>
@@ -168,8 +168,8 @@ export function VotingSection({
 
           {/* Songs Table */}
           <div className="space-y-0">
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border/30 font-body">
+            {/* Table Header - Hidden on mobile */}
+            <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border/30 font-body">
               <div className="col-span-1">#</div>
               <div className="col-span-9">SONG</div>
               <div className="col-span-2 text-center">VOTE</div>
@@ -185,12 +185,12 @@ export function VotingSection({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, delay: index * 0.02 }}
-                  className="grid grid-cols-12 gap-4 px-4 py-4 border-b border-border/20 hover:bg-muted/20 transition-colors group"
+                  className="grid grid-cols-12 sm:grid-cols-12 gap-2 sm:gap-4 px-3 sm:px-4 py-3 sm:py-4 border-b border-border/20 hover:bg-muted/20 transition-colors group"
                 >
                   {/* Rank Number */}
-                  <div className="col-span-1 flex items-center">
+                  <div className="col-span-2 sm:col-span-1 flex items-center">
                     <span className={cn(
-                      "text-lg font-headline font-bold",
+                      "text-base sm:text-lg font-headline font-bold",
                       index === 0 && sortBy === 'votes' 
                         ? "text-yellow-500" 
                         : "text-muted-foreground" 
@@ -200,26 +200,26 @@ export function VotingSection({
                   </div>
 
                   {/* Song Info */}
-                  <div className="col-span-9 flex items-center">
-                    <div className="min-w-0">
-                      <h3 className="font-medium text-base text-foreground font-body truncate">
+                  <div className="col-span-7 sm:col-span-9 flex items-center min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium text-sm sm:text-base text-foreground font-body truncate">
                         {setlistSong.song.name}
                       </h3>
                       {setlistSong.song.album && (
-                        <p className="text-sm text-muted-foreground font-body truncate">
+                        <p className="text-xs sm:text-sm text-muted-foreground font-body truncate">
                           {setlistSong.song.album}
                         </p>
                       )}
                     </div>
                     {setlistSong.hasVoted && (
-                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-md font-medium ml-auto">
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-md font-medium ml-2 flex-shrink-0">
                         Voted
                       </span>
                     )}
                   </div>
 
-                  {/* Vote Button (now shows count and arrow) */}
-                  <div className="col-span-2 flex items-center justify-center">
+                  {/* Vote Button */}
+                  <div className="col-span-3 sm:col-span-2 flex items-center justify-center">
                     <VoteButton
                       songId={setlistSong.song.id}
                       showId={showId}
@@ -237,62 +237,82 @@ export function VotingSection({
           </div>
 
           {/* Footer */}
-          <div className="mt-6 pt-4 border-t border-border/30 flex items-center justify-between text-sm text-muted-foreground">
-            <span>You've used 1/3 free votes</span>
-            <span>Last updated less than a minute ago</span>
+          <div className="mt-6 pt-4 border-t border-border/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>
+              {user 
+                ? `You've used ${10 - (voteLimits?.showVotesRemaining || 10)}/10 votes for this show`
+                : `You've used ${3 - (voteLimits?.showVotesRemaining || 3)}/3 free votes`
+              }
+            </span>
+            <span className="text-xs sm:text-sm">Last updated less than a minute ago</span>
           </div>
         </div>
       </div>
 
       {/* Right Sidebar - Voting Stats */}
-      <div className="w-80 space-y-6">
+      <div className="w-full lg:w-80 space-y-4 lg:space-y-6 order-1 lg:order-2">
         {/* Voting Stats Card */}
-        <div className="card-base p-6">
-          <h3 className="text-xl font-headline font-bold mb-6 text-foreground flex items-center gap-2">
+        <div className="card-base p-4 sm:p-6">
+          <h3 className="text-lg sm:text-xl font-headline font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
             <TrendingUp className="w-5 h-5" />
             Voting Stats
           </h3>
           
-          {/* Total Votes */}
-          <div className="mb-6">
-            <p className="text-sm text-muted-foreground font-body mb-1">Total Votes</p>
-            <p className="text-3xl font-headline font-bold text-foreground">{totalVotes}</p>
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6">
+            {/* Total Votes */}
+            <div className="lg:mb-6">
+              <p className="text-sm text-muted-foreground font-body mb-1">Total Votes</p>
+              <p className="text-2xl sm:text-3xl font-headline font-bold text-foreground">{totalVotes}</p>
+            </div>
+
+            {/* Votes Used */}
+            <div className="lg:mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground font-body">
+                  {user ? 'Show Votes Used' : 'Free Votes Used'}
+                </p>
+                {!user && (
+                  <button className="text-xs text-primary hover:underline font-body">Log in for more</button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-lg sm:text-xl font-headline font-bold text-foreground">
+                  {user 
+                    ? `${voteLimits ? 10 - voteLimits.showVotesRemaining : 0}/10`
+                    : `${voteLimits ? 3 - voteLimits.showVotesRemaining : 0}/3`
+                  }
+                </p>
+              </div>
+              <div className="w-full bg-secondary/30 rounded-full h-1 mt-2">
+                <div 
+                  className="bg-primary h-1 rounded-full transition-all duration-300"
+                  style={{ 
+                    width: user 
+                      ? `${voteLimits ? ((10 - voteLimits.showVotesRemaining) / 10) * 100 : 0}%`
+                      : `${voteLimits ? ((3 - voteLimits.showVotesRemaining) / 3) * 100 : 0}%`
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Free Votes Used */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground font-body">Free Votes Used</p>
-              <button className="text-xs text-primary hover:underline font-body">Log in for more</button>
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6 mt-4 lg:mt-0">
+            {/* Voting Closes In */}
+            <div className="lg:mb-6">
+              <p className="text-sm text-muted-foreground font-body mb-1">Voting Closes In</p>
+              <p className="text-lg sm:text-xl font-headline font-bold text-foreground">{votingCloseTime}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <p className="text-xl font-headline font-bold text-foreground">
-                {voteLimits ? `${3 - voteLimits.showVotesRemaining}/3` : '1/3'}
-              </p>
-            </div>
-            <div className="w-full bg-secondary/30 rounded-full h-1 mt-2">
-              <div 
-                className="bg-primary h-1 rounded-full transition-all duration-300"
-                style={{ width: voteLimits ? `${((3 - voteLimits.showVotesRemaining) / 3) * 100}%` : '33%' }}
-              />
-            </div>
-          </div>
 
-          {/* Voting Closes In */}
-          <div className="mb-6">
-            <p className="text-sm text-muted-foreground font-body mb-1">Voting Closes In</p>
-            <p className="text-xl font-headline font-bold text-foreground">{votingCloseTime}</p>
-          </div>
-
-          {/* Fans Voted */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground font-body">
-            <Users className="w-4 h-4" />
-            <span><span className="font-semibold text-foreground">{votedUsersCount}</span> fans have voted</span>
+            {/* Fans Voted */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+              <Users className="w-4 h-4" />
+              <span><span className="font-semibold text-foreground">{votedUsersCount}</span> fans have voted</span>
+            </div>
           </div>
         </div>
 
-        {/* How It Works Card */}
-        <div className="card-base p-6">
+        {/* How It Works Card - Hidden on mobile to save space */}
+        <div className="card-base p-4 sm:p-6 hidden lg:block">
           <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
             <Clock className="w-5 h-5" />
             How It Works

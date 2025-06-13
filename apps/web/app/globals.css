@@ -48,13 +48,13 @@
     min-height: 100vh;
   }
 
-  /* Font family utilities */
+  /* Font family utilities - All using Overpass for consistency */
   .font-headline {
     font-family: var(--font-overpass), sans-serif;
   }
 
   .font-body {
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-overpass), sans-serif;
   }
 }
 

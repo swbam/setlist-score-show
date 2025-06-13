@@ -214,7 +214,7 @@ export const SEARCH_ALL = gql`
 
 // Song queries
 export const GET_ARTIST_SONGS = gql`
-  query GetArtistSongs($artistId: ID!, $limit: Int = 50, $offset: Int = 0) {
+  query GetArtistSongs($artistId: ID!, $limit: Int = 1000, $offset: Int = 0) {
     songs(filter: { artistId: $artistId }, limit: $limit, offset: $offset) {
       edges {
         node {

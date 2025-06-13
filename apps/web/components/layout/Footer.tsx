@@ -10,10 +10,11 @@ export function Footer() {
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <Music2 className="w-6 h-6 text-slate-400" />
-              <span className="text-lg font-bold gradient-text">SetlistScore</span>
+              <span className="text-lg font-bold gradient-text">TheSet</span>
             </div>
             <p className="text-sm text-gray-400">
-              Vote on songs for upcoming concerts and help shape the perfect setlist.
+              Request and vote on songs for upcoming concerts to help shape the perfect setlist.
+              <i>No artist work required.</i>
             </p>
           </div>
 
@@ -87,7 +88,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="mt-8 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-gray-500">
-            © 2025 SetlistScore. All rights reserved.
+            © 2025 TheSet. All rights reserved.
           </p>
           <p className="text-sm text-gray-500">
             Made with ♪ for music fans

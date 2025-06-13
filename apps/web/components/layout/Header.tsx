@@ -32,7 +32,7 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <Music2 className="w-8 h-8 text-primary" />
-            <span className="text-xl font-headline font-bold gradient-text">SetlistScore</span>
+            <span className="text-xl font-headline font-bold gradient-text">TheSet</span>
           </Link>
 
           {/* Desktop Navigation */}

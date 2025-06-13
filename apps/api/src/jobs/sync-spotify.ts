@@ -52,8 +52,8 @@ export class SpotifySyncJob {
     try {
       logger.info(`Syncing catalog for ${artist.name} (${artist.spotifyId})`);
       
-      // Get all albums
-      const albums = await this.client.getArtistAlbums(artist.spotifyId, { 
+      // Get all albums using pagination  
+      const albums = await this.client.getAllArtistAlbums(artist.spotifyId, { 
         include_groups: 'album,single,compilation' 
       });
 

@@ -18,7 +18,7 @@ export const songResolvers: IResolvers = {
       return song
     },
 
-    songs: async (_parent, { filter, orderBy, limit = 50, offset = 0 }, { prisma }) => {
+    songs: async (_parent, { filter, orderBy, limit = 1000, offset = 0 }, { prisma }) => {
       const where: Prisma.SongWhereInput = {}
 
       if (filter) {

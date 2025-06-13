@@ -1,12 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter, Overpass } from 'next/font/google'
+import { Overpass } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter',
-})
 
 const overpass = Overpass({ 
   subsets: ['latin'],
@@ -25,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} ${overpass.variable} font-sans`}>
+      <body className={`${overpass.variable} font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>
