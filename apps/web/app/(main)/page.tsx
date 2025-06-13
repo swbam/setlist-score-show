@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react' // Import useEffect and useState
 import { supabase } from '@/lib/supabase' // Import supabase client
-import { TrendingShows } from '@/components/shows/TrendingShows' // Import TrendingShows component
+import { ShowCardGrid } from '@/components/shows/ShowCardGrid' // Import ShowCardGrid component
+import { FeaturedArtists } from '@/components/artists/FeaturedArtists' // Import FeaturedArtists component
 
 // Make sure the TrendingShow interface matches the one in TrendingShows.tsx
 // Based on previous tool output for TrendingShows.tsx, the interface is:
@@ -11,6 +12,7 @@ interface TrendingShow {
   show: {
     id: string;
     date: string;
+    title?: string;
     artist: {
       id: string;
       name: string;
@@ -27,14 +29,25 @@ interface TrendingShow {
   trendingScore: number;
 }
 
+interface FeaturedArtist {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl?: string;
+  genres?: string[];
+  upcomingShowsCount?: number;
+}
+
 export default function HomePage() {
   const [trendingShows, setTrendingShows] = useState<TrendingShow[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtist[]>([])
+  const [isLoadingShows, setIsLoadingShows] = useState(true)
+  const [isLoadingArtists, setIsLoadingArtists] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchTrendingShows = async () => {
-      setIsLoading(true)
+      setIsLoadingShows(true)
       setError(null)
       try {
         // First, get the trending data from the materialized view
@@ -42,14 +55,61 @@ export default function HomePage() {
           .from('trending_shows')
           .select('*')
           .order('trending_score', { ascending: false })
-          .limit(10)
+          .limit(12) // Increased for grid layout
 
         if (trendingError) {
           throw trendingError
         }
 
         if (!trendingData || trendingData.length === 0) {
-          setTrendingShows([])
+          // Fallback to upcoming shows if no trending data
+          const { data: fallbackShows, error: fallbackError } = await supabase
+            .from('shows')
+            .select(`
+              id,
+              date,
+              title,
+              view_count,
+              artist:artists(
+                id,
+                name,
+                image_url
+              ),
+              venue:venues(
+                id,
+                name,
+                city
+              )
+            `)
+            .eq('status', 'upcoming')
+            .gte('date', new Date().toISOString())
+            .order('view_count', { ascending: false })
+            .limit(12)
+
+          if (fallbackError) throw fallbackError
+
+          const fallbackMapped: TrendingShow[] = (fallbackShows || []).map((show: any) => ({
+            show: {
+              id: show.id,
+              date: show.date,
+              title: show.title,
+              artist: {
+                id: show.artist?.id,
+                name: show.artist?.name,
+                imageUrl: show.artist?.image_url,
+              },
+              venue: {
+                id: show.venue?.id,
+                name: show.venue?.name,
+                city: show.venue?.city,
+              },
+            },
+            totalVotes: 0,
+            uniqueVoters: 0,
+            trendingScore: show.view_count || 0,
+          }))
+
+          setTrendingShows(fallbackMapped)
           return
         }
 
@@ -81,7 +141,7 @@ export default function HomePage() {
         }
 
         // Create a map of show details
-        const showsMap = new Map(showsData.map(show => [show.id, show]))
+        const showsMap = new Map(showsData.map((show: any) => [show.id, show]))
 
         // Combine trending data with show details
         const mappedData: TrendingShow[] = trendingData
@@ -93,6 +153,7 @@ export default function HomePage() {
               show: {
                 id: show.id,
                 date: show.date,
+                title: show.title,
                 artist: {
                   id: show.artist?.id,
                   name: show.artist?.name,
@@ -114,65 +175,59 @@ export default function HomePage() {
         setTrendingShows(mappedData)
       } catch (err: any) {
         console.error('Error fetching trending shows:', err)
-        
-        // Fallback to showing regular upcoming shows if trending view fails
-        try {
-          const { data: fallbackShows, error: fallbackError } = await supabase
-            .from('shows')
-            .select(`
-              id,
-              date,
-              title,
-              view_count,
-              artist:artists(
-                id,
-                name,
-                image_url
-              ),
-              venue:venues(
-                id,
-                name,
-                city
-              )
-            `)
-            .eq('status', 'upcoming')
-            .gte('date', new Date().toISOString())
-            .order('view_count', { ascending: false })
-            .limit(10)
-
-          if (fallbackError) throw fallbackError
-
-          const fallbackMapped: TrendingShow[] = (fallbackShows || []).map(show => ({
-            show: {
-              id: show.id,
-              date: show.date,
-              artist: {
-                id: show.artist?.id,
-                name: show.artist?.name,
-                imageUrl: show.artist?.image_url,
-              },
-              venue: {
-                id: show.venue?.id,
-                name: show.venue?.name,
-                city: show.venue?.city,
-              },
-            },
-            totalVotes: 0,
-            uniqueVoters: 0,
-            trendingScore: show.view_count || 0,
-          }))
-
-          setTrendingShows(fallbackMapped)
-          setError('Using fallback data - trending view not available')
-        } catch (fallbackErr: any) {
-          setError(fallbackErr.message || 'Failed to fetch shows.')
-        }
+        setError(err.message || 'Failed to fetch shows.')
       } finally {
-        setIsLoading(false)
+        setIsLoadingShows(false)
+      }
+    }
+
+    const fetchFeaturedArtists = async () => {
+      setIsLoadingArtists(true)
+      try {
+        // Get artists with upcoming shows
+        const { data: artistsData, error: artistsError } = await supabase
+          .from('artists')
+          .select(`
+            id,
+            name,
+            slug,
+            image_url,
+            genres,
+            shows!inner(
+              id,
+              status,
+              date
+            )
+          `)
+          .eq('shows.status', 'upcoming')
+          .gte('shows.date', new Date().toISOString())
+          .order('followers', { ascending: false })
+          .limit(6)
+
+        if (artistsError) {
+          throw artistsError
+        }
+
+        // Transform data for featured artists
+        const featuredData: FeaturedArtist[] = (artistsData || []).map(artist => ({
+          id: artist.id,
+          name: artist.name,
+          slug: artist.slug,
+          imageUrl: artist.image_url,
+          genres: artist.genres,
+          upcomingShowsCount: artist.shows?.length || 0,
+        }))
+
+        setFeaturedArtists(featuredData)
+      } catch (err: any) {
+        console.error('Error fetching featured artists:', err)
+      } finally {
+        setIsLoadingArtists(false)
       }
     }
 
     fetchTrendingShows()
+    fetchFeaturedArtists()
   }, [])
 
   return (
@@ -181,11 +236,8 @@ export default function HomePage() {
       <section className="relative py-32 px-4 bg-gradient-to-b from-background to-muted/30">
         <div className="container mx-auto text-center">
           <h1 className="text-6xl font-headline font-bold mb-8 gradient-text leading-tight">
-            Unleash Your Musical Voice
+            Vote on the setlists<br />you want to hear.
           </h1>
-          <h2 className="text-2xl font-headline font-medium mb-6 text-foreground/80">
-            Vote on Concert Setlists
-          </h2>
           <p className="text-xl text-muted-foreground mb-12 max-w-3xl mx-auto font-body leading-relaxed">
             Help shape the setlist for upcoming concerts by voting on the songs you want to hear most
           </p>
@@ -207,11 +259,47 @@ export default function HomePage() {
       </section>
 
       {/* Trending Shows Section */}
-      <section className="py-24 bg-muted/20">
+      <section className="py-20 bg-background">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-headline font-bold text-center mb-16 gradient-text">Trending Shows</h2>
-          {error && <p className="text-destructive text-center font-body">{error}</p>}
-          <TrendingShows shows={trendingShows} isLoading={isLoading} />
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h2 className="text-4xl font-headline font-bold mb-4 gradient-text">Trending Shows</h2>
+              <p className="text-muted-foreground text-lg font-body">
+                The hottest shows based on voting activity and engagement
+              </p>
+            </div>
+            <Link
+              href="/shows"
+              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300"
+            >
+              View all →
+            </Link>
+          </div>
+          
+          {error && <p className="text-destructive text-center font-body mb-8">{error}</p>}
+          <ShowCardGrid shows={trendingShows} isLoading={isLoadingShows} />
+        </div>
+      </section>
+
+      {/* Featured Artists Section */}
+      <section className="py-20 bg-muted/20">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h2 className="text-4xl font-headline font-bold mb-4 gradient-text">Featured Artists</h2>
+              <p className="text-muted-foreground text-lg font-body">
+                Top artists with upcoming shows to vote on
+              </p>
+            </div>
+            <Link
+              href="/artists"
+              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300"
+            >
+              View all →
+            </Link>
+          </div>
+          
+          <FeaturedArtists artists={featuredArtists} isLoading={isLoadingArtists} />
         </div>
       </section>
 
