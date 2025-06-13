@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronUp, Check } from 'lucide-react'
 import { useVoting } from '@/hooks/useVoting'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 interface VoteButtonProps {
   songId: string
@@ -46,39 +46,29 @@ export function VoteButton({
   }
 
   return (
-    <motion.button
-      whileHover={{ scale: hasVoted ? 1 : 1.05 }}
-      whileTap={{ scale: hasVoted ? 1 : 0.95 }}
-      onClick={handleVote}
-      disabled={hasVoted || isVoting || disabled}
-      className={cn(
-        "relative flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-medium transition-all duration-200 min-w-[60px]",
-        hasVoted
-          ? "bg-gray-700 text-gray-300 cursor-default"
-          : "bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 hover:border-gray-600"
-      )}
-    >
-      <AnimatePresence mode="wait">
-        {showSuccess ? (
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            exit={{ scale: 0, rotate: 180 }}
-            className="absolute inset-0 flex items-center justify-center bg-gray-700 rounded-lg"
-          >
-            <Check className="w-4 h-4 text-green-400" />
-          </motion.div>
-        ) : (
-          <>
-            <ChevronUp className="w-4 h-4" />
-            <span className="text-sm">{currentVotes}</span>
-          </>
+    <div className="flex flex-col items-center w-12">
+      <span className="font-headline font-semibold text-base leading-none text-foreground mb-1">
+        {currentVotes}
+      </span>
+
+      <motion.button
+        whileHover={{ y: hasVoted ? 0 : -2 }}
+        whileTap={{ scale: hasVoted ? 1 : 0.9 }}
+        onClick={handleVote}
+        disabled={hasVoted || isVoting || disabled}
+        className={cn(
+          "flex items-center justify-center p-1 transition-colors",
+          hasVoted || disabled
+            ? "text-primary cursor-default"
+            : "text-muted-foreground hover:text-foreground"
         )}
-      </AnimatePresence>
-      
-      {hasVoted && (
-        <span className="text-xs opacity-60 ml-1">Vote</span>
-      )}
-    </motion.button>
+      >
+        {showSuccess ? (
+          <Check className="w-5 h-5 text-green-400" />
+        ) : (
+          <ChevronUp className="w-5 h-5" />
+        )}
+      </motion.button>
+    </div>
   )
 }

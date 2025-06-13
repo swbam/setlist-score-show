@@ -308,9 +308,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-                <button className="btn-white flex items-center justify-center gap-3 px-6 sm:px-8 py-3 sm:py-4 text-sm sm:text-base">
-                  <span>Vote on Setlist</span>
-                </button>
+              
                 
                 {show.ticketmaster_url && (
                   <Link

@@ -21,6 +21,16 @@ function SearchPageContent() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery)
+      // Update URL query param without navigating away (shallow)
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        if (searchQuery) {
+          url.searchParams.set('q', searchQuery)
+        } else {
+          url.searchParams.delete('q')
+        }
+        window.history.replaceState({}, '', url)
+      }
     }, 300)
 
     return () => clearTimeout(timer)
@@ -89,7 +99,13 @@ function SearchPageContent() {
               placeholder="Search for artists, shows, or songs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-teal-500 transition-colors text-lg"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  setDebouncedQuery(searchQuery)
+                }
+              }}
+              className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-primary transition-colors text-lg"
               autoFocus
             />
           </div>

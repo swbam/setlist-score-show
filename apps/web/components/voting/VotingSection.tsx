@@ -171,9 +171,8 @@ export function VotingSection({
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border/30 font-body">
               <div className="col-span-1">#</div>
-              <div className="col-span-7">SONG</div>
-              <div className="col-span-2 text-center">VOTES</div>
-              <div className="col-span-2"></div>
+              <div className="col-span-9">SONG</div>
+              <div className="col-span-2 text-center">VOTE</div>
             </div>
 
             {/* Songs List */}
@@ -201,7 +200,7 @@ export function VotingSection({
                   </div>
 
                   {/* Song Info */}
-                  <div className="col-span-7 flex items-center">
+                  <div className="col-span-9 flex items-center">
                     <div className="min-w-0">
                       <h3 className="font-medium text-base text-foreground font-body truncate">
                         {setlistSong.song.name}
@@ -219,14 +218,7 @@ export function VotingSection({
                     )}
                   </div>
 
-                  {/* Vote Count */}
-                  <div className="col-span-2 flex items-center justify-center">
-                    <span className="text-base font-medium text-foreground">
-                      {setlistSong.votes}
-                    </span>
-                  </div>
-
-                  {/* Vote Button */}
+                  {/* Vote Button (now shows count and arrow) */}
                   <div className="col-span-2 flex items-center justify-center">
                     <VoteButton
                       songId={setlistSong.song.id}
