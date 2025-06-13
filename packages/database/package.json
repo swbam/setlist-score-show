@@ -5,13 +5,13 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "scripts": {
-    "build": "prisma generate",
-    "dev": "prisma generate",
+    "build": "prisma generate --schema packages/database/prisma/schema.prisma",
+    "dev": "prisma generate --schema packages/database/prisma/schema.prisma",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "push": "prisma db push",
     "seed": "tsx prisma/seed.ts",
-    "generate": "prisma generate",
+    "generate": "prisma generate --schema packages/database/prisma/schema.prisma",
     "studio": "prisma studio",
     "test": "echo 'No tests configured yet'"
   },
@@ -19,10 +19,10 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
-    "prisma": "^5.22.0",
     "tsx": "^4.19.0",
     "typescript": "^5.4.0"
   }
