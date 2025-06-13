@@ -65,7 +65,57 @@ export default function ArtistsPage() {
             </p>
           </div>
         ) : (
-          <FeaturedArtists artists={artists} isLoading={isLoading} />
+          <div className="space-y-4 sm:space-y-6">
+            {artists.map((artist: any) => (
+              <Link
+                key={artist.id}
+                href={`/artists/${artist.slug}`}
+                className="card-base p-4 sm:p-6 group block"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                  {/* Artist Image */}
+                  <div className="flex-shrink-0">
+                    {artist.imageUrl ? (
+                      <img
+                        src={artist.imageUrl}
+                        alt={artist.name}
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-muted flex items-center justify-center">
+                        <span className="text-lg sm:text-xl font-headline font-bold text-muted-foreground">
+                          {artist.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Artist Info */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl sm:text-2xl font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
+                      {artist.name}
+                    </h2>
+                    
+                    <div className="space-y-1 text-sm sm:text-base text-muted-foreground font-body">
+                      {artist.genres?.length > 0 && (
+                        <div className="line-clamp-1">
+                          {artist.genres.slice(0, 3).join(' • ')}
+                        </div>
+                      )}
+                      <div>
+                        {artist.upcomingShowsCount || 0} upcoming shows
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  <div className="flex items-center text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
+                    <span className="whitespace-nowrap">View Shows →</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </div>

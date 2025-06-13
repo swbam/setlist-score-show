@@ -109,9 +109,9 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
   }).slice(0, 10) || [] // Limit to 10 most recent
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-background">
       {/* Artist Header */}
-      <div className="bg-gradient-to-b from-gray-900 to-[#122727] border-b border-gray-800">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="flex flex-col items-center gap-6 sm:gap-8">
             {/* Artist Image */}
@@ -125,7 +125,7 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
             
             {/* Artist Info */}
             <div className="flex-1 text-center">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 gradient-text px-2">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-white px-2">
                 {artist.name}
               </h1>
               
@@ -133,16 +133,16 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center mb-6 px-4">
                 {artist.followers && (
                   <div className="flex items-center gap-2 justify-center">
-                    <Users className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-300 text-sm sm:text-base">
+                    <Users className="w-5 h-5 text-white/80" />
+                    <span className="text-white/90 text-sm sm:text-base">
                       {artist.followers.toLocaleString()} followers
                     </span>
                   </div>
                 )}
                 {artist.genres?.length > 0 && (
                   <div className="flex items-center gap-2 justify-center">
-                    <Music className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-300 text-sm sm:text-base">
+                    <Music className="w-5 h-5 text-white/80" />
+                    <span className="text-white/90 text-sm sm:text-base">
                       {artist.genres.slice(0, 3).join(', ')}
                     </span>
                   </div>
@@ -156,8 +156,8 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                   disabled={isFollowLoading}
                   className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
                     isFollowing
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-white text-gray-900 hover:bg-gray-100'
+                      ? 'bg-white/20 text-white hover:bg-white/30'
+                      : 'bg-white text-gray-900 hover:bg-white/90'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFollowing ? 'fill-current' : ''}`} />
@@ -298,8 +298,8 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
 
 function ArtistPageSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="bg-gradient-to-b from-gray-900 to-[#122727] border-b border-gray-800">
+    <div className="min-h-screen bg-background">
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] border-b border-border">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
             <Skeleton className="w-48 h-48 rounded-full" />

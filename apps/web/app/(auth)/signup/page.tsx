@@ -62,11 +62,11 @@ export default async function SignUpPage() {
         {/* Terms and Privacy */}
         <p className="text-center text-xs text-gray-400">
           By creating an account, you agree to our{' '}
-          <Link href="/terms" className="text-teal-400 hover:text-teal-300">
+          <Link href="/terms" className="text-white hover:text-gray-300">
             Terms of Service
           </Link>{' '}
           and{' '}
-          <Link href="/privacy" className="text-teal-400 hover:text-teal-300">
+          <Link href="/privacy" className="text-white hover:text-gray-300">
             Privacy Policy
           </Link>
         </p>

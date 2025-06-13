@@ -25,8 +25,8 @@ export function ArtistGrid({ artists }: ArtistGridProps) {
           href={`/artists/${artist.slug}`}
           className="group card-base overflow-hidden"
         >
-          {/* Artist Image */}
-          <div className="aspect-square relative bg-muted overflow-hidden">
+          {/* Artist Image - Much smaller height to match show cards */}
+          <div className="aspect-[16/9] sm:aspect-[3/2] relative bg-muted overflow-hidden">
             {artist.imageUrl ? (
               <Image
                 src={artist.imageUrl}
@@ -45,34 +45,29 @@ export function ArtistGrid({ artists }: ArtistGridProps) {
           </div>
 
           {/* Artist Info */}
-          <div className="p-6">
-            <h3 className="text-xl font-headline font-bold mb-3 text-foreground group-hover:gradient-text transition-all duration-300">
+          <div className="p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
               {artist.name}
             </h3>
             
+            {/* Genres - More compact */}
             {artist.genres?.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {artist.genres.slice(0, 2).map((genre, index) => (
-                  <span
-                    key={index}
-                    className="text-xs px-3 py-1 bg-muted/60 rounded-full text-muted-foreground font-body"
-                  >
-                    {genre}
-                  </span>
-                ))}
-              </div>
+              <h4 className="text-xs sm:text-sm font-headline font-medium mb-2 sm:mb-3 text-muted-foreground line-clamp-1">
+                {artist.genres.slice(0, 2).join(' • ')}
+              </h4>
             )}
 
-            <div className="flex items-center justify-between text-sm text-muted-foreground font-body">
+            {/* Stats & Actions */}
+            <div className="space-y-1 text-xs text-muted-foreground font-body mb-2 sm:mb-3">
               {artist.followers && (
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-accent" />
-                  <span className="font-medium">{formatNumber(artist.followers)} followers</span>
+                  <Users className="w-3 h-3 text-accent flex-shrink-0" />
+                  <span className="font-medium line-clamp-1">{formatNumber(artist.followers)} followers</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                <span className="text-primary font-medium">View Shows</span>
+                <Calendar className="w-3 h-3 text-accent flex-shrink-0" />
+                <span className="font-medium">View Shows</span>
               </div>
             </div>
           </div>

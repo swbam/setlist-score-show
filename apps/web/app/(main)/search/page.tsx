@@ -132,7 +132,7 @@ function SearchPageContent() {
             {results.artists?.length > 0 && (
               <section>
                 <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                  <Users className="w-6 h-6 text-teal-500" />
+                  <Users className="w-6 h-6 text-white" />
                   Artists
                 </h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -175,7 +175,7 @@ function SearchPageContent() {
             {results.shows?.length > 0 && (
               <section>
                 <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                  <Calendar className="w-6 h-6 text-teal-500" />
+                  <Calendar className="w-6 h-6 text-white" />
                   Shows
                 </h2>
                 <div className="space-y-3">
@@ -183,7 +183,7 @@ function SearchPageContent() {
                     <Link
                       key={show.id}
                       href={`/shows/${show.id}`}
-                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-teal-500/30 transition-all duration-300 card-hover block"
+                      className="gradient-card rounded-lg p-4 border border-gray-800 hover:border-white/30 transition-all duration-300 card-hover block"
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -200,7 +200,7 @@ function SearchPageContent() {
                             })}
                           </p>
                         </div>
-                        <span className="text-sm font-medium text-teal-400">
+                        <span className="text-sm font-medium text-white">
                           Vote Now →
                         </span>
                       </div>
@@ -214,7 +214,7 @@ function SearchPageContent() {
             {results.songs?.length > 0 && (
               <section>
                 <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                  <Music className="w-6 h-6 text-teal-500" />
+                  <Music className="w-6 h-6 text-white" />
                   Songs
                 </h2>
                 <div className="space-y-3">

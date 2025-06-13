@@ -33,6 +33,10 @@
     --gradient-active: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%); /* Darker when active */
     --gradient-subtle: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
     
+    /* Green gradient for headers (artist/show pages) */
+    --gradient-green: linear-gradient(135deg, #16a34a 0%, #15803d 50%, #166534 100%);
+    --gradient-green-light: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    
     /* Subtle dark gradient background */
     --gradient-background: linear-gradient(135deg, #000222 0%, #1a1a2e 50%, #16213e 100%);
   }
@@ -76,6 +80,21 @@
     -webkit-text-fill-color: transparent;
     font-family: var(--font-overpass), sans-serif;
     font-weight: 700;
+  }
+
+  /* Green gradient text for headers */
+  .gradient-text-green {
+    background: var(--gradient-green-light);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-family: var(--font-overpass), sans-serif;
+    font-weight: 700;
+  }
+
+  /* Green gradient background for headers */
+  .gradient-bg-green {
+    background: var(--gradient-green);
   }
   
   /* Modern card hover effects */

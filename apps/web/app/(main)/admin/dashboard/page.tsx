@@ -150,7 +150,7 @@ export default function AdminDashboard() {
   if (loading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
       </div>
     )
   }
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="gradient-card rounded-lg p-6 border border-gray-800">
             <div className="flex items-center justify-between mb-4">
-              <Users className="w-8 h-8 text-teal-500" />
+              <Users className="w-8 h-8 text-white" />
               <span className="text-sm text-gray-400">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalUsers.toLocaleString()}</div>
@@ -184,12 +184,12 @@ export default function AdminDashboard() {
 
           <div className="gradient-card rounded-lg p-6 border border-gray-800">
             <div className="flex items-center justify-between mb-4">
-              <Calendar className="w-8 h-8 text-cyan-500" />
+              <Calendar className="w-8 h-8 text-white" />
               <span className="text-sm text-gray-400">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalShows.toLocaleString()}</div>
             <div className="text-gray-400">Shows</div>
-            <div className="mt-2 text-sm text-blue-400">
+            <div className="mt-2 text-sm text-white">
               {stats.upcomingShows} upcoming
             </div>
           </div>
@@ -279,7 +279,7 @@ export default function AdminDashboard() {
                 <span className="text-gray-400">System operational</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-white rounded-full"></div>
                 <span className="text-gray-400">Database connected</span>
               </div>
               <div className="flex items-center gap-3 text-sm">

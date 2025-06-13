@@ -272,7 +272,7 @@ function SyncStatusBadge({ status }: { status?: string }) {
   if (!status) return null;
 
   const config = {
-    running: { icon: Clock, className: 'bg-blue-500/20 text-blue-400' },
+    running: { icon: Clock, className: 'bg-white/20 text-white' },
     completed: { icon: CheckCircle2, className: 'bg-green-500/20 text-green-400' },
     failed: { icon: AlertCircle, className: 'bg-red-500/20 text-red-400' }
   };

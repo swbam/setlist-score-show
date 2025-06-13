@@ -116,7 +116,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
       if (!show?.artist?.id) return []
       try {
         const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit: 1000 })
-        return (data as any).songs?.edges?.map((edge: any) => edge.node) || []
+        const songs = (data as any).songs?.edges?.map((edge: any) => edge.node) || []
+        return songs
       } catch (error) {
         console.error("Error fetching artist songs:", error)
         // Fallback to direct Supabase query
@@ -328,7 +329,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
                 />
               ) : (
                 <div className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full bg-muted border-4 border-border flex items-center justify-center shadow-strong">
-                  <span className="text-2xl sm:text-4xl lg:text-6xl font-headline font-bold gradient-text">
+                  <span className="text-2xl sm:text-4xl lg:text-6xl font-headline font-bold text-white">
                     {show.artist.name.charAt(0)}
                   </span>
                 </div>
@@ -337,19 +338,19 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
             {/* Show Info */}
             <div className="flex-1 min-w-0 text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-headline font-bold mb-4 gradient-text leading-tight">
+              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-headline font-bold mb-4 text-white leading-tight">
                 {show.artist.name}
               </h1>
               
-              <div className="flex flex-col sm:flex-row lg:flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 mb-6 sm:mb-8 text-base sm:text-lg text-muted-foreground font-body">
+              <div className="flex flex-col sm:flex-row lg:flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 mb-6 sm:mb-8 text-base sm:text-lg text-white/90 font-body">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-primary flex-shrink-0" />
+                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 flex-shrink-0" />
                   <span className="font-medium text-center lg:text-left">
                     {show.venue.name}, {show.venue.city}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-primary flex-shrink-0" />
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 flex-shrink-0" />
                   <span className="font-medium text-center lg:text-left text-sm sm:text-base">
                     {new Date(show.date).toLocaleDateString('en-US', {
                       weekday: 'long',
