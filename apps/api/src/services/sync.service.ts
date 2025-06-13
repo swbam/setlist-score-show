@@ -408,21 +408,15 @@ export class SyncService {
     console.log('Calculating trending scores...')
     
     // Refresh the materialized view
-    await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY trending_shows`
+    await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY trending_shows_view`
     
-    // Get top trending shows
+    // Get top trending shows directly from the view
     const trending = await this.prisma.$queryRaw`
-      SELECT 
-        ts.*,
-        a.name as artist_name,
-        a.image_url as artist_image,
-        v.name as venue_name,
-        v.city as venue_city
-      FROM trending_shows ts
-      JOIN shows s ON ts.show_id = s.id
-      JOIN artists a ON s.artist_id = a.id
-      JOIN venues v ON s.venue_id = v.id
-      ORDER BY ts.trending_score DESC
+      SELECT *
+      FROM trending_shows_view
+      WHERE show_status IN ('upcoming', 'ongoing')
+        AND show_date >= CURRENT_DATE
+      ORDER BY trending_score DESC
       LIMIT 20
     `
 

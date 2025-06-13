@@ -247,7 +247,7 @@ async function main() {
   console.log('✅ Created test user')
 
   // Refresh materialized views
-  await prisma.$executeRaw`REFRESH MATERIALIZED VIEW trending_shows`
+  await prisma.$executeRaw`REFRESH MATERIALIZED VIEW trending_shows_view`
 
   console.log('✅ Database seed completed!')
 }

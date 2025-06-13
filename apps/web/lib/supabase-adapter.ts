@@ -439,135 +439,78 @@ export class SupabaseAdapter {
 
   async getTrendingShows(limit = 10) {
     try {
-      // First try to get from the trending_shows view with artist limits
-      const { data, error } = await supabase.rpc('get_trending_shows_limited', {
-        limit_count: limit
-      })
+      // Query directly from trending_shows_view materialized view
+      const { data: trendingData, error } = await supabase
+        .from('trending_shows_view')
+        .select('*')
+        .eq('show_status', 'upcoming')
+        .gte('show_date', new Date().toISOString())
+        .order('trending_score', { ascending: false })
+        .limit(limit * 3) // Get more to allow for artist filtering
 
-      if (error || !data) {
-        console.log('Trending view query failed, trying direct query:', error)
+      if (error) {
+        console.log('Trending view query failed, using fallback:', error)
         
-        // Fallback: Direct query with manual artist limiting
-        const { data: trendingData, error: directError } = await supabase
-          .from('trending_shows_view')
-          .select(`
-            show_id,
-            date,
-            title,
-            trending_score,
-            total_votes,
-            unique_voters,
-            artist_id,
-            venue_id
-          `)
-          .order('trending_score', { ascending: false })
-          .limit(limit * 3) // Get more to allow for filtering
-
-        if (directError) {
-          console.log('Direct trending query failed, using fallback:', directError)
-          
-          // Final fallback to regular shows
-          const { data: showsData, error: showsError } = await supabase
-            .from('shows')
-            .select(`
-              id,
-              date,
-              title,
-              view_count,
-              artist_id,
-              venue_id,
-              artist:artists(id, name, slug, image_url),
-              venue:venues(id, name, city)
-            `)
-            .eq('status', 'upcoming')
-            .gte('date', new Date().toISOString())
-            .order('view_count', { ascending: false })
-            .limit(limit)
-
-          if (showsError) throw showsError
-
-          return showsData?.map((show: any) => ({
-            id: show.id,
-            date: show.date,
-            title: show.title,
-            trendingScore: show.view_count || 0,
-            totalVotes: 0,
-            uniqueVoters: 0,
-            artist: {
-              id: show.artist?.id,
-              name: show.artist?.name,
-              slug: show.artist?.slug,
-              imageUrl: show.artist?.image_url
-            },
-            venue: {
-              id: show.venue?.id,
-              name: show.venue?.name,
-              city: show.venue?.city
-            }
-          })) || []
-        }
-
-        // Process trending data to limit artists to 2 shows each
-        const artistCounts = new Map<string, number>()
-        const limitedShows = []
-        
-        for (const show of trendingData || []) {
-          const artistId = show.artist_id
-          const currentCount = artistCounts.get(artistId) || 0
-          
-          if (currentCount < 2) {
-            limitedShows.push(show)
-            artistCounts.set(artistId, currentCount + 1)
-          }
-          
-          if (limitedShows.length >= limit) break
-        }
-
-        // Now fetch artist and venue data for the limited shows
-        const showIds = limitedShows.map(show => show.show_id)
-        
-        const { data: showDetails, error: detailsError } = await supabase
+        // Fallback to regular shows
+        const { data: showsData, error: showsError } = await supabase
           .from('shows')
           .select(`
             id,
             date,
             title,
+            view_count,
             artist:artists(id, name, slug, image_url),
             venue:venues(id, name, city)
           `)
-          .in('id', showIds)
+          .eq('status', 'upcoming')
+          .gte('date', new Date().toISOString())
+          .order('view_count', { ascending: false })
+          .limit(limit)
 
-        if (detailsError) throw detailsError
+        if (showsError) throw showsError
 
-        // Combine trending data with show details
-        return limitedShows.map((trendingShow: any) => {
-          const showDetail = showDetails?.find(s => s.id === trendingShow.show_id)
-          return {
-            id: trendingShow.show_id,
-            date: trendingShow.date,
-            title: trendingShow.title,
-            trendingScore: trendingShow.trending_score || 0,
-            totalVotes: trendingShow.total_votes || 0,
-            uniqueVoters: trendingShow.unique_voters || 0,
-            artist: {
-              id: showDetail?.artist?.id,
-              name: showDetail?.artist?.name,
-              slug: showDetail?.artist?.slug,
-              imageUrl: showDetail?.artist?.image_url
-            },
-            venue: {
-              id: showDetail?.venue?.id,
-              name: showDetail?.venue?.name,
-              city: showDetail?.venue?.city
-            }
+        return showsData?.map((show: any) => ({
+          id: show.id,
+          date: show.date,
+          title: show.title,
+          trendingScore: show.view_count || 0,
+          totalVotes: 0,
+          uniqueVoters: 0,
+          artist: {
+            id: show.artist?.id,
+            name: show.artist?.name,
+            slug: show.artist?.slug,
+            imageUrl: show.artist?.image_url
+          },
+          venue: {
+            id: show.venue?.id,
+            name: show.venue?.name,
+            city: show.venue?.city
           }
-        })
+        })) || []
       }
 
-      return data?.map((show: any) => ({
+      // Apply artist limiting (max 2 shows per artist)
+      const artistCounts = new Map<string, number>()
+      const limitedShows = []
+      
+      for (const show of trendingData || []) {
+        const artistId = show.artist_id
+        const currentCount = artistCounts.get(artistId) || 0
+        
+        if (currentCount < 2) {
+          limitedShows.push(show)
+          artistCounts.set(artistId, currentCount + 1)
+        }
+        
+        if (limitedShows.length >= limit) break
+      }
+
+      // Transform data to match expected format
+      return limitedShows.map((show: any) => ({
         id: show.show_id,
-        date: show.date,
-        title: show.title,
+        date: show.show_date,
+        title: show.show_title,
         trendingScore: show.trending_score || 0,
         totalVotes: show.total_votes || 0,
         uniqueVoters: show.unique_voters || 0,
@@ -582,7 +525,7 @@ export class SupabaseAdapter {
           name: show.venue_name,
           city: show.venue_city
         }
-      })) || []
+      }))
     } catch (error) {
       console.error('Error fetching trending shows:', error)
       return []

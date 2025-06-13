@@ -50,12 +50,14 @@ export default function HomePage() {
       setIsLoadingShows(true)
       setError(null)
       try {
-        // First, get the trending data from the materialized view
+        // Fetch directly from trending_shows_view materialized view with artist limiting
         const { data: trendingData, error: trendingError } = await supabase
-          .from('trending_shows')
+          .from('trending_shows_view')
           .select('*')
+          .eq('show_status', 'upcoming')
+          .gte('show_date', new Date().toISOString())
           .order('trending_score', { ascending: false })
-          .limit(12) // Increased for grid layout
+          .limit(24) // Get more to allow for artist limiting
 
         if (trendingError) {
           throw trendingError
@@ -113,64 +115,43 @@ export default function HomePage() {
           return
         }
 
-        // Extract unique show IDs
-        const showIds = trendingData.map(t => t.show_id)
-
-        // Fetch full show details with artist and venue info
-        const { data: showsData, error: showsError } = await supabase
-          .from('shows')
-          .select(`
-            id,
-            date,
-            title,
-            artist:artists(
-              id,
-              name,
-              image_url
-            ),
-            venue:venues(
-              id,
-              name,
-              city
-            )
-          `)
-          .in('id', showIds)
-
-        if (showsError) {
-          throw showsError
+        // Apply artist limiting (max 2 shows per artist) and take first 12
+        const artistCounts = new Map<string, number>()
+        const limitedShows = []
+        
+        for (const trending of trendingData) {
+          const artistId = trending.artist_id
+          const currentCount = artistCounts.get(artistId) || 0
+          
+          if (currentCount < 2) {
+            limitedShows.push(trending)
+            artistCounts.set(artistId, currentCount + 1)
+          }
+          
+          if (limitedShows.length >= 12) break
         }
 
-        // Create a map of show details
-        const showsMap = new Map(showsData.map((show: any) => [show.id, show]))
-
-        // Combine trending data with show details
-        const mappedData: TrendingShow[] = trendingData
-          .map((trending: any) => {
-            const show = showsMap.get(trending.show_id)
-            if (!show) return null
-
-            return {
-              show: {
-                id: show.id,
-                date: show.date,
-                title: show.title,
-                artist: {
-                  id: show.artist?.id,
-                  name: show.artist?.name,
-                  imageUrl: show.artist?.image_url,
-                },
-                venue: {
-                  id: show.venue?.id,
-                  name: show.venue?.name,
-                  city: show.venue?.city,
-                },
-              },
-              totalVotes: trending.total_votes,
-              uniqueVoters: trending.unique_voters,
-              trendingScore: trending.trending_score,
-            }
-          })
-          .filter(Boolean) // Remove any null entries
+        // Transform data to match component interface
+        const mappedData: TrendingShow[] = limitedShows.map((trending: any) => ({
+          show: {
+            id: trending.show_id,
+            date: trending.show_date,
+            title: trending.show_title,
+            artist: {
+              id: trending.artist_id,
+              name: trending.artist_name,
+              imageUrl: trending.artist_image_url,
+            },
+            venue: {
+              id: trending.venue_id,
+              name: trending.venue_name,
+              city: trending.venue_city,
+            },
+          },
+          totalVotes: trending.total_votes || 0,
+          uniqueVoters: trending.unique_voters || 0,
+          trendingScore: trending.trending_score || 0,
+        }))
 
         setTrendingShows(mappedData)
       } catch (err: any) {

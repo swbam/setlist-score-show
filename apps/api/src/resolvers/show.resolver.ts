@@ -111,36 +111,32 @@ export const showResolvers: IResolvers = {
     },
 
     trendingShows: async (_parent, { limit = 10, timeframe = 'WEEK' }, { prisma }) => {
-      // Fetch from trending_shows materialized view with artist limit
+      // Fetch directly from trending_shows_view materialized view with artist limit
       const trendingData = await prisma.$queryRaw`
         WITH ranked_shows AS (
           SELECT 
-            ts.show_id,
-            ts.total_votes,
-            ts.unique_voters,
-            ts.trending_score,
-            s.id,
-            s.date,
-            s.title,
-            s.status,
-            s.ticketmaster_url,
-            s.view_count,
-            a.id as artist_id,
-            a.name as artist_name,
-            a.slug as artist_slug,
-            a.image_url as artist_image_url,
-            v.id as venue_id,
-            v.name as venue_name,
-            v.city as venue_city,
-            v.state as venue_state,
-            v.country as venue_country,
-            ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY ts.trending_score DESC) as rn
-          FROM trending_shows ts
-          JOIN shows s ON ts.show_id = s.id
-          JOIN artists a ON s.artist_id = a.id
-          JOIN venues v ON s.venue_id = v.id
-          WHERE s.status IN ('upcoming', 'ongoing')
-            AND s.date >= CURRENT_DATE
+            tsv.show_id,
+            tsv.total_votes,
+            tsv.unique_voters,
+            tsv.trending_score,
+            tsv.show_date,
+            tsv.show_title,
+            tsv.show_status,
+            tsv.show_ticketmaster_url,
+            tsv.show_view_count,
+            tsv.artist_id,
+            tsv.artist_name,
+            tsv.artist_slug,
+            tsv.artist_image_url,
+            tsv.venue_id,
+            tsv.venue_name,
+            tsv.venue_city,
+            tsv.venue_state,
+            tsv.venue_country,
+            ROW_NUMBER() OVER (PARTITION BY tsv.artist_id ORDER BY tsv.trending_score DESC) as rn
+          FROM trending_shows_view tsv
+          WHERE tsv.show_status IN ('upcoming', 'ongoing')
+            AND tsv.show_date >= CURRENT_DATE
         )
         SELECT *
         FROM ranked_shows
@@ -151,12 +147,12 @@ export const showResolvers: IResolvers = {
 
       // Transform raw data to match GraphQL schema
       return (trendingData as any[]).map((row: any) => ({
-        id: row.id,
-        date: row.date,
-        title: row.title,
-        status: row.status,
-        ticketmasterUrl: row.ticketmaster_url,
-        viewCount: row.view_count,
+        id: row.show_id,
+        date: row.show_date,
+        title: row.show_title,
+        status: row.show_status,
+        ticketmasterUrl: row.show_ticketmaster_url,
+        viewCount: row.show_view_count,
         totalVotes: parseInt(row.total_votes || '0'),
         uniqueVoters: parseInt(row.unique_voters || '0'),
         trendingScore: parseFloat(row.trending_score || '0'),

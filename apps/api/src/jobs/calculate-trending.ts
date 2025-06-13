@@ -206,8 +206,8 @@ export class TrendingCalculationJob {
   private async refreshMaterializedView() {
     try {
       // Refresh the materialized view if it exists
-      await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY trending_shows`;
-      logger.info('Refreshed trending_shows materialized view');
+      await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY trending_shows_view`;
+      logger.info('Refreshed trending_shows_view materialized view');
     } catch (error) {
       // View might not exist, which is fine
       logger.debug('Could not refresh materialized view:', error);

@@ -155,18 +155,13 @@ export const CommonQueries = {
   getTrendingShows: async (limit: number = 20) => {
     const prisma = getPrismaClient()
     
-    // Use raw query to access the materialized view
+    // Use raw query to access the materialized view directly
     return await prisma.$queryRaw`
-      SELECT 
-        ts.*,
-        to_json(a.*) as artist,
-        to_json(v.*) as venue
-      FROM trending_shows ts
-      JOIN shows s ON ts.show_id = s.id
-      JOIN artists a ON s.artist_id = a.id
-      JOIN venues v ON s.venue_id = v.id
-      WHERE ts.show_status = 'upcoming'
-      ORDER BY ts.trending_score DESC
+      SELECT *
+      FROM trending_shows_view
+      WHERE show_status = 'upcoming'
+        AND show_date >= CURRENT_DATE
+      ORDER BY trending_score DESC
       LIMIT ${limit}
     `
   }
