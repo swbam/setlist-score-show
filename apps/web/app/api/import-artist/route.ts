@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 )
 
 // Spotify API credentials
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || ''
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || ''
 const TICKETMASTER_API_KEY = 'k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b'
 
 async function getSpotifyToken() {
