@@ -48,8 +48,8 @@ export default function ShowsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-4 py-12">
-        <h1 className="text-5xl font-headline font-bold mb-12 gradient-text">Upcoming Shows</h1>
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-6 sm:mb-8 lg:mb-10 gradient-text">Upcoming Shows</h1>
         
         {isLoading ? (
           <div className="space-y-4 sm:space-y-6">

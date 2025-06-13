@@ -1,4 +1,4 @@
-# Setlist Score Show
+# TheSet
 
 A crowdsourced concert setlist voting platform built with Next.js, Fastify, GraphQL, and Supabase.
 

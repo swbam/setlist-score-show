@@ -122,12 +122,12 @@ export default function MyArtistsPage() {
   const followedArtists = (data as any)?.myArtists || []
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 gradient-text">My Artists</h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-muted-foreground text-lg">
             Artists you follow and their upcoming shows
           </p>
         </div>
@@ -141,9 +141,9 @@ export default function MyArtistsPage() {
           </div>
         ) : !followedArtists.length ? (
           <div className="text-center py-16">
-            <Music2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <Music2 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-semibold mb-2">No artists yet</h2>
-            <p className="text-gray-400 mb-8 max-w-md mx-auto">
+            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
               Start following artists to see their upcoming shows and vote on setlists
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -169,7 +169,7 @@ export default function MyArtistsPage() {
         ) : (
           <div>
             <div className="mb-4 flex justify-between items-center">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 Following {followedArtists.length} {followedArtists.length === 1 ? 'artist' : 'artists'}
               </span>
               <button

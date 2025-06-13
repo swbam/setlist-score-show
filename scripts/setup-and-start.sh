@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Setup and Start Script for Setlist Score Show
-echo "🎵 Starting Setlist Score Show setup and launch..."
+# Setup and Start Script for TheSet
+echo "🎵 Starting TheSet setup and launch..."
 
 # Colors for output
 RED='\033[0;31m'

@@ -1,4 +1,4 @@
-# Setlist Score Show - Architecture Overview
+# TheSet - Architecture Overview
 
 ## System Architecture
 

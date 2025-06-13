@@ -1,4 +1,4 @@
-# **SETLIST SCORE SHOW - PROJECT STATUS**
+# **TheSet - PROJECT STATUS**
 
 ## **✅ Completed Cleanup**
 

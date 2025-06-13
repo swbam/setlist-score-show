@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
 import { GET_ARTISTS } from '@/lib/graphql/queries'
 import { Search } from 'lucide-react'
+import Link from 'next/link'
 import { FeaturedArtists } from '@/components/artists/FeaturedArtists'
 
 export default function ArtistsPage() {
@@ -36,23 +37,23 @@ export default function ArtistsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4 gradient-text">Browse Artists</h1>
-          <p className="text-muted-foreground text-lg mb-6">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 gradient-text">Browse Artists</h1>
+          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg mb-4 sm:mb-6">
             Find your favorite artists and vote on their upcoming shows
           </p>
 
           {/* Search Bar */}
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5" />
             <input
               type="text"
               placeholder="Search artists..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-3 bg-card border border-border rounded-lg text-sm sm:text-base text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
           </div>
         </div>

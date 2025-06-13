@@ -149,8 +149,8 @@ export default function AdminDashboard() {
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -160,81 +160,81 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 gradient-text">Admin Dashboard</h1>
-          <p className="text-gray-400">Manage your Setlist Score Show platform</p>
+          <p className="text-muted-foreground">Manage your TheSet platform</p>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <Users className="w-8 h-8 text-white" />
-              <span className="text-sm text-gray-400">Total</span>
+              <Users className="w-8 h-8 text-foreground" />
+              <span className="text-sm text-muted-foreground">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalUsers.toLocaleString()}</div>
-            <div className="text-gray-400">Registered Users</div>
+            <div className="text-muted-foreground">Registered Users</div>
             <div className="mt-2 text-sm text-green-400">
               {stats.activeUsers} active this week
             </div>
           </div>
 
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <Calendar className="w-8 h-8 text-white" />
-              <span className="text-sm text-gray-400">Total</span>
+              <Calendar className="w-8 h-8 text-foreground" />
+              <span className="text-sm text-muted-foreground">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalShows.toLocaleString()}</div>
-            <div className="text-gray-400">Shows</div>
-            <div className="mt-2 text-sm text-white">
+            <div className="text-muted-foreground">Shows</div>
+            <div className="mt-2 text-sm text-foreground">
               {stats.upcomingShows} upcoming
             </div>
           </div>
 
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <Music className="w-8 h-8 text-purple-500" />
-              <span className="text-sm text-gray-400">Total</span>
+              <span className="text-sm text-muted-foreground">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalArtists.toLocaleString()}</div>
-            <div className="text-gray-400">Artists</div>
+            <div className="text-muted-foreground">Artists</div>
           </div>
 
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="w-8 h-8 text-green-500" />
-              <span className="text-sm text-gray-400">Total</span>
+              <span className="text-sm text-muted-foreground">Total</span>
             </div>
             <div className="text-3xl font-bold mb-1">{stats.totalVotes.toLocaleString()}</div>
-            <div className="text-gray-400">Votes Cast</div>
+            <div className="text-muted-foreground">Votes Cast</div>
           </div>
 
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <Activity className="w-8 h-8 text-orange-500" />
-              <span className="text-sm text-gray-400">System</span>
+              <span className="text-sm text-muted-foreground">System</span>
             </div>
             <div className="text-xl font-bold mb-1 text-green-400">Healthy</div>
-            <div className="text-gray-400">Status</div>
+            <div className="text-muted-foreground">Status</div>
           </div>
 
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <Database className="w-8 h-8 text-red-500" />
-              <span className="text-sm text-gray-400">Database</span>
+              <span className="text-sm text-muted-foreground">Database</span>
             </div>
             <div className="text-xl font-bold mb-1 text-green-400">Connected</div>
-            <div className="text-gray-400">Supabase</div>
+            <div className="text-muted-foreground">Supabase</div>
           </div>
         </div>
 
         {/* Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Data Sync */}
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <RefreshCw className="w-5 h-5" />
               Data Sync
@@ -243,7 +243,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => handleRefreshTrending()}
                 disabled={isSyncing}
-                className="w-full px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
+                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
               >
                 <span>Refresh Trending Shows</span>
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => handleSyncData('setlists')}
                 disabled={isSyncing}
-                className="w-full px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
+                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
               >
                 <span>Sync Setlists</span>
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -259,7 +259,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => handleSyncData('trending')}
                 disabled={isSyncing}
-                className="w-full px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
+                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
               >
                 <span>Calculate Trending</span>
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -268,7 +268,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Recent Activity */}
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Activity className="w-5 h-5" />
               Recent Activity
@@ -276,15 +276,15 @@ export default function AdminDashboard() {
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-gray-400">System operational</span>
+                <span className="text-muted-foreground">System operational</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <div className="w-2 h-2 bg-white rounded-full"></div>
-                <span className="text-gray-400">Database connected</span>
+                <span className="text-muted-foreground">Database connected</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                <span className="text-gray-400">Background jobs pending</span>
+                <span className="text-muted-foreground">Background jobs pending</span>
               </div>
             </div>
           </div>

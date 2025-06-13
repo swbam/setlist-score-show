@@ -7,7 +7,7 @@ import { SignUpForm } from '@/components/auth/SignUpForm'
 import { Logo } from '@/components/ui/logo'
 
 export const metadata: Metadata = {
-  title: 'Sign Up | Setlist Score Show',
+  title: 'Sign Up | TheSet',
   description: 'Create an account to start voting on concert setlists',
 }
 

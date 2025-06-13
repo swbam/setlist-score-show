@@ -1,6 +1,6 @@
 # GraphQL Schema Documentation
 
-This directory contains the GraphQL schema definitions for the Setlist Score Show API.
+This directory contains the GraphQL schema definitions for the TheSet API.
 
 ## Schema Files
 

@@ -27,10 +27,10 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="max-w-md mx-auto p-8 bg-gray-900 rounded-lg border border-gray-800">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="max-w-md mx-auto p-8 card-base rounded-lg">
         <h1 className="text-2xl font-bold mb-4 gradient-text text-center">Database Setup</h1>
-        <p className="text-gray-400 mb-6 text-center">
+        <p className="text-muted-foreground mb-6 text-center">
           Click the button below to create test data for the app.
         </p>
         
@@ -43,7 +43,7 @@ export default function SetupPage() {
         </Button>
         
         {status && (
-          <div className="p-4 bg-gray-800 rounded-lg text-sm">
+          <div className="p-4 bg-muted/20 rounded-lg text-sm">
             {status}
           </div>
         )}

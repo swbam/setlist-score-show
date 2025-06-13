@@ -1,11 +1,15 @@
 'use client' // Add this line to make it a client component for data fetching and state
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useGraphQLClient } from '@/lib/graphql-client'
+import { SEARCH_ALL } from '@/lib/graphql/queries'
 import { supabase } from '@/lib/supabase'
 import { ShowCardGrid } from '@/components/shows/ShowCardGrid'
 import { FeaturedArtists } from '@/components/artists/FeaturedArtists'
 import { TrendingShows } from '@/components/shows/TrendingShows'
+import { Search, Music, Users, Calendar } from 'lucide-react'
 
 // Make sure the TrendingShow interface matches the one in TrendingShows.tsx
 // Based on previous tool output for TrendingShows.tsx, the interface is:
@@ -74,6 +78,89 @@ export default function HomePage() {
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(true)
   const [isLoadingPopular, setIsLoadingPopular] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Search functionality
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const [importingArtist, setImportingArtist] = useState(false)
+  const client = useGraphQLClient()
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Search query
+  const { data: searchData, isLoading: isLoadingSearch } = useQuery({
+    queryKey: ['search', debouncedQuery],
+    queryFn: async () => {
+      if (!debouncedQuery) return null
+      return client.request(SEARCH_ALL, { query: debouncedQuery })
+    },
+    enabled: !!debouncedQuery,
+  })
+
+  const searchResults = (searchData as any)?.search
+
+  // Handle artist import from search results
+  const handleArtistImport = async (artist: any) => {
+    if (artist.isFromApi) {
+      try {
+        setImportingArtist(true)
+        const response = await fetch('/api/import-artist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketmasterId: artist.ticketmasterId,
+            name: artist.name,
+            imageUrl: artist.imageUrl,
+            slug: artist.slug
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to import artist')
+        }
+        
+        const data = await response.json()
+        
+        // Clear search and navigate
+        setSearchQuery('')
+        setShowSearchResults(false)
+        window.location.href = `/artists/${data.artist.slug}`
+      } catch (error) {
+        console.error('Error importing artist:', error)
+        alert('Failed to import artist. Please try again.')
+      } finally {
+        setImportingArtist(false)
+      }
+    } else {
+      // Artist already in DB, just navigate
+      setSearchQuery('')
+      setShowSearchResults(false)
+      window.location.href = `/artists/${artist.slug}`
+    }
+  }
 
   // Helper function to ensure artist diversity across different show lists
   const ensureArtistDiversity = (shows: any[], usedArtists: Set<string>, maxPerArtist = 1, limit = 10) => {
@@ -460,6 +547,89 @@ export default function HomePage() {
             Help shape the setlist for upcoming concerts by voting on the songs you want to hear most
           </p>
           
+          {/* Search Input */}
+          <div ref={searchContainerRef} className="relative max-w-2xl mx-auto mb-8 md:mb-12">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search for artists to add to our platform..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setShowSearchResults(e.target.value.length > 0)
+                }}
+                onFocus={() => setShowSearchResults(searchQuery.length > 0)}
+                className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors text-base"
+              />
+            </div>
+            
+            {/* Search Results */}
+            {showSearchResults && (searchQuery.length > 0) && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
+                {isLoadingSearch ? (
+                  <div className="p-4">
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
+                          <div className="w-10 h-10 bg-muted rounded-full" />
+                          <div className="flex-1">
+                            <div className="h-4 bg-muted rounded mb-1" />
+                            <div className="h-3 bg-muted rounded w-2/3" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : searchResults?.artists?.length > 0 ? (
+                  <div className="p-2">
+                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                      Artists
+                    </div>
+                    {searchResults.artists.slice(0, 5).map((artist: any) => (
+                      <button
+                        key={artist.id || artist.ticketmasterId}
+                        onClick={() => handleArtistImport(artist)}
+                        disabled={importingArtist}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/20 transition-colors text-left disabled:opacity-50"
+                      >
+                        <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
+                          {artist.imageUrl ? (
+                            <img
+                              src={artist.imageUrl}
+                              alt={artist.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            <Users className="w-5 h-5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-foreground text-sm truncate">
+                            {artist.name}
+                            {artist.isFromApi && (
+                              <span className="ml-2 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                                New
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {artist.isFromApi ? 'From Ticketmaster API' : `${artist.upcomingShowsCount || 0} upcoming shows`}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : debouncedQuery && !isLoadingSearch ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No artists found for "{debouncedQuery}"</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+          
           {/* Quick Stats */}
           <div className="flex flex-wrap justify-center gap-8 mb-8 md:mb-12">
             <div className="text-center">
@@ -776,24 +946,24 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-br from-black via-slate-900 to-slate-800 text-white">
+      <section className="py-16 bg-muted/10">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">
             Ready to influence your favorite concerts?
           </h2>
-          <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
+          <p className="text-xl mb-8 text-muted-foreground max-w-2xl mx-auto">
             Join thousands of fans voting on setlists for upcoming shows
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               href="/signup"
-              className="px-8 py-3 bg-white text-gray-900 rounded-lg font-semibold hover:bg-gray-100 transition-colors duration-200"
+              className="btn-primary px-8 py-3"
             >
               Get Started Free
             </Link>
             <Link
               href="/shows"
-              className="px-8 py-3 bg-transparent border-2 border-white rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition-colors duration-200"
+              className="btn-secondary px-8 py-3"
             >
               Browse Shows
             </Link>

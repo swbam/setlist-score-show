@@ -98,68 +98,68 @@ export default function ProfilePage() {
   }, [user])
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Profile Header */}
-        <div className="bg-gradient-to-br from-black via-slate-900 to-slate-800 rounded-2xl p-8 mb-8">
+        <div className="card-base rounded-2xl p-8 mb-8">
           <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
-              <User className="w-12 h-12 text-white" />
+            <div className="w-24 h-24 bg-muted/20 rounded-full flex items-center justify-center">
+              <User className="w-12 h-12 text-foreground" />
             </div>
-            <div className="text-white">
+            <div className="text-foreground">
               <h1 className="text-3xl font-bold mb-2">{user.email}</h1>
-              <p className="text-white/80">Member since {stats.memberSince}</p>
+              <p className="text-muted-foreground">Member since {stats.memberSince}</p>
             </div>
           </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
-                          <Vote className="w-8 h-8 text-slate-400 mb-4" />
+          <div className="card-base rounded-lg p-6 ">
+                          <Vote className="w-8 h-8 text-muted-foreground mb-4" />
             <div className="text-3xl font-bold mb-1">{stats.totalVotes}</div>
-            <div className="text-gray-400">Total Votes</div>
+            <div className="text-muted-foreground">Total Votes</div>
           </div>
           
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
-                          <Calendar className="w-8 h-8 text-slate-400 mb-4" />
+          <div className="card-base rounded-lg p-6 ">
+                          <Calendar className="w-8 h-8 text-muted-foreground mb-4" />
             <div className="text-3xl font-bold mb-1">{stats.showsVoted}</div>
-            <div className="text-gray-400">Shows Voted</div>
+            <div className="text-muted-foreground">Shows Voted</div>
           </div>
           
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
-            <Music className="w-8 h-8 text-purple-500 mb-4" />
+          <div className="card-base rounded-lg p-6 ">
+            <Music className="w-8 h-8 text-primary mb-4" />
             <div className="text-3xl font-bold mb-1">{stats.artistsFollowed}</div>
-            <div className="text-gray-400">Artists Followed</div>
+            <div className="text-muted-foreground">Artists Followed</div>
           </div>
           
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6 ">
             <User className="w-8 h-8 text-green-500 mb-4" />
             <div className="text-xl font-bold mb-1">Active</div>
-            <div className="text-gray-400">Account Status</div>
+            <div className="text-muted-foreground">Account Status</div>
           </div>
         </div>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Account Settings */}
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6 ">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Settings className="w-5 h-5" />
               Account Settings
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-gray-400">Email</label>
+                <label className="text-sm text-muted-foreground">Email</label>
                 <p className="font-medium">{user.email}</p>
               </div>
               <div>
-                <label className="text-sm text-gray-400">User ID</label>
-                <p className="font-mono text-sm text-gray-500">{user.id}</p>
+                <label className="text-sm text-muted-foreground">User ID</label>
+                <p className="font-mono text-sm text-muted-foreground/70">{user.id}</p>
               </div>
               {user.app_metadata?.provider && (
                 <div>
-                  <label className="text-sm text-gray-400">Login Method</label>
+                  <label className="text-sm text-muted-foreground">Login Method</label>
                   <p className="font-medium capitalize">{user.app_metadata.provider}</p>
                 </div>
               )}
@@ -167,29 +167,29 @@ export default function ProfilePage() {
           </div>
 
           {/* Quick Links */}
-          <div className="gradient-card rounded-lg p-6 border border-gray-800">
+          <div className="card-base rounded-lg p-6 ">
             <h2 className="text-xl font-bold mb-4">Quick Links</h2>
             <div className="space-y-3">
               <button
                 onClick={() => router.push('/my-artists')}
-                className="w-full text-left px-4 py-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-between"
+                className="w-full text-left px-4 py-3 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors flex items-center justify-between"
               >
                 <span>My Artists</span>
-                <span className="text-gray-400">→</span>
+                <span className="text-muted-foreground">→</span>
               </button>
               <button
                 onClick={() => router.push('/shows')}
-                className="w-full text-left px-4 py-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-between"
+                className="w-full text-left px-4 py-3 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors flex items-center justify-between"
               >
                 <span>Browse Shows</span>
-                <span className="text-gray-400">→</span>
+                <span className="text-muted-foreground">→</span>
               </button>
               <button
                 onClick={() => router.push('/trending')}
-                className="w-full text-left px-4 py-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-between"
+                className="w-full text-left px-4 py-3 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors flex items-center justify-between"
               >
                 <span>Trending Shows</span>
-                <span className="text-gray-400">→</span>
+                <span className="text-muted-foreground">→</span>
               </button>
             </div>
           </div>

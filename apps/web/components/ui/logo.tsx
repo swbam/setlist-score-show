@@ -25,7 +25,7 @@ export function Logo({ className }: LogoProps) {
       
       {/* Text */}
       <text x="55" y="35" fill="currentColor" fontSize="24" fontWeight="600" fontFamily="Overpass, sans-serif">
-        Setlist Score Show
+        TheSet
       </text>
       
       {/* Gradient definition */}

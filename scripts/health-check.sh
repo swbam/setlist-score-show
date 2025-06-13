@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Health check script for Setlist Score Show
+# Health check script for TheSet
 # Runs various checks to ensure the application is functioning correctly
 
 set -e

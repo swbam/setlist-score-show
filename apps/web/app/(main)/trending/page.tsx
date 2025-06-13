@@ -51,26 +51,26 @@ export default function TrendingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
         {/* Header */}
-        <div className="mb-8 sm:mb-10 lg:mb-12">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold mb-4 sm:mb-6 gradient-text flex items-center gap-3 sm:gap-4">
-            <TrendingUp className="w-8 h-8 sm:w-10 sm:h-10" />
-            Trending Shows
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+            <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8" />
+            <span>Trending Shows</span>
           </h1>
-          <p className="text-muted-foreground text-base sm:text-lg lg:text-xl font-body">
+          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body">
             The hottest shows based on voting activity and engagement
           </p>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
           {/* Main Content - Trending Shows Grid */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <ShowCardGrid shows={trendingShows} isLoading={isLoading} />
           </div>
 
           {/* Sidebar - Recent Activity */}
-          <div className="w-full lg:w-80 space-y-6">
+          <div className="w-full lg:w-80 space-y-4 sm:space-y-6 order-first lg:order-last">
             <RecentActivitySidebar />
           </div>
         </div>
@@ -113,21 +113,21 @@ function RecentActivitySidebar() {
           Live Activity
         </h3>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4">
           <div className="text-center">
-            <div className="text-2xl font-headline font-bold text-foreground">{stats.totalVotesToday.toLocaleString()}</div>
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.totalVotesToday.toLocaleString()}</div>
             <div className="text-xs text-muted-foreground">Votes Today</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-headline font-bold text-foreground">{stats.activeFans}</div>
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.activeFans}</div>
             <div className="text-xs text-muted-foreground">Active Fans</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-headline font-bold text-foreground">{stats.songsAdded}</div>
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.songsAdded}</div>
             <div className="text-xs text-muted-foreground">Songs Added</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-headline font-bold text-foreground">{stats.trendingShows}</div>
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.trendingShows}</div>
             <div className="text-xs text-muted-foreground">Trending</div>
           </div>
         </div>
@@ -140,21 +140,21 @@ function RecentActivitySidebar() {
           Recent Votes
         </h3>
         
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {recentVotes.map((vote) => (
-            <div key={vote.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors">
-              <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
+            <div key={vote.id} className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-xs font-bold text-primary">{vote.user.charAt(0)}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">
+                <div className="text-xs sm:text-sm font-medium text-foreground truncate">
                   {vote.song}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  by {vote.artist} • voted by {vote.user}
+                <div className="text-xs text-muted-foreground truncate">
+                  by {vote.artist} • {vote.user}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground flex-shrink-0 hidden sm:block">
                 {vote.timeAgo}
               </div>
             </div>
@@ -169,21 +169,21 @@ function RecentActivitySidebar() {
           Recently Added Songs
         </h3>
         
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {recentSongs.map((song) => (
-            <div key={song.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors">
-              <div className="w-8 h-8 bg-secondary/20 rounded-full flex items-center justify-center">
-                <Music className="w-4 h-4 text-secondary" />
+            <div key={song.id} className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-secondary/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <Music className="w-3 h-3 sm:w-4 sm:h-4 text-secondary" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">
+                <div className="text-xs sm:text-sm font-medium text-foreground truncate">
                   {song.song}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  by {song.artist} • added by {song.addedBy}
+                <div className="text-xs text-muted-foreground truncate">
+                  by {song.artist} • {song.addedBy}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground flex-shrink-0 hidden sm:block">
                 {song.timeAgo}
               </div>
             </div>
@@ -195,17 +195,17 @@ function RecentActivitySidebar() {
       <div className="card-base p-4 sm:p-6">
         <h3 className="text-lg font-headline font-bold mb-4 text-foreground">Quick Actions</h3>
         
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           <Link 
             href="/shows" 
-            className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
-            <Calendar className="w-5 h-5 text-primary" />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-foreground group-hover:gradient-text transition-all">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
                 Browse All Shows
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground hidden sm:block">
                 Find upcoming concerts
               </div>
             </div>
@@ -213,14 +213,14 @@ function RecentActivitySidebar() {
           
           <Link 
             href="/artists" 
-            className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
-            <Users className="w-5 h-5 text-primary" />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-foreground group-hover:gradient-text transition-all">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
                 Explore Artists
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground hidden sm:block">
                 Discover new music
               </div>
             </div>

@@ -294,9 +294,9 @@ export const commonResolvers: IResolvers = {
         if (artists.length === 0) {
           try {
             console.log(`🎵 Searching for artists: "${searchQuery}"`)
-            const spotifyResults = await spotify.searchArtists(searchQuery, { limit: Math.min(limit, 10) })
+            const spotifyArtists = await spotify.searchArtists(searchQuery, { limit: Math.min(limit, 10) })
             
-            for (const spotifyArtist of spotifyResults.body.artists.items) {
+            for (const spotifyArtist of spotifyArtists) {
               try {
                 // Create slug from artist name
                 const slug = spotifyArtist.name.toLowerCase()

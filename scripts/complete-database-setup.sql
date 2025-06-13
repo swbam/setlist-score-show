@@ -1,4 +1,4 @@
--- Complete Database Setup for Setlist Score Show
+-- Complete Database Setup for TheSet
 -- Run this in Supabase SQL Editor
 
 -- Enable required extensions

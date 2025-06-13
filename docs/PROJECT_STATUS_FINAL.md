@@ -90,4 +90,4 @@ The app includes several performance optimizations:
 
 ## 🎉 Migration Complete!
 
-The Setlist Score Show app has been successfully migrated from the hybrid Vite/Next.js structure to a clean Next.js/Turbo monorepo with GraphQL integration. All features are working and the app is ready for production deployment.
+The TheSet app has been successfully migrated from the hybrid Vite/Next.js structure to a clean Next.js/Turbo monorepo with GraphQL integration. All features are working and the app is ready for production deployment.

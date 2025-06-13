@@ -53,7 +53,7 @@ export default function AdminDashboard() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-4xl font-bold gradient-text mb-2">Admin Dashboard</h1>
-        <p className="text-gray-400">Manage your Setlist Score Show platform</p>
+        <p className="text-gray-400">Manage your TheSet platform</p>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-8">

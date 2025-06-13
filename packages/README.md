@@ -1,6 +1,6 @@
 # Shared Packages
 
-This directory contains shared packages used across the Setlist Score Show monorepo.
+This directory contains shared packages used across the TheSet monorepo.
 
 ## Packages
 

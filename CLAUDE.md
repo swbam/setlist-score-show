@@ -7,7 +7,7 @@ IMPORTANT: NEVER REPLY THAT THE APP IS FULLY COMPLETE AND FUNCTIONAL. STICK TO T
 
 ## Project Overview
 
-Setlist Score Show is a crowdsourced concert setlist voting platform built as a Turborepo monorepo with Next.js frontend, Fastify/GraphQL backend, and Supabase for database and real-time features.
+TheSet is a crowdsourced concert setlist voting platform built as a Turborepo monorepo with Next.js frontend, Fastify/GraphQL backend, and Supabase for database and real-time features.
 
 ## Common Commands
 

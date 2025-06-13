@@ -1,6 +1,6 @@
 # @setlist/ui
 
-Shared UI component library for Setlist Score Show with teal gradient theme.
+Shared UI component library for TheSet with teal gradient theme.
 
 ## Installation
 

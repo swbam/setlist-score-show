@@ -9,7 +9,7 @@ const overpass = Overpass({
 })
 
 export const metadata: Metadata = {
-  title: 'Setlist Score Show',
+  title: 'TheSet',
   description: 'Vote on songs you want to hear at upcoming concerts',
 }
 

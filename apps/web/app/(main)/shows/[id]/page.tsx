@@ -315,77 +315,82 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Show header with gradient - inspired by artist page design */}
-      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
-            {/* Artist Image */}
+      {/* Show header - mobile-first design */}
+      <div className="bg-background border-b border-border">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          <div className="flex items-start gap-3 sm:gap-4">
+            {/* Artist Image - Left aligned */}
             <div className="flex-shrink-0">
               {show.artist.image_url ? (
                 <img
                   src={show.artist.image_url}
                   alt={show.artist.name}
-                  className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full object-cover border-4 border-border shadow-strong"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover"
                 />
               ) : (
-                <div className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full bg-muted border-4 border-border flex items-center justify-center shadow-strong">
-                  <span className="text-2xl sm:text-4xl lg:text-6xl font-headline font-bold text-white">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-muted flex items-center justify-center">
+                  <span className="text-lg sm:text-xl font-headline font-bold text-muted-foreground">
                     {show.artist.name.charAt(0)}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Show Info */}
-            <div className="flex-1 min-w-0 text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-headline font-bold mb-4 text-white leading-tight">
+            {/* Event Info - Right side */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-headline font-bold mb-1 text-foreground line-clamp-2">
                 {show.artist.name}
               </h1>
               
-              <div className="flex flex-col sm:flex-row lg:flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 mb-6 sm:mb-8 text-base sm:text-lg text-white/90 font-body">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 flex-shrink-0" />
-                  <span className="font-medium text-center lg:text-left">
-                    {show.venue.name}, {show.venue.city}
-                  </span>
+              {show.title && (
+                <p className="text-sm sm:text-base text-muted-foreground font-medium mb-2 line-clamp-1">
+                  {show.title}
+                </p>
+              )}
+              
+              <div className="space-y-1 text-sm text-muted-foreground font-body">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-3 h-3 text-accent flex-shrink-0" />
+                  <span className="font-medium line-clamp-1">{show.venue.name}</span>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 flex-shrink-0" />
-                  <span className="font-medium text-center lg:text-left text-sm sm:text-base">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3 h-3 text-accent flex-shrink-0" />
+                  <span className="font-medium">
                     {new Date(show.date).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
                     })}
                   </span>
                 </div>
+                <div className="text-muted-foreground/70 text-xs pl-5">
+                  {show.venue.city}, {show.venue.state || show.venue.country}
+                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-              
-                
-                {show.ticketmaster_url && (
+              {/* Action Button */}
+              {show.ticketmaster_url && (
+                <div className="mt-3">
                   <Link
                     href={show.ticketmaster_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-black flex items-center justify-center gap-3 px-6 sm:px-8 py-3 sm:py-4 text-sm sm:text-base"
+                    className="inline-flex items-center gap-2 bg-foreground text-background px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-foreground/90 transition-colors"
                   >
-                    <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>Get Tickets</span>
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Tickets</span>
                   </Link>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Main content */}
-      <div className="bg-slate-950/50 min-h-screen">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <div className="bg-background min-h-screen">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Connection status */}
         {!isConnected && (
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body text-sm sm:text-base">
@@ -393,8 +398,8 @@ export default function ShowPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold gradient-text">Setlist Voting</h2>
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-lg sm:text-xl font-headline font-bold text-foreground">Setlist Voting</h2>
         </div>
 
         {/* Voting section */}
@@ -425,34 +430,33 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 function ShowPageSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
-            {/* Artist Image Skeleton */}
-            <div className="flex-shrink-0">
-              <div className="w-32 h-32 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-full bg-muted border-4 border-border animate-pulse" />
-            </div>
-            
-            {/* Show Info Skeleton */}
-            <div className="flex-1 min-w-0 text-center lg:text-left">
-              <div className="h-12 sm:h-16 w-full max-w-96 bg-muted rounded-lg mb-4 animate-pulse mx-auto lg:mx-0" />
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8 justify-center lg:justify-start">
-                <div className="h-6 w-48 bg-muted rounded-lg animate-pulse mx-auto lg:mx-0" />
-                <div className="h-6 w-56 bg-muted rounded-lg animate-pulse mx-auto lg:mx-0" />
+      {/* Header Skeleton */}
+      <div className="bg-background border-b border-border">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-muted animate-pulse flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="h-6 sm:h-7 bg-muted rounded-lg mb-2 animate-pulse w-3/4" />
+              <div className="h-4 bg-muted rounded-lg mb-3 animate-pulse w-1/2" />
+              <div className="space-y-1">
+                <div className="h-4 bg-muted rounded-lg animate-pulse w-2/3" />
+                <div className="h-4 bg-muted rounded-lg animate-pulse w-1/2" />
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-                <div className="h-12 w-40 bg-muted rounded-xl animate-pulse mx-auto lg:mx-0" />
-                <div className="h-12 w-32 bg-muted rounded-xl animate-pulse mx-auto lg:mx-0" />
-              </div>
+              <div className="h-8 w-20 bg-muted rounded-lg animate-pulse mt-3" />
             </div>
           </div>
         </div>
       </div>
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="space-y-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-32 w-full bg-muted rounded-2xl animate-pulse" />
-          ))}
+      
+      {/* Content Skeleton */}
+      <div className="bg-background">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          <div className="h-6 bg-muted rounded-lg animate-pulse mb-4 w-32" />
+          <div className="space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-16 w-full bg-muted rounded-xl animate-pulse" />
+            ))}
+          </div>
         </div>
       </div>
     </div>

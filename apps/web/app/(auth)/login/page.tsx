@@ -7,7 +7,7 @@ import { LoginForm } from '@/components/auth/LoginForm'
 import { Logo } from '@/components/ui/logo'
 
 export const metadata: Metadata = {
-  title: 'Login | Setlist Score Show',
+  title: 'Login | TheSet',
   description: 'Sign in to vote on your favorite songs',
 }
 
@@ -45,7 +45,7 @@ export default async function LoginPage() {
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-gray-800 text-gray-400">
-                New to Setlist Score Show?
+                New to TheSet?
               </span>
             </div>
           </div>

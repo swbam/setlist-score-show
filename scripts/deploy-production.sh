@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Production Deployment Script for Setlist Score Show
+# Production Deployment Script for TheSet
 set -e
 
 echo "🚀 Starting Production Deployment..."
