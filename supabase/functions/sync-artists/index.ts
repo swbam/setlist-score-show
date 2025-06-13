@@ -16,14 +16,14 @@ serve(async (req) => {
     
     if (authHeader !== `Bearer ${cronSecret}` && 
         !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
-      console.error('Unauthorized artist sync request');
+      console.error('Unauthorized show sync request');
       return new Response(
         JSON.stringify({ success: false, message: 'Unauthorized' }), 
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('🎪 Starting artist show sync job');
+    console.log('🎪 Starting comprehensive show sync job');
     
     const supabase = createServiceClient();
     const ticketmasterApiKey = Deno.env.get('TICKETMASTER_API_KEY');
@@ -32,248 +32,217 @@ serve(async (req) => {
       throw new Error('TICKETMASTER_API_KEY not configured');
     }
 
-    // Get artists that need show data refresh (haven't been updated in 24 hours)
+    // Phase 1: Sync shows for existing artists that need updates
+    console.log('🎯 Phase 1: Syncing existing artists...');
+    
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
     const { data: artists, error: artistsError } = await supabase
       .from('artists')
-      .select('id, name, last_synced_at')
+      .select('id, name, ticketmaster_id, last_synced_at')
       .or(`last_synced_at.is.null,last_synced_at.lt.'${twentyFourHoursAgo.toISOString()}'`)
-      .limit(20);
+      .order('popularity', { ascending: false }) // Prioritize popular artists
+      .limit(30); // Increased limit for better coverage
 
     if (artistsError) {
       throw new Error(`Failed to fetch artists: ${artistsError.message}`);
     }
 
-    if (!artists || artists.length === 0) {
-      console.log('✅ No artists need show sync');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'No artists need show sync',
-          processed: 0,
-          duration: Date.now() - startTime,
-        }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    let existingProcessed = 0;
+    let existingShowsStored = 0;
 
-    console.log(`🎯 Syncing shows for ${artists.length} artists`);
-
-    let processed = 0;
-    let showsFound = 0;
-    let showsStored = 0;
-    const errors: string[] = [];
-
-    for (const artist of artists) {
+    for (const artist of artists || []) {
       try {
-        console.log(`🎤 Syncing shows for: ${artist.name}`);
+        console.log(`🎤 Syncing existing artist: ${artist.name}`);
         
-        // Search Ticketmaster for upcoming shows
-        const searchUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
-        searchUrl.searchParams.append('apikey', ticketmasterApiKey);
-        searchUrl.searchParams.append('keyword', artist.name);
-        searchUrl.searchParams.append('classificationName', 'Music');
-        searchUrl.searchParams.append('size', '50');
-        searchUrl.searchParams.append('sort', 'date,asc');
-        searchUrl.searchParams.append('startDateTime', new Date().toISOString());
+        if (artist.ticketmaster_id) {
+          // Direct search by Ticketmaster artist ID (more accurate)
+          const directUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
+          directUrl.searchParams.append('apikey', ticketmasterApiKey);
+          directUrl.searchParams.append('attractionId', artist.ticketmaster_id);
+          directUrl.searchParams.append('size', '100');
+          directUrl.searchParams.append('sort', 'date,asc');
+          directUrl.searchParams.append('startDateTime', new Date().toISOString());
 
-        const response = await fetch(searchUrl.toString());
+          const response = await fetch(directUrl.toString());
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            console.warn('Rate limit hit, waiting...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            continue;
-          }
-          throw new Error(`Ticketmaster API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const events = data._embedded?.events || [];
-
-        for (const event of events) {
-          try {
-            // Verify this is actually the artist we're looking for
-            const eventArtistName = event.name.toLowerCase();
-            const targetArtistName = artist.name.toLowerCase();
+          if (response.ok) {
+            const data = await response.json();
+            const events = data._embedded?.events || [];
             
-            if (!eventArtistName.includes(targetArtistName) && 
-                !targetArtistName.includes(eventArtistName)) {
-              continue;
-            }
+            existingShowsStored += await processEventsForArtist(supabase, artist, events);
+            console.log(`✅ Found ${events.length} shows for ${artist.name}`);
+          }
+        } else {
+          // Fallback to name search
+          const searchUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
+          searchUrl.searchParams.append('apikey', ticketmasterApiKey);
+          searchUrl.searchParams.append('keyword', artist.name);
+          searchUrl.searchParams.append('classificationName', 'Music');
+          searchUrl.searchParams.append('size', '50');
+          searchUrl.searchParams.append('sort', 'date,asc');
+          searchUrl.searchParams.append('startDateTime', new Date().toISOString());
 
-            showsFound++;
+          const response = await fetch(searchUrl.toString());
 
-            // Check if show already exists
-            const eventDate = event.dates?.start?.localDate || event.dates?.start?.dateTime?.split('T')[0];
-            if (!eventDate) continue;
-
-            const { data: existingShow } = await supabase
-              .from('shows')
-              .select('id')
-              .eq('artist_id', artist.id)
-              .eq('date', eventDate)
-              .single();
-
-            if (existingShow) {
-              console.log(`ℹ️ Show already exists for ${artist.name} on ${eventDate}`);
-              continue;
-            }
-
-            // Create or get venue
-            const venueName = event._embedded?.venues?.[0]?.name || 'Unknown Venue';
-            const venueCity = event._embedded?.venues?.[0]?.city?.name || 'Unknown City';
-            const venueState = event._embedded?.venues?.[0]?.state?.stateCode || event._embedded?.venues?.[0]?.state?.name;
-            const venueCountry = event._embedded?.venues?.[0]?.country?.name || 'Unknown Country';
-            const venueLat = parseFloat(event._embedded?.venues?.[0]?.location?.latitude || '0');
-            const venueLon = parseFloat(event._embedded?.venues?.[0]?.location?.longitude || '0');
-
-            let venueId: string;
-            const { data: existingVenue } = await supabase
-              .from('venues')
-              .select('id')
-              .eq('name', venueName)
-              .eq('city', venueCity)
-              .single();
-
-            if (existingVenue) {
-              venueId = existingVenue.id;
-            } else {
-              const { data: newVenue, error: venueError } = await supabase
-                .from('venues')
-                .insert({
-                  name: venueName,
-                  city: venueCity,
-                  state: venueState,
-                  country: venueCountry,
-                  latitude: venueLat,
-                  longitude: venueLon,
-                })
-                .select('id')
-                .single();
-
-              if (venueError) throw venueError;
-              venueId = newVenue.id;
-            }
-
-            // Create show
-            const { data: newShowData, error: showError } = await supabase // Assign data to newShowData
-              .from('shows')
-              .insert({
-                artist_id: artist.id,
-                venue_id: venueId,
-                date: eventDate,
-                title: event.name, // Changed 'name' to 'title' to match schema
-                ticketmaster_id: event.id,
-                ticketmaster_url: event.url,
-                // image_url: event.images?.[0]?.url, // image_url is not in the 'shows' table schema in TheSet-Fixes.md
-                status: 'upcoming' // Explicitly set status
-              }).select('id').single();
-
-            if (!showError && newShowData?.id) { // Check newShowData and its id
-              showsStored++;
-              console.log(`✅ Stored show for ${artist.name} on ${eventDate} with ID: ${newShowData.id}`);
-
-              // Create default setlist for the new show
-              const { data: newSetlistData, error: setlistError } = await supabase
-                .from('setlists')
-                .upsert(
-                  {
-                    show_id: newShowData.id,
-                    name: 'Main Set',
-                    order_index: 0,
-                  },
-                  {
-                    onConflict: 'show_id,order_index',
-                  }
-                )
-                .select('id')
-                .single();
-
-              if (setlistError) {
-                console.error(`Error creating default setlist for show ${newShowData.id}: ${setlistError.message}`);
-              } else if (newSetlistData) {
-                console.log(`✅ Created default setlist for show ${newShowData.id} with setlist ID: ${newSetlistData.id}`);
-
-                // Fetch up to 5 songs for the artist to populate the new setlist
-                const { data: artistSongs, error: songsError } = await supabase
-                  .from('songs')
-                  .select('id')
-                  .eq('artist_id', artist.id)
-                  // .order('popularity', { ascending: false }) // Optional: order by popularity
-                  .limit(5);
-
-                if (songsError) {
-                  console.error(`Error fetching songs for artist ${artist.id} for initial setlist: ${songsError.message}`);
-                } else if (artistSongs && artistSongs.length > 0) {
-                  const setlistSongInserts = artistSongs.map((song, index) => ({
-                    setlist_id: newSetlistData.id,
-                    song_id: song.id,
-                    position: index + 1,
-                    vote_count: 0
-                  }));
-
-                  const { error: insertSetlistSongsError } = await supabase
-                    .from('setlist_songs')
-                    .insert(setlistSongInserts);
-
-                  if (insertSetlistSongsError) {
-                    console.error(`Error inserting initial songs into setlist ${newSetlistData.id}: ${insertSetlistSongsError.message}`);
-                  } else {
-                    console.log(`✅ Inserted ${artistSongs.length} initial songs into setlist ${newSetlistData.id}`);
-                  }
-                } else {
-                  console.log(`No songs found for artist ${artist.id} to populate initial setlist ${newSetlistData.id}.`);
-                }
-              }
-
-            } else if (showError) {
-              console.error(`Error storing show for ${artist.name} on ${eventDate}: ${showError.message}`);
-            } else {
-              console.warn(`Show for ${artist.name} on ${eventDate} might not have been stored correctly, or ID was not returned.`);
-            }
-
-          } catch (error) {
-            console.error(`Error processing event: ${error}`);
+          if (response.ok) {
+            const data = await response.json();
+            const events = data._embedded?.events || [];
+            
+            // Filter for exact artist matches
+            const matchingEvents = events.filter((event: any) => {
+              const eventArtists = event._embedded?.attractions || [];
+              return eventArtists.some((attraction: any) => 
+                attraction.name.toLowerCase() === artist.name.toLowerCase()
+              );
+            });
+            
+            existingShowsStored += await processEventsForArtist(supabase, artist, matchingEvents);
+            console.log(`✅ Found ${matchingEvents.length} matching shows for ${artist.name}`);
           }
         }
 
-        // Update artist's last_synced_at timestamp
+        // Update artist's last_synced_at
         await supabase
           .from('artists')
           .update({ last_synced_at: new Date().toISOString() })
           .eq('id', artist.id);
 
-        processed++;
+        existingProcessed++;
         
-        // Rate limiting between artists
+        // Rate limiting
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
-        processed++;
-        const errorMsg = `${artist.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        errors.push(errorMsg);
-        console.error(`💥 Error syncing shows for ${artist.name}:`, error);
+        console.error(`Error syncing existing artist ${artist.name}:`, error);
+      }
+    }
+
+    // Phase 2: Discover trending/popular shows and new artists
+    console.log('🔥 Phase 2: Discovering trending shows...');
+    
+    let newArtistsFound = 0;
+    let trendingShowsStored = 0;
+
+    // Search for popular music events in major markets
+    const majorMarkets = [
+      { market: 'DMA220', name: 'New York' },  
+      { market: 'DMA298', name: 'Los Angeles' },
+      { market: 'DMA269', name: 'Chicago' },
+      { market: 'DMA212', name: 'San Francisco' },
+      { market: 'DMA213', name: 'Seattle' },
+      { market: 'DMA217', name: 'Boston' },
+      { market: 'DMA237', name: 'Philadelphia' },
+      { market: 'DMA234', name: 'Miami' },
+      { market: 'DMA346', name: 'Atlanta' }
+    ];
+
+    for (const market of majorMarkets.slice(0, 4)) { // Limit to prevent rate limiting
+      try {
+        console.log(`🌟 Searching trending shows in ${market.name}...`);
+        
+        const trendingUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
+        trendingUrl.searchParams.append('apikey', ticketmasterApiKey);
+        trendingUrl.searchParams.append('classificationName', 'Music');
+        trendingUrl.searchParams.append('dmaId', market.market);
+        trendingUrl.searchParams.append('size', '50');
+        trendingUrl.searchParams.append('sort', 'relevance,desc'); // Get most relevant/popular
+        trendingUrl.searchParams.append('startDateTime', new Date().toISOString());
+        
+        // Get events for next 6 months
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 6);
+        trendingUrl.searchParams.append('endDateTime', endDate.toISOString());
+
+        const response = await fetch(trendingUrl.toString());
+
+        if (response.ok) {
+          const data = await response.json();
+          const events = data._embedded?.events || [];
+
+          console.log(`📈 Found ${events.length} trending events in ${market.name}`);
+
+          for (const event of events) {
+            try {
+              const artists = event._embedded?.attractions || [];
+              
+              for (const attraction of artists) {
+                // Check if we already have this artist
+                const { data: existingArtist } = await supabase
+                  .from('artists')
+                  .select('id, name')
+                  .or(`name.ilike.%${attraction.name}%,ticketmaster_id.eq.${attraction.id}`)
+                  .single();
+
+                let artistRecord = existingArtist;
+
+                if (!existingArtist) {
+                  // Create new trending artist
+                  const { data: newArtist, error: artistError } = await supabase
+                    .from('artists')
+                    .insert({
+                      name: attraction.name,
+                      slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                      ticketmaster_id: attraction.id,
+                      genres: attraction.classifications?.[0]?.genre?.name ? [attraction.classifications[0].genre.name] : [],
+                      popularity: 50, // Default trending popularity
+                      followers: 0,
+                      last_synced_at: new Date().toISOString(),
+                    })
+                    .select()
+                    .single();
+
+                  if (!artistError && newArtist) {
+                    artistRecord = newArtist;
+                    newArtistsFound++;
+                    console.log(`🆕 Added trending artist: ${attraction.name}`);
+                  }
+                }
+
+                // Store the trending show
+                if (artistRecord) {
+                  const stored = await processEventsForArtist(supabase, artistRecord, [event]);
+                  trendingShowsStored += stored;
+                }
+              }
+            } catch (eventError) {
+              console.warn(`Error processing trending event:`, eventError);
+            }
+          }
+        }
+
+        // Rate limiting between markets
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+      } catch (marketError) {
+        console.error(`Error searching market ${market.name}:`, marketError);
       }
     }
 
     const duration = Date.now() - startTime;
     const response = {
       success: true,
-      message: `Processed ${processed} artists, found ${showsFound} shows, stored ${showsStored} shows`,
+      message: 'Comprehensive show sync completed',
       stats: {
-        artists_processed: processed,
-        shows_found: showsFound,
-        shows_stored: showsStored,
-        failed: errors.length,
-        errors: errors.slice(0, 3),
+        phase1: {
+          existingArtistsProcessed: existingProcessed,
+          existingShowsStored: existingShowsStored,
+        },
+        phase2: {
+          newArtistsFound,
+          trendingShowsStored,
+        },
+        total: {
+          showsStored: existingShowsStored + trendingShowsStored,
+          artistsProcessed: existingProcessed + newArtistsFound,
+        }
       },
       duration,
     };
 
-    console.log(`🎉 Show sync completed: ${processed} artists processed, ${showsStored} shows stored in ${duration}ms`);
+    console.log(`🎉 Comprehensive show sync completed in ${duration}ms`);
+    console.log(`📊 Stats: ${existingProcessed} existing artists, ${newArtistsFound} new artists, ${existingShowsStored + trendingShowsStored} total shows`);
 
     return new Response(
       JSON.stringify(response),
@@ -293,3 +262,116 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to process events for an artist
+async function processEventsForArtist(supabase: any, artist: any, events: any[]): Promise<number> {
+  let storedCount = 0;
+
+  for (const event of events) {
+    try {
+      // Check if show already exists
+      const { data: existingShow } = await supabase
+        .from('shows')
+        .select('id')
+        .eq('ticketmaster_id', event.id)
+        .single();
+
+      if (existingShow) {
+        continue; // Skip existing shows
+      }
+
+      const venue = event._embedded?.venues?.[0];
+      if (!venue) continue;
+
+      // Create or get venue
+      let venueId: string;
+      const { data: existingVenue } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('ticketmaster_id', venue.id)
+        .single();
+
+      if (existingVenue) {
+        venueId = existingVenue.id;
+      } else {
+        const { data: newVenue, error: venueError } = await supabase
+          .from('venues')
+          .insert({
+            name: venue.name,
+            city: venue.city?.name || 'Unknown',
+            state: venue.state?.name || venue.state?.stateCode || '',
+            country: venue.country?.name || 'Unknown',
+            ticketmaster_id: venue.id,
+            latitude: venue.location?.latitude ? parseFloat(venue.location.latitude) : null,
+            longitude: venue.location?.longitude ? parseFloat(venue.location.longitude) : null,
+            timezone: venue.timezone,
+          })
+          .select('id')
+          .single();
+
+        if (venueError) throw venueError;
+        venueId = newVenue.id;
+      }
+
+      // Create show
+      const eventDate = new Date(event.dates.start.localDate);
+      const { data: newShow, error: showError } = await supabase
+        .from('shows')
+        .insert({
+          artist_id: artist.id,
+          venue_id: venueId,
+          date: eventDate.toISOString(),
+          title: event.name,
+          ticketmaster_id: event.id,
+          ticketmaster_url: event.url,
+          status: 'upcoming',
+          view_count: 0,
+        })
+        .select('id')
+        .single();
+
+      if (showError) throw showError;
+
+      // Create default setlist
+      const { data: setlist, error: setlistError } = await supabase
+        .from('setlists')
+        .insert({
+          show_id: newShow.id,
+          name: 'Main Set',
+          order_index: 0,
+        })
+        .select('id')
+        .single();
+
+      if (!setlistError && setlist) {
+        // Add popular songs to setlist
+        const { data: artistSongs } = await supabase
+          .from('songs')
+          .select('id')
+          .eq('artist_id', artist.id)
+          .order('popularity', { ascending: false })
+          .limit(15);
+
+        if (artistSongs && artistSongs.length > 0) {
+          const setlistSongs = artistSongs.map((song: any, index: number) => ({
+            setlist_id: setlist.id,
+            song_id: song.id,
+            position: index + 1,
+            vote_count: 0,
+          }));
+
+          await supabase
+            .from('setlist_songs')
+            .insert(setlistSongs);
+        }
+      }
+
+      storedCount++;
+
+    } catch (error) {
+      console.warn(`Error processing event ${event.id}:`, error);
+    }
+  }
+
+  return storedCount;
+}

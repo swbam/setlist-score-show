@@ -111,34 +111,41 @@ export const showResolvers: IResolvers = {
     },
 
     trendingShows: async (_parent, { limit = 10, timeframe = 'WEEK' }, { prisma }) => {
-      // Fetch from trending_shows materialized view
+      // Fetch from trending_shows materialized view with artist limit
       const trendingData = await prisma.$queryRaw`
-        SELECT 
-          ts.show_id,
-          ts.total_votes,
-          ts.unique_voters,
-          ts.trending_score,
-          s.id,
-          s.date,
-          s.title,
-          s.status,
-          s.ticketmaster_url,
-          s.view_count,
-          a.id as artist_id,
-          a.name as artist_name,
-          a.slug as artist_slug,
-          a.image_url as artist_image_url,
-          v.id as venue_id,
-          v.name as venue_name,
-          v.city as venue_city,
-          v.state as venue_state,
-          v.country as venue_country
-        FROM trending_shows ts
-        JOIN shows s ON ts.show_id = s.id
-        JOIN artists a ON s.artist_id = a.id
-        JOIN venues v ON s.venue_id = v.id
-        WHERE s.status IN ('upcoming', 'ongoing')
-        ORDER BY ts.trending_score DESC
+        WITH ranked_shows AS (
+          SELECT 
+            ts.show_id,
+            ts.total_votes,
+            ts.unique_voters,
+            ts.trending_score,
+            s.id,
+            s.date,
+            s.title,
+            s.status,
+            s.ticketmaster_url,
+            s.view_count,
+            a.id as artist_id,
+            a.name as artist_name,
+            a.slug as artist_slug,
+            a.image_url as artist_image_url,
+            v.id as venue_id,
+            v.name as venue_name,
+            v.city as venue_city,
+            v.state as venue_state,
+            v.country as venue_country,
+            ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY ts.trending_score DESC) as rn
+          FROM trending_shows ts
+          JOIN shows s ON ts.show_id = s.id
+          JOIN artists a ON s.artist_id = a.id
+          JOIN venues v ON s.venue_id = v.id
+          WHERE s.status IN ('upcoming', 'ongoing')
+            AND s.date >= CURRENT_DATE
+        )
+        SELECT *
+        FROM ranked_shows
+        WHERE rn <= 2  -- Limit to max 2 shows per artist
+        ORDER BY trending_score DESC
         LIMIT ${limit}
       `
 
@@ -150,9 +157,9 @@ export const showResolvers: IResolvers = {
         status: row.status,
         ticketmasterUrl: row.ticketmaster_url,
         viewCount: row.view_count,
-        totalVotes: parseInt(row.total_votes),
-        uniqueVoters: parseInt(row.unique_voters),
-        trendingScore: parseFloat(row.trending_score),
+        totalVotes: parseInt(row.total_votes || '0'),
+        uniqueVoters: parseInt(row.unique_voters || '0'),
+        trendingScore: parseFloat(row.trending_score || '0'),
         artist: {
           id: row.artist_id,
           name: row.artist_name,

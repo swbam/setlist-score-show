@@ -18,8 +18,8 @@ interface FeaturedArtistsProps {
 export function FeaturedArtists({ artists, isLoading }: FeaturedArtistsProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {[...Array(6)].map((_, i) => (
+      <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+        {[...Array(12)].map((_, i) => (
           <div key={i} className="card-base h-64 animate-pulse" />
         ))}
       </div>
@@ -35,7 +35,7 @@ export function FeaturedArtists({ artists, isLoading }: FeaturedArtistsProps) {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
       {artists.map((artist) => (
         <Link
           key={artist.id}

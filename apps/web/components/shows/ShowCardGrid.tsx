@@ -57,7 +57,7 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
           className="card-base overflow-hidden group"
         >
           {/* Artist Image */}
-          <div className="aspect-square relative bg-muted overflow-hidden">
+          <div className="aspect-[4/3] relative bg-muted overflow-hidden">
             {item.show.artist.imageUrl ? (
               <img
                 src={item.show.artist.imageUrl}
@@ -66,7 +66,7 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                <span className="text-4xl font-headline font-bold text-muted-foreground/50">
+                <span className="text-2xl font-headline font-bold text-muted-foreground/50">
                   {item.show.artist.name.charAt(0)}
                 </span>
               </div>
@@ -81,31 +81,31 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
             )}
             
             {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-60" />
+            <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-40" />
           </div>
 
           {/* Show Info */}
-          <div className="p-6">
+          <div className="p-4">
             {/* Artist Name - Main Headline */}
-            <h3 className="text-xl font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300">
+            <h3 className="text-lg font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
               {item.show.artist.name}
             </h3>
             
             {/* Tour Name - Subheadline (if exists) */}
             {item.show.title && (
-              <h4 className="text-lg font-headline font-medium mb-3 text-muted-foreground">
+              <h4 className="text-sm font-headline font-medium mb-3 text-muted-foreground line-clamp-1">
                 {item.show.title}
               </h4>
             )}
             
             {/* Venue & Date */}
-            <div className="space-y-2 text-sm text-muted-foreground font-body mb-4">
+            <div className="space-y-1 text-xs text-muted-foreground font-body mb-3">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-accent" />
-                <span className="font-medium">{item.show.venue.name}</span>
+                <MapPin className="w-3 h-3 text-accent flex-shrink-0" />
+                <span className="font-medium line-clamp-1">{item.show.venue.name}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-accent" />
+                <Calendar className="w-3 h-3 text-accent flex-shrink-0" />
                 <span className="font-medium">
                   {new Date(item.show.date).toLocaleDateString('en-US', {
                     month: 'short',
@@ -114,17 +114,17 @@ export function ShowCardGrid({ shows, isLoading }: ShowCardGridProps) {
                   })}
                 </span>
               </div>
-              <div className="text-muted-foreground/70 font-medium">
+              <div className="text-muted-foreground/70 font-medium pl-5 line-clamp-1">
                 {item.show.venue.city}
               </div>
             </div>
 
             {/* Stats */}
-            <div className="flex items-center justify-between pt-4 border-t border-border/30">
-              <span className="text-sm text-muted-foreground font-body">
+            <div className="flex items-center justify-between pt-2 border-t border-border/30">
+              <span className="text-xs text-muted-foreground font-body">
                 {item.totalVotes} votes
               </span>
-              <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
+              <span className="text-xs font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
                 Vote Now →
               </span>
             </div>
