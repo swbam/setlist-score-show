@@ -560,32 +560,32 @@ export default function HomePage() {
           {/* Search Input */}
           <div ref={searchContainerRef} className="relative max-w-2xl mx-auto mb-8 md:mb-12">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/60 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search for artists to add to our platform..."
+                placeholder="Search for artists, venues, or cities..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
                   setShowSearchResults(e.target.value.length > 0)
                 }}
                 onFocus={() => setShowSearchResults(searchQuery.length > 0)}
-                className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:bg-white transition-all text-base shadow-lg"
+                className="w-full pl-12 pr-4 py-4 bg-black/40 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:border-white/40 focus:bg-black/50 transition-all text-base shadow-lg"
               />
             </div>
             
             {/* Search Results */}
             {showSearchResults && (searchQuery.length > 0) && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm border border-white/20 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
                 {isLoadingSearch ? (
                   <div className="p-4">
                     <div className="space-y-3">
                       {[...Array(3)].map((_, i) => (
                         <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
-                          <div className="w-10 h-10 bg-muted rounded-full" />
+                          <div className="w-10 h-10 bg-white/20 rounded-full" />
                           <div className="flex-1">
-                            <div className="h-4 bg-muted rounded mb-1" />
-                            <div className="h-3 bg-muted rounded w-2/3" />
+                            <div className="h-4 bg-white/20 rounded mb-1" />
+                            <div className="h-3 bg-white/20 rounded w-2/3" />
                           </div>
                         </div>
                       ))}
@@ -593,7 +593,7 @@ export default function HomePage() {
                   </div>
                 ) : searchResults?.artists?.length > 0 ? (
                   <div className="p-2">
-                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                    <div className="px-3 py-2 text-xs font-medium text-white/60 border-b border-white/20">
                       Artists
                     </div>
                     {searchResults.artists.slice(0, 5).map((artist: any) => (
@@ -601,9 +601,9 @@ export default function HomePage() {
                         key={artist.id || artist.ticketmasterId}
                         onClick={() => handleArtistImport(artist)}
                         disabled={importingArtist}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/20 transition-colors text-left disabled:opacity-50"
+                        className="w-full flex items-center gap-3 p-3 hover:bg-white/10 transition-colors text-left disabled:opacity-50"
                       >
-                        <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
                           {artist.imageUrl ? (
                             <img
                               src={artist.imageUrl}
@@ -611,14 +611,14 @@ export default function HomePage() {
                               className="w-full h-full rounded-full object-cover"
                             />
                           ) : (
-                            <Users className="w-5 h-5 text-muted-foreground" />
+                            <Users className="w-5 h-5 text-white/60" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-foreground text-sm truncate">
+                          <div className="font-medium text-white text-sm truncate">
                             {artist.name}
                             {artist.isFromApi && (
-                              <span className="ml-2 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                              <span className="ml-2 text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
                                 New
                               </span>
                             )}
@@ -629,8 +629,8 @@ export default function HomePage() {
                     ))}
                   </div>
                 ) : debouncedQuery && !isLoadingSearch ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <div className="p-4 text-center text-white/60">
+                    <Search className="w-8 h-8 mx-auto mb-2 text-white/40" />
                     <p className="text-sm">No artists found for "{debouncedQuery}"</p>
                   </div>
                 ) : null}
