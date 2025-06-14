@@ -40,7 +40,6 @@ export default function ShowPage({ params }: { params: { id: string } }) {
   const { user } = useAuth()
   const { 
     voteCounts, 
-    isConnected, 
     optimisticVoteUpdate, 
     revertVoteUpdate,
     refreshVoteCounts
@@ -315,21 +314,21 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Show header - mobile-first design */}
-      <div className="bg-background border-b border-border">
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <div className="flex items-start gap-3 sm:gap-4">
+      {/* Show header with green gradient - mobile-first design */}
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 lg:gap-8">
             {/* Artist Image - Left aligned */}
             <div className="flex-shrink-0">
               {show.artist.image_url ? (
                 <img
                   src={show.artist.image_url}
                   alt={show.artist.name}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover"
+                  className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full object-cover border-4 border-border"
                 />
               ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-muted flex items-center justify-center">
-                  <span className="text-lg sm:text-xl font-headline font-bold text-muted-foreground">
+                <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full bg-muted flex items-center justify-center border-4 border-border">
+                  <span className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold text-muted-foreground">
                     {show.artist.name.charAt(0)}
                   </span>
                 </div>
@@ -338,48 +337,48 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
             {/* Event Info - Right side */}
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-headline font-bold mb-1 text-foreground line-clamp-2">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-headline font-bold mb-2 sm:mb-4 text-foreground">
                 {show.artist.name}
               </h1>
               
               {show.title && (
-                <p className="text-sm sm:text-base text-muted-foreground font-medium mb-2 line-clamp-1">
+                <p className="text-lg sm:text-xl lg:text-2xl text-muted-foreground font-medium mb-4 sm:mb-6">
                   {show.title}
                 </p>
               )}
               
-              <div className="space-y-1 text-sm text-muted-foreground font-body">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-3 h-3 text-accent flex-shrink-0" />
-                  <span className="font-medium line-clamp-1">{show.venue.name}</span>
+              <div className="space-y-2 sm:space-y-3 text-base sm:text-lg text-muted-foreground font-body">
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0" />
+                  <span className="font-medium">{show.venue.name}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-3 h-3 text-accent flex-shrink-0" />
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0" />
                   <span className="font-medium">
                     {new Date(show.date).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
+                      weekday: 'long',
+                      month: 'long',
                       day: 'numeric',
                       year: 'numeric'
                     })}
                   </span>
                 </div>
-                <div className="text-muted-foreground/70 text-xs pl-5">
+                <div className="text-muted-foreground/70 pl-8 sm:pl-9">
                   {show.venue.city}, {show.venue.state || show.venue.country}
                 </div>
               </div>
 
               {/* Action Button */}
               {show.ticketmaster_url && (
-                <div className="mt-3">
+                <div className="mt-6 sm:mt-8">
                   <Link
                     href={show.ticketmaster_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-foreground text-background px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-foreground/90 transition-colors"
+                    className="inline-flex items-center gap-3 bg-foreground text-background px-6 py-3 rounded-lg text-lg font-medium hover:bg-foreground/90 transition-colors"
                   >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Tickets</span>
+                    <ExternalLink className="w-5 h-5" />
+                    <span>Get Tickets</span>
                   </Link>
                 </div>
               )}
@@ -390,16 +389,9 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
       {/* Main content */}
       <div className="bg-background min-h-screen">
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        {/* Connection status */}
-        {!isConnected && (
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 glass border border-yellow-500/30 rounded-xl text-yellow-400 font-body text-sm sm:text-base">
-            Connecting to live updates...
-          </div>
-        )}
-
-        <div className="mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-headline font-bold text-foreground">Setlist Voting</h2>
+        <div className="w-full max-w-7xl mx-auto px-4 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl font-headline font-bold text-foreground">Setlist Voting</h2>
         </div>
 
         {/* Voting section */}
@@ -419,9 +411,6 @@ export default function ShowPage({ params }: { params: { id: string } }) {
         />
         </div>
       </div>
-
-      {/* Live activity indicator */}
-      <LiveActivityIndicator showId={params.id} />
     </div>
   )
 }
@@ -430,19 +419,20 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 function ShowPageSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Header Skeleton */}
-      <div className="bg-background border-b border-border">
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <div className="flex items-start gap-3 sm:gap-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-muted animate-pulse flex-shrink-0" />
+      {/* Header Skeleton with green gradient */}
+      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 lg:gap-8">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full bg-muted border-4 border-border animate-pulse flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="h-6 sm:h-7 bg-muted rounded-lg mb-2 animate-pulse w-3/4" />
-              <div className="h-4 bg-muted rounded-lg mb-3 animate-pulse w-1/2" />
-              <div className="space-y-1">
-                <div className="h-4 bg-muted rounded-lg animate-pulse w-2/3" />
-                <div className="h-4 bg-muted rounded-lg animate-pulse w-1/2" />
+              <div className="h-12 sm:h-16 lg:h-20 bg-muted rounded-lg mb-4 animate-pulse w-3/4" />
+              <div className="h-6 sm:h-8 bg-muted rounded-lg mb-6 animate-pulse w-1/2" />
+              <div className="space-y-3">
+                <div className="h-6 bg-muted rounded-lg animate-pulse w-2/3" />
+                <div className="h-6 bg-muted rounded-lg animate-pulse w-1/2" />
+                <div className="h-5 bg-muted rounded-lg animate-pulse w-1/3" />
               </div>
-              <div className="h-8 w-20 bg-muted rounded-lg animate-pulse mt-3" />
+              <div className="h-12 w-32 bg-muted rounded-lg animate-pulse mt-8" />
             </div>
           </div>
         </div>
@@ -450,48 +440,15 @@ function ShowPageSkeleton() {
       
       {/* Content Skeleton */}
       <div className="bg-background">
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <div className="h-6 bg-muted rounded-lg animate-pulse mb-4 w-32" />
-          <div className="space-y-3">
+        <div className="w-full max-w-7xl mx-auto px-4 py-6 sm:py-8">
+          <div className="h-8 bg-muted rounded-lg animate-pulse mb-8 w-48" />
+          <div className="space-y-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-16 w-full bg-muted rounded-xl animate-pulse" />
+              <div key={i} className="h-20 w-full bg-muted rounded-xl animate-pulse" />
             ))}
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-// Live activity indicator component
-function LiveActivityIndicator({ showId }: { showId: string }) {
-  const [activeUsers, setActiveUsers] = useState(0)
-  
-  useEffect(() => {
-    const channel = supabase.channel(`show:${showId}:presence`)
-    
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        setActiveUsers(Object.keys(state).length)
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ online_at: new Date().toISOString() })
-        }
-      })
-    
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [showId])
-
-  return (
-    <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 glass px-3 sm:px-6 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 border border-border">
-      <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-400 rounded-full animate-pulse" />
-      <span className="text-xs sm:text-sm font-body font-medium text-foreground">
-        {activeUsers} {activeUsers === 1 ? 'person' : 'people'} voting now
-      </span>
     </div>
   )
 }

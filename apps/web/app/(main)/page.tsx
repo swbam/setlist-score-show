@@ -538,12 +538,23 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative py-24 md:py-32 px-4 bg-gradient-to-b from-background to-muted/30">
-        <div className="container mx-auto text-center">
-          <h1 className="text-4xl md:text-6xl font-headline font-bold mb-6 md:mb-8 gradient-text leading-tight">
+      <section className="relative py-24 md:py-32 px-4 bg-gradient-to-b from-background to-muted/30 overflow-hidden">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="/bg.jpg"
+            alt="Concert background"
+            className="w-full h-full object-cover"
+          />
+          {/* Dark gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80"></div>
+        </div>
+        
+        <div className="container mx-auto text-center relative z-10">
+          <h1 className="text-4xl md:text-6xl font-headline font-bold mb-6 md:mb-8 text-white leading-tight drop-shadow-lg">
             Vote on the setlists<br />you want to hear.
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-8 md:mb-12 max-w-3xl mx-auto font-body leading-relaxed">
+          <p className="text-lg md:text-xl text-white/90 mb-8 md:mb-12 max-w-3xl mx-auto font-body leading-relaxed drop-shadow-md">
             Help shape the setlist for upcoming concerts by voting on the songs you want to hear most
           </p>
           
@@ -560,13 +571,13 @@ export default function HomePage() {
                   setShowSearchResults(e.target.value.length > 0)
                 }}
                 onFocus={() => setShowSearchResults(searchQuery.length > 0)}
-                className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors text-base"
+                className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:bg-white transition-all text-base shadow-lg"
               />
             </div>
             
             {/* Search Results */}
             {showSearchResults && (searchQuery.length > 0) && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm border border-white/20 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
                 {isLoadingSearch ? (
                   <div className="p-4">
                     <div className="space-y-3">
@@ -633,47 +644,47 @@ export default function HomePage() {
           {/* Quick Stats */}
           <div className="flex flex-wrap justify-center gap-8 mb-8 md:mb-12">
             <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold gradient-text">
+              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
                 {isLoadingTrending || isLoadingUpcoming ? (
-                  <div className="animate-pulse bg-muted rounded w-12 h-8 mx-auto" />
+                  <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto" />
                 ) : (
                   `${trendingShows.length + upcomingThisWeek.length}+`
                 )}
               </div>
-              <div className="text-sm text-muted-foreground font-body">Shows Available</div>
+              <div className="text-sm text-white/80 font-body drop-shadow-md">Shows Available</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold gradient-text">
+              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
                 {isLoadingFeatured || isLoadingPopular ? (
-                  <div className="animate-pulse bg-muted rounded w-12 h-8 mx-auto" />
+                  <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto" />
                 ) : (
                   `${featuredArtists.length + popularArtists.length}+`
                 )}
               </div>
-              <div className="text-sm text-muted-foreground font-body">Artists Featured</div>
+              <div className="text-sm text-white/80 font-body drop-shadow-md">Artists Featured</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold gradient-text">
+              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
                 {isLoadingTrending ? (
-                  <div className="animate-pulse bg-muted rounded w-16 h-8 mx-auto" />
+                  <div className="animate-pulse bg-white/20 rounded w-16 h-8 mx-auto" />
                 ) : (
                   `${trendingShows.reduce((sum, show) => sum + show.totalVotes, 0)}+`
                 )}
               </div>
-              <div className="text-sm text-muted-foreground font-body">Votes Cast</div>
+              <div className="text-sm text-white/80 font-body drop-shadow-md">Votes Cast</div>
             </div>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center">
             <Link
               href="/shows"
-              className="btn-primary text-base md:text-lg px-8 md:px-10 py-3 md:py-4"
+              className="btn-primary text-base md:text-lg px-8 md:px-10 py-3 md:py-4 shadow-lg hover:shadow-xl transition-shadow"
             >
               Discover Shows
             </Link>
             <Link
               href="/artists"
-              className="btn-secondary text-base md:text-lg px-8 md:px-10 py-3 md:py-4"
+              className="btn-secondary text-base md:text-lg px-8 md:px-10 py-3 md:py-4 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 shadow-lg hover:shadow-xl transition-all"
             >
               Find Artists
             </Link>
@@ -726,14 +737,14 @@ export default function HomePage() {
             </Link>
           </div>
           
-          <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 md:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {isLoadingUpcoming ? (
-              [...Array(8)].map((_, i) => (
-                <div key={i} className="card-base h-80 animate-pulse">
-                  <div className="aspect-[4/3] bg-muted/50 animate-pulse" />
-                  <div className="p-4 space-y-3">
-                    <div className="h-5 bg-muted/50 rounded animate-pulse" />
-                    <div className="h-4 bg-muted/30 rounded animate-pulse w-3/4" />
+              [...Array(12)].map((_, i) => (
+                <div key={i} className="card-base h-64 animate-pulse">
+                  <div className="aspect-[3/2] bg-muted/50 animate-pulse" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-4 bg-muted/50 rounded animate-pulse" />
+                    <div className="h-3 bg-muted/30 rounded animate-pulse w-3/4" />
                     <div className="h-3 bg-muted/30 rounded animate-pulse w-1/2" />
                   </div>
                 </div>
@@ -745,7 +756,7 @@ export default function HomePage() {
                   href={`/shows/${show.id}`}
                   className="card-base overflow-hidden group"
                 >
-                  <div className="aspect-[4/3] relative bg-muted overflow-hidden">
+                  <div className="aspect-[3/2] relative bg-muted overflow-hidden">
                     {show.artist.imageUrl ? (
                       <img
                         src={show.artist.imageUrl}
@@ -754,7 +765,7 @@ export default function HomePage() {
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                        <span className="text-2xl font-headline font-bold text-muted-foreground/50">
+                        <span className="text-lg font-headline font-bold text-muted-foreground/50">
                           {show.artist.name.charAt(0)}
                         </span>
                       </div>
@@ -762,30 +773,27 @@ export default function HomePage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-40" />
                     
                     {/* Days until show badge */}
-                    <div className="absolute top-3 left-3 bg-accent text-accent-foreground px-3 py-1 rounded-full text-xs font-bold">
-                      {Math.ceil((new Date(show.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                    <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 rounded-full text-xs font-bold">
+                      {Math.ceil((new Date(show.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}d
                     </div>
                   </div>
                   
-                  <div className="p-4">
-                    <h3 className="text-lg font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
+                  <div className="p-3">
+                    <h3 className="text-sm font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
                       {show.artist.name}
                     </h3>
                     {show.title && (
-                      <h4 className="text-sm font-headline font-medium mb-3 text-muted-foreground line-clamp-1">
+                      <h4 className="text-xs font-headline font-medium mb-2 text-muted-foreground line-clamp-1">
                         {show.title}
                       </h4>
                     )}
-                    <div className="space-y-1 text-xs text-muted-foreground font-body mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium line-clamp-1">{show.venue.name}</span>
-                      </div>
+                    <div className="space-y-1 text-xs text-muted-foreground font-body mb-2">
+                      <div className="font-medium line-clamp-1">{show.venue.name}</div>
                       <div className="text-muted-foreground/70 font-medium line-clamp-1">
                         {show.venue.city}
                       </div>
                       <div className="text-accent font-semibold">
                         {new Date(show.date).toLocaleDateString('en-US', {
-                          weekday: 'short',
                           month: 'short',
                           day: 'numeric'
                         })}
@@ -793,7 +801,7 @@ export default function HomePage() {
                     </div>
                     <div className="pt-2 border-t border-border/30">
                       <span className="text-xs font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
-                        Vote Now →
+                        Vote →
                       </span>
                     </div>
                   </div>

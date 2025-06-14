@@ -3,35 +3,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
 import { GET_SHOWS } from '@/lib/graphql/queries'
+import { Calendar, Activity, Music, Users, Vote, Clock } from 'lucide-react'
+import { ShowCardGrid } from '@/components/shows/ShowCardGrid'
 import Link from 'next/link'
-import { Calendar, MapPin, Users } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
-
-interface Show {
-  id: string
-  date: string
-  title: string
-  status: string
-  ticketmasterUrl?: string
-  viewCount: number
-  artist: {
-    id: string
-    name: string
-    slug: string
-    imageUrl?: string
-  }
-  venue: {
-    id: string
-    name: string
-    city: string
-    state?: string
-    country: string
-  }
-}
-
-interface ShowsResponse {
-  shows: Show[]
-}
 
 export default function ShowsPage() {
   const client = useGraphQLClient()
@@ -40,110 +14,182 @@ export default function ShowsPage() {
     queryKey: ['shows'],
     queryFn: async () => {
       return client.request(GET_SHOWS, {
-        limit: 20,
+        limit: 24,
         status: 'upcoming'
-      }) as Promise<ShowsResponse>
+      })
     }
   })
+
+  const rawData = (data as any)?.shows || []
+  
+  // Transform the data structure to match what ShowCardGrid expects
+  const shows = Array.isArray(rawData) ? rawData.map((show: any) => {
+    // If it's already in the correct format, return as is
+    if (show.show && show.totalVotes !== undefined) {
+      return show
+    }
+    
+    // Otherwise transform it
+    return {
+      show: {
+        id: show.id,
+        date: show.date,
+        title: show.title,
+        artist: {
+          id: show.artist?.id,
+          name: show.artist?.name || 'Unknown Artist',
+          imageUrl: show.artist?.imageUrl
+        },
+        venue: {
+          id: show.venue?.id,
+          name: show.venue?.name || 'Unknown Venue',
+          city: show.venue?.city || 'Unknown City'
+        }
+      },
+      totalVotes: show.totalVotes || 0,
+      uniqueVoters: show.uniqueVoters || 0,
+      trendingScore: show.viewCount || 0
+    }
+  }) : []
 
   return (
     <div className="min-h-screen bg-background">
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-6 sm:mb-8 lg:mb-10 gradient-text">Upcoming Shows</h1>
-        
-        {isLoading ? (
-          <div className="space-y-4 sm:space-y-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="card-base p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-xl animate-pulse flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="h-6 sm:h-8 bg-muted rounded-lg mb-2 animate-pulse" />
-                    <div className="space-y-1">
-                      <div className="h-4 bg-muted rounded-lg animate-pulse w-3/4" />
-                      <div className="h-4 bg-muted rounded-lg animate-pulse w-1/2" />
-                    </div>
-                  </div>
-                  <div className="h-6 w-20 bg-muted rounded-lg animate-pulse flex-shrink-0" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : !data?.shows?.length ? (
-          <div className="text-center py-20">
-            <p className="text-muted-foreground text-xl font-body">No upcoming shows found.</p>
-          </div>
-        ) : (
-          <div className="space-y-4 sm:space-y-6">
-            {data.shows.map((show) => (
-              <Link
-                key={show.id}
-                href={`/shows/${show.id}`}
-                className="card-base p-4 sm:p-6 group block"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                  {/* Artist Image */}
-                  <div className="flex-shrink-0">
-                    {show.artist.imageUrl ? (
-                      <img
-                        src={show.artist.imageUrl}
-                        alt={show.artist.name}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-muted flex items-center justify-center">
-                        <span className="text-lg sm:text-xl font-headline font-bold text-muted-foreground">
-                          {show.artist.name.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+        {/* Header */}
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+            <Calendar className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8" />
+            <span>Upcoming Shows</span>
+          </h1>
+          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body">
+            All upcoming concerts available for setlist voting
+          </p>
+        </div>
 
-                  {/* Show Info */}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl sm:text-2xl font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
-                      {show.artist.name}
-                    </h2>
-                    
-                    <div className="space-y-1 text-sm sm:text-base text-muted-foreground font-body">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-accent flex-shrink-0" />
-                        <span className="font-medium line-clamp-1">{show.venue.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-accent flex-shrink-0" />
-                        <span className="font-medium">
-                          {new Date(show.date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                      {show.venue.city && (
-                        <div className="text-muted-foreground/70 font-medium text-sm pl-6">
-                          {show.venue.city}, {show.venue.state || show.venue.country}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action & Stats */}
-                  <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 text-sm text-muted-foreground font-body">
-                    <span className="hidden sm:block">
-                      {show.viewCount || 0} views
-                    </span>
-                    <span className="font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300 whitespace-nowrap">
-                      Vote Now →
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
+          {/* Main Content - Shows Grid */}
+          <div className="flex-1 min-w-0">
+            <ShowCardGrid shows={shows} isLoading={isLoading} />
           </div>
-        )}
+
+          {/* Sidebar - Quick Filters & Stats */}
+          <div className="w-full lg:w-80 space-y-4 sm:space-y-6 order-first lg:order-last">
+            <ShowsSidebar />
+          </div>
+        </div>
       </div>
     </div>
+  )
+}
+
+// Shows Sidebar Component
+function ShowsSidebar() {
+  const stats = {
+    totalShows: 156,
+    thisWeek: 24,
+    thisMonth: 89,
+    votableShows: 134
+  }
+
+  const filters = [
+    { name: 'This Week', count: 24, href: '/shows?filter=this-week' },
+    { name: 'This Month', count: 89, href: '/shows?filter=this-month' },
+    { name: 'By Genre', count: 12, href: '/shows?filter=genre' },
+    { name: 'By Location', count: 45, href: '/shows?filter=location' }
+  ]
+
+  return (
+    <>
+      {/* Quick Stats */}
+      <div className="card-base p-4 sm:p-6">
+        <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
+          <Activity className="w-5 h-5 text-primary" />
+          Show Stats
+        </h3>
+        
+        <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4">
+          <div className="text-center">
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.totalShows}</div>
+            <div className="text-xs text-muted-foreground">Total Shows</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.thisWeek}</div>
+            <div className="text-xs text-muted-foreground">This Week</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.thisMonth}</div>
+            <div className="text-xs text-muted-foreground">This Month</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">{stats.votableShows}</div>
+            <div className="text-xs text-muted-foreground">Votable</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Filters */}
+      <div className="card-base p-4 sm:p-6">
+        <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
+          <Clock className="w-5 h-5 text-primary" />
+          Quick Filters
+        </h3>
+        
+        <div className="space-y-2 sm:space-y-3">
+          {filters.map((filter) => (
+            <Link
+              key={filter.name}
+              href={filter.href}
+              className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors group"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
+                  {filter.name}
+                </div>
+              </div>
+              <div className="text-xs bg-muted/40 text-muted-foreground px-2 py-1 rounded-full">
+                {filter.count}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="card-base p-4 sm:p-6">
+        <h3 className="text-lg font-headline font-bold mb-4 text-foreground">Quick Actions</h3>
+        
+        <div className="space-y-2 sm:space-y-3">
+          <Link 
+            href="/trending" 
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+          >
+            <Vote className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
+                View Trending
+              </div>
+              <div className="text-xs text-muted-foreground hidden sm:block">
+                Hottest shows right now
+              </div>
+            </div>
+          </Link>
+          
+          <Link 
+            href="/artists" 
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+          >
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
+                Browse Artists
+              </div>
+              <div className="text-xs text-muted-foreground hidden sm:block">
+                Find your favorite artists
+              </div>
+            </div>
+          </Link>
+        </div>
+      </div>
+    </>
   )
 }

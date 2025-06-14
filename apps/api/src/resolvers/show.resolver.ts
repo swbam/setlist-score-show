@@ -110,39 +110,80 @@ export const showResolvers: IResolvers = {
       return shows
     },
 
-    trendingShows: async (_parent, { limit = 10, timeframe = 'WEEK' }, { prisma }) => {
-      // Fetch directly from trending_shows_view materialized view with artist limit
+    trendingShows: async (_parent, { limit = 24, timeframe = 'WEEK' }, { prisma }) => {
+      // Enhanced trending algorithm that includes shows without votes but with other trending indicators
       const trendingData = await prisma.$queryRaw`
-        WITH ranked_shows AS (
+        WITH enhanced_trending AS (
           SELECT 
-            tsv.id,
-            tsv.total_votes,
-            tsv.unique_voters,
-            tsv.trending_score,
-            tsv.date,
-            tsv.title,
-            tsv.status,
-            tsv.view_count,
-            tsv.artist_id,
-            tsv.venue_id,
+            s.id,
+            s.date,
+            s.title,
+            s.status,
+            s.view_count,
+            s.artist_id,
+            s.venue_id,
+            s.created_at,
             a.name as artist_name,
             a.slug as artist_slug,
             a.image_url as artist_image_url,
+            a.popularity as artist_popularity,
+            a.followers as artist_followers,
             v.name as venue_name,
             v.city as venue_city,
             v.state as venue_state,
             v.country as venue_country,
-            ROW_NUMBER() OVER (PARTITION BY tsv.artist_id ORDER BY tsv.trending_score DESC) as rn
-          FROM trending_shows_view tsv
-          JOIN artists a ON tsv.artist_id = a.id
-          JOIN venues v ON tsv.venue_id = v.id
-          WHERE tsv.status IN ('upcoming', 'ongoing')
-            AND tsv.date >= CURRENT_DATE
+            COALESCE(vote_stats.total_votes, 0) as total_votes,
+            COALESCE(vote_stats.unique_voters, 0) as unique_voters,
+            EXTRACT(DAY FROM (s.date::timestamp - CURRENT_DATE::timestamp)) as days_until_show,
+            -- Enhanced trending score calculation
+            (
+              -- Vote activity (40% weight)
+              (COALESCE(vote_stats.total_votes, 0) * 2.0 + COALESCE(vote_stats.unique_voters, 0) * 3.0) * 0.4 +
+              -- View activity (20% weight) 
+              (s.view_count * 0.5) * 0.2 +
+              -- Artist popularity (25% weight)
+              (a.popularity * 0.1 + a.followers * 0.01) * 0.25 +
+              -- Recency boost (15% weight) - newer shows get a boost
+              (CASE 
+                WHEN s.created_at > CURRENT_DATE - INTERVAL '7 days' THEN 100
+                WHEN s.created_at > CURRENT_DATE - INTERVAL '30 days' THEN 50
+                ELSE 10
+              END) * 0.15
+            ) * 
+            -- Time urgency multiplier
+            (CASE 
+              WHEN EXTRACT(DAY FROM (s.date::timestamp - CURRENT_DATE::timestamp)) <= 7 THEN 2.0
+              WHEN EXTRACT(DAY FROM (s.date::timestamp - CURRENT_DATE::timestamp)) <= 30 THEN 1.5
+              ELSE 1.0
+            END) as enhanced_trending_score
+          FROM shows s
+          JOIN artists a ON s.artist_id = a.id
+          JOIN venues v ON s.venue_id = v.id
+          LEFT JOIN (
+            SELECT 
+              s.id as show_id,
+              COUNT(DISTINCT v.id) as total_votes,
+              COUNT(DISTINCT v.user_id) as unique_voters
+            FROM shows s
+            LEFT JOIN setlists sl ON sl.show_id = s.id
+            LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
+            LEFT JOIN votes v ON v.setlist_song_id = ss.id
+            GROUP BY s.id
+          ) vote_stats ON vote_stats.show_id = s.id
+          WHERE s.status IN ('upcoming', 'ongoing')
+            AND s.date >= CURRENT_DATE
+            AND s.date <= CURRENT_DATE + INTERVAL '180 days'
+        ),
+        ranked_shows AS (
+          SELECT 
+            *,
+            ROW_NUMBER() OVER (PARTITION BY artist_id ORDER BY enhanced_trending_score DESC) as rn
+          FROM enhanced_trending
         )
         SELECT *
         FROM ranked_shows
-        WHERE rn <= 2  -- Limit to max 2 shows per artist
-        ORDER BY trending_score DESC
+        WHERE rn = 1  -- Only 1 show per artist to ensure diversity
+        ORDER BY enhanced_trending_score DESC
         LIMIT ${limit}
       `
 
@@ -153,10 +194,10 @@ export const showResolvers: IResolvers = {
         title: row.title,
         status: row.status,
         ticketmasterUrl: null, // Not available in the view
-        viewCount: row.view_count,
+        viewCount: parseInt(row.view_count || '0'),
         totalVotes: parseInt(row.total_votes || '0'),
         uniqueVoters: parseInt(row.unique_voters || '0'),
-        trendingScore: parseFloat(row.trending_score || '0'),
+        trendingScore: parseFloat(row.enhanced_trending_score || '0'),
         artist: {
           id: row.artist_id,
           name: row.artist_name,
