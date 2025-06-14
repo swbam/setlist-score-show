@@ -541,10 +541,9 @@ export default function HomePage() {
       <section className="relative py-24 md:py-32 px-4 bg-gradient-to-b from-background to-muted/30 overflow-hidden">
         {/* Background Image */}
         <div className="absolute inset-0 z-0">
-          <img
-            src="/bg.jpg"
-            alt="Concert background"
-            className="w-full h-full object-cover"
+          <div 
+            className="w-full h-full bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: 'url(/bg.jpg)' }}
           />
           {/* Dark gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80"></div>
@@ -675,16 +674,16 @@ export default function HomePage() {
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center items-center">
             <Link
               href="/shows"
-              className="btn-primary text-base md:text-lg px-8 md:px-10 py-3 md:py-4 shadow-lg hover:shadow-xl transition-shadow"
+              className="btn-primary text-base md:text-lg px-8 md:px-10 shadow-lg hover:shadow-xl transition-shadow inline-flex items-center justify-center"
             >
               Discover Shows
             </Link>
             <Link
               href="/artists"
-              className="btn-secondary text-base md:text-lg px-8 md:px-10 py-3 md:py-4 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 shadow-lg hover:shadow-xl transition-all"
+              className="btn-secondary text-base md:text-lg px-8 md:px-10 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
             >
               Find Artists
             </Link>
@@ -737,14 +736,14 @@ export default function HomePage() {
             </Link>
           </div>
           
-          <div className="grid gap-3 md:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {isLoadingUpcoming ? (
-              [...Array(12)].map((_, i) => (
-                <div key={i} className="card-base h-64 animate-pulse">
-                  <div className="aspect-[3/2] bg-muted/50 animate-pulse" />
-                  <div className="p-3 space-y-2">
-                    <div className="h-4 bg-muted/50 rounded animate-pulse" />
-                    <div className="h-3 bg-muted/30 rounded animate-pulse w-3/4" />
+              [...Array(8)].map((_, i) => (
+                <div key={i} className="card-base h-80 animate-pulse">
+                  <div className="aspect-[4/3] bg-muted/50 animate-pulse rounded-t-lg" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-5 bg-muted/50 rounded animate-pulse" />
+                    <div className="h-4 bg-muted/30 rounded animate-pulse w-3/4" />
                     <div className="h-3 bg-muted/30 rounded animate-pulse w-1/2" />
                   </div>
                 </div>
@@ -754,9 +753,9 @@ export default function HomePage() {
                 <Link
                   key={show.id}
                   href={`/shows/${show.id}`}
-                  className="card-base overflow-hidden group"
+                  className="card-base overflow-hidden group hover:shadow-lg transition-all duration-300"
                 >
-                  <div className="aspect-[3/2] relative bg-muted overflow-hidden">
+                  <div className="aspect-[4/3] relative bg-muted overflow-hidden">
                     {show.artist.imageUrl ? (
                       <img
                         src={show.artist.imageUrl}
@@ -765,7 +764,7 @@ export default function HomePage() {
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                        <span className="text-lg font-headline font-bold text-muted-foreground/50">
+                        <span className="text-2xl font-headline font-bold text-muted-foreground/50">
                           {show.artist.name.charAt(0)}
                         </span>
                       </div>
@@ -773,35 +772,43 @@ export default function HomePage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-40" />
                     
                     {/* Days until show badge */}
-                    <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 rounded-full text-xs font-bold">
+                    <div className="absolute top-3 right-3 bg-accent text-accent-foreground px-3 py-1 rounded-full text-xs font-bold">
                       {Math.ceil((new Date(show.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}d
+                    </div>
+                    
+                    {/* Genre badge if available */}
+                    <div className="absolute top-3 left-3 bg-primary/80 text-primary-foreground px-2 py-1 rounded text-xs font-medium">
+                      Live
                     </div>
                   </div>
                   
-                  <div className="p-3">
-                    <h3 className="text-sm font-headline font-bold mb-1 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
+                  <div className="p-4">
+                    <h3 className="text-lg font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
                       {show.artist.name}
                     </h3>
                     {show.title && (
-                      <h4 className="text-xs font-headline font-medium mb-2 text-muted-foreground line-clamp-1">
+                      <h4 className="text-sm font-headline font-medium mb-3 text-muted-foreground line-clamp-1">
                         {show.title}
                       </h4>
                     )}
-                    <div className="space-y-1 text-xs text-muted-foreground font-body mb-2">
-                      <div className="font-medium line-clamp-1">{show.venue.name}</div>
+                    <div className="space-y-2 text-sm text-muted-foreground font-body mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium line-clamp-1">{show.venue.name}</span>
+                      </div>
                       <div className="text-muted-foreground/70 font-medium line-clamp-1">
                         {show.venue.city}
                       </div>
                       <div className="text-accent font-semibold">
                         {new Date(show.date).toLocaleDateString('en-US', {
+                          weekday: 'short',
                           month: 'short',
                           day: 'numeric'
                         })}
                       </div>
                     </div>
-                    <div className="pt-2 border-t border-border/30">
-                      <span className="text-xs font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
-                        Vote →
+                    <div className="pt-3 border-t border-border/30">
+                      <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
+                        Vote Now →
                       </span>
                     </div>
                   </div>
