@@ -8,6 +8,7 @@ export interface Show {
   status: string
   ticketmasterUrl?: string
   viewCount: number
+  trendingScore?: number
   artist: {
     id: string
     name: string
@@ -46,8 +47,15 @@ export function ShowCard({ show, variant = 'grid', showStats = false }: ShowCard
     return (
       <Link
         href={`/shows/${show.id}`}
-        className="card-base p-8 block group"
+        className="card-base p-8 block group relative"
       >
+        {/* Trending Flame */}
+        {show.trendingScore && show.trendingScore > 80 && (
+          <div className="absolute top-4 right-4 flex items-center gap-1 text-red-500 animate-pulse">
+            <span className="text-base font-bold">🔥</span>
+            <span className="text-xs font-semibold">Trending</span>
+          </div>
+        )}
         <div className="flex items-start gap-8">
           {/* Artist Image */}
           {show.artist.imageUrl && (
@@ -106,8 +114,14 @@ export function ShowCard({ show, variant = 'grid', showStats = false }: ShowCard
   return (
     <Link
       href={`/shows/${show.id}`}
-      className="card-base p-8 group block"
+      className="card-base p-8 group block relative"
     >
+      {show.trendingScore && show.trendingScore > 80 && (
+        <div className="absolute top-4 right-4 flex items-center gap-1 text-red-500 animate-pulse">
+          <span className="text-base font-bold">🔥</span>
+          <span className="text-xs font-semibold">Trending</span>
+        </div>
+      )}
       <div className="flex flex-col h-full">
         <h2 className="text-2xl font-headline font-bold mb-4 text-foreground group-hover:gradient-text transition-all duration-300">
           {show.artist.name}

@@ -113,23 +113,45 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryKey: ['artistSongs', show?.artist?.id],
     queryFn: async () => {
       if (!show?.artist?.id) return []
+      const limit = 1000
+      let offset = 0
+      let allSongs: Song[] = []
+
+      // Helper to merge songs uniquely by id
+      const mergeUnique = (base: Song[], incoming: Song[]) => {
+        const existingIds = new Set(base.map((s) => s.id))
+        return [...base, ...incoming.filter((s) => !existingIds.has(s.id))]
+      }
+
       try {
-        const data = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit: 1000 })
-        const songs = (data as any).songs?.edges?.map((edge: any) => edge.node) || []
-        return songs
+        // Paginate through GraphQL results until fewer than limit returned
+        while (true) {
+          const gData = await client.request(GET_ARTIST_SONGS, { artistId: show.artist.id, limit, offset })
+          const batch: Song[] = (gData as any)?.songs?.edges?.map((edge: any) => edge.node) || []
+          allSongs = mergeUnique(allSongs, batch)
+          if (batch.length < limit) break
+          offset += limit
+        }
       } catch (error) {
-        console.error("Error fetching artist songs:", error)
-        // Fallback to direct Supabase query
+        console.error("GraphQL song catalog fetch failed:", error)
+      }
+
+      // Fallback / merge with Supabase data
+      try {
         const { data: songsFromDb, error: dbError } = await supabase
           .from('songs')
           .select('id, title, album')
           .eq('artist_id', show.artist.id)
-        if (dbError) {
-          console.error("Fallback error:", dbError)
-          return []
+        if (dbError) throw dbError
+        if (songsFromDb) {
+          allSongs = mergeUnique(allSongs, songsFromDb as Song[])
         }
-        return songsFromDb as Song[]
+      } catch (err) {
+        console.error('Supabase song fallback failed:', err)
       }
+
+      // Sort alphabetically
+      return allSongs.sort((a, b) => a.title.localeCompare(b.title))
     },
     enabled: !!show?.artist?.id,
   })
@@ -314,21 +336,21 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Show header with green gradient - mobile-first design */}
-      <div className="bg-gradient-to-b from-background via-muted/30 to-[#122727] py-8 sm:py-12 lg:py-16 px-4">
+      {/* Show header */}
+      <div className="bg-gradient-to-b from-black to-neutral-800 py-6 sm:py-10 lg:py-12 px-4">
         <div className="w-full max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 lg:gap-8">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 lg:gap-8">
             {/* Artist Image - Left aligned */}
             <div className="flex-shrink-0">
               {show.artist.image_url ? (
                 <img
                   src={show.artist.image_url}
                   alt={show.artist.name}
-                  className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full object-cover border-4 border-border"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-border shadow-lg"
                 />
               ) : (
-                <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full bg-muted flex items-center justify-center border-4 border-border">
-                  <span className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold text-muted-foreground">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center border-2 border-border shadow-lg">
+                  <span className="text-xl sm:text-2xl font-headline font-bold text-muted-foreground">
                     {show.artist.name.charAt(0)}
                   </span>
                 </div>
@@ -337,23 +359,23 @@ export default function ShowPage({ params }: { params: { id: string } }) {
 
             {/* Event Info - Right side */}
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-headline font-bold mb-2 sm:mb-4 text-foreground">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold mb-1 sm:mb-2 text-white">
                 {show.artist.name}
               </h1>
               
               {show.title && (
-                <p className="text-lg sm:text-xl lg:text-2xl text-muted-foreground font-medium mb-4 sm:mb-6">
+                <p className="text-base sm:text-lg lg:text-xl text-gray-300 font-medium mb-3 sm:mb-4">
                   {show.title}
                 </p>
               )}
               
-              <div className="space-y-2 sm:space-y-3 text-base sm:text-lg text-muted-foreground font-body">
+              <div className="space-y-1 sm:space-y-2 text-sm sm:text-base text-gray-400 font-body">
                 <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0" />
+                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
                   <span className="font-medium">{show.venue.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-accent flex-shrink-0" />
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
                   <span className="font-medium">
                     {new Date(show.date).toLocaleDateString('en-US', {
                       weekday: 'long',
@@ -363,21 +385,21 @@ export default function ShowPage({ params }: { params: { id: string } }) {
                     })}
                   </span>
                 </div>
-                <div className="text-muted-foreground/70 pl-8 sm:pl-9">
+                <div className="text-gray-500 pl-7 sm:pl-8">
                   {show.venue.city}, {show.venue.state || show.venue.country}
                 </div>
               </div>
 
               {/* Action Button */}
               {show.ticketmaster_url && (
-                <div className="mt-6 sm:mt-8">
+                <div className="mt-5 sm:mt-6">
                   <Link
                     href={show.ticketmaster_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-3 bg-foreground text-background px-6 py-3 rounded-lg text-lg font-medium hover:bg-foreground/90 transition-colors"
+                    className="inline-flex items-center gap-2 bg-white text-black px-5 py-2 rounded-md text-sm font-semibold hover:bg-gray-200 transition-colors shadow"
                   >
-                    <ExternalLink className="w-5 h-5" />
+                    <ExternalLink className="w-4 h-4" />
                     <span>Get Tickets</span>
                   </Link>
                 </div>

@@ -623,9 +623,7 @@ export default function HomePage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {artist.isFromApi ? 'From Ticketmaster API' : `${artist.upcomingShowsCount || 0} upcoming shows`}
-                          </div>
+                        
                         </div>
                       </button>
                     ))}

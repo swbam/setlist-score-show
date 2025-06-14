@@ -39,7 +39,6 @@ export default function MyArtistsPage() {
 
   const handleImportFromSpotify = useCallback(async () => {
     if (!user) return
-    
     setIsImporting(true)
     try {
       // Check if user has Spotify connected
@@ -64,26 +63,14 @@ export default function MyArtistsPage() {
         return
       }
       
-      // Import artists
+      // Import artists via Supabase adapter
       toast.info('Importing your Spotify artists...')
-      const importResult = await client.request(`
-        mutation ImportSpotifyArtists {
-          importSpotifyArtists {
-            artist {
-              id
-              name
-              imageUrl
-            }
-            followedAt
-          }
-        }
-      `)
-      
-      const imported = (importResult as any)?.importSpotifyArtists || []
+      const adapter = new (await import('@/lib/supabase-adapter')).SupabaseAdapter()
+      const { importSpotifyArtists: imported } = await adapter.importSpotifyArtists()
       
       if (imported.length > 0) {
         toast.success(`Imported ${imported.length} artists from Spotify!`)
-        refetch() // Refresh the list
+        refetch()
       } else {
         toast.info('No new artists to import')
       }
@@ -93,7 +80,7 @@ export default function MyArtistsPage() {
     } finally {
       setIsImporting(false)
     }
-  }, [user, client, refetch])
+  }, [user, refetch])
 
   // Check for action parameter on page load (after Spotify OAuth redirect)
   useEffect(() => {

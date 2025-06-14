@@ -1,29 +1,42 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
 import { GET_ARTISTS } from '@/lib/graphql/queries'
 import { Search } from 'lucide-react'
 import Link from 'next/link'
 import { FeaturedArtists } from '@/components/artists/FeaturedArtists'
+import { InfiniteList } from '@/components/ui/InfiniteList'
 
 export default function ArtistsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const client = useGraphQLClient()
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery<any, Error, any>({
     queryKey: ['artists', searchQuery],
-    queryFn: async () => {
-      return client.request(GET_ARTISTS, {
+    queryFn: async ({ pageParam = 0 }) => {
+      const res: any = await client.request(GET_ARTISTS, {
         limit: 50,
-        search: searchQuery || undefined
+        offset: pageParam,
+        search: searchQuery || undefined,
       })
+      const artistsArr = res?.artists ?? []
+      return { artists: artistsArr, nextOffset: Number(pageParam) + 50 }
     },
-    enabled: true,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage: any) => (lastPage.artists.length === 50 ? lastPage.nextOffset : undefined),
   })
 
-  const rawArtists = (data as any)?.artists || []
+  const rawArtists = useMemo(() => {
+    return data?.pages.flatMap((p) => p.artists) ?? []
+  }, [data])
   
   // Transform artists data to match FeaturedArtists component interface
   const artists = rawArtists.map((artist: any) => ({
@@ -66,8 +79,13 @@ export default function ArtistsPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4 sm:space-y-6">
-            {artists.map((artist: any) => (
+          <InfiniteList
+            items={artists}
+            isLoading={isLoading || isFetchingNextPage}
+            hasMore={hasNextPage}
+            loadMore={() => fetchNextPage()}
+            itemHeight={96}
+            renderItem={(artist: any) => (
               <Link
                 key={artist.id}
                 href={`/artists/${artist.slug}`}
@@ -115,8 +133,8 @@ export default function ArtistsPage() {
                   </div>
                 </div>
               </Link>
-            ))}
-          </div>
+            )}
+          />
         )}
       </div>
     </div>

@@ -77,10 +77,29 @@ export function VotingSection({
   const votedUsersCount = 127; // This would come from props or API
   const votingCloseTime = "2d 14h"; // This would be calculated from show date
 
-  // Filter out songs that are already in the setlist
-  const availableSongs = artistSongs.filter(catalogSong => 
-    !songs.some(setlistSong => setlistSong.song.id === catalogSong.id)
-  ).sort((a, b) => a.title.localeCompare(b.title));
+  // Ensure we always have a usable array even if the prop is temporarily undefined
+  const catalogSongsSafed: CatalogSong[] = Array.isArray(artistSongs) ? artistSongs : []
+
+  const availableSongs = catalogSongsSafed
+    .filter((catalogSong) => !songs.some((setlistSong) => setlistSong.song.id === catalogSong.id))
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  // ---- Played-vs-Voted stats (completed shows) ----
+  const officialSetlist = (showData?.status === 'completed')
+    ? showData?.setlists?.find((s: any) => s.is_official || s.name?.toLowerCase().includes('actual'))
+    : null
+
+  const playedSongs: { id: string; title: string }[] = officialSetlist?.setlistSongs?.map((ss: any) => ({
+    id: ss.song?.id || ss.song_id || ss.songId || '',
+    title: ss.song?.title || ss.song_name || 'Unknown'
+  })) || []
+
+  const playedIds = new Set(playedSongs.map((s) => s.id))
+  const votedPlayed = songs.filter((s) => playedIds.has(s.song.id))
+  const accuracyPct = playedSongs.length ? Math.round((votedPlayed.length / playedSongs.length) * 100) : 0
+
+  const topVotedPlayed = votedPlayed.sort((a, b) => b.votes - a.votes)[0]
+  const surpriseCount = playedSongs.filter((p) => !songs.some((s) => s.song.id === p.id)).length
 
   if (isLoading) {
     return (
@@ -310,6 +329,51 @@ export function VotingSection({
             </div>
           </div>
         </div>
+
+        {/* Show Insights - only for completed shows */}
+        {showData?.status === 'completed' && (
+          <div className="card-base p-4 sm:p-6">
+            <h3 className="text-lg sm:text-xl font-headline font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
+              🎤 Show Insights
+            </h3>
+            <div className="space-y-4">
+              {/* Accuracy */}
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary font-headline font-bold text-base">
+                  {accuracyPct}%
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Fan Accuracy</p>
+                  <p className="text-xs text-muted-foreground font-body">of songs fans voted for were actually played</p>
+                </div>
+              </div>
+
+              {/* Top predicted */}
+              {topVotedPlayed && (
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-accent/20 text-accent font-headline font-bold text-base">
+                    ★
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Most Predicted Song</p>
+                    <p className="text-xs text-muted-foreground font-body truncate">{topVotedPlayed.song.name} ({topVotedPlayed.votes} votes)</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Surprises */}
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-destructive/20 text-destructive font-headline font-bold text-base">
+                  {surpriseCount}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Surprise Tracks</p>
+                  <p className="text-xs text-muted-foreground font-body">played that fans didn't vote on</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* How It Works Card - Hidden on mobile to save space */}
         <div className="card-base p-4 sm:p-6 hidden lg:block">
