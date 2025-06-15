@@ -1,71 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Search, TrendingUp, Calendar, Users, ArrowRight, Music, Play } from 'lucide-react'
+import { TrendingUp, Calendar, Users, ArrowRight, Music, Play } from 'lucide-react'
 import { ShowCard } from '@/components/shows/ShowCard'
+import { UnifiedSearch } from '@/components/search/UnifiedSearch'
 import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
 
-interface SearchResult {
-  artists: any[]
-  venues: any[]
-  shows: any[]
-}
-
 export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [showSearchResults, setShowSearchResults] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
-  const [isLoadingSearch, setIsLoadingSearch] = useState(false)
-  const [importingArtist, setImportingArtist] = useState(false)
-  const searchContainerRef = useRef<HTMLDivElement>(null)
-
-  // Debounce search query
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(searchQuery)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
-
-  // Handle click outside to close search results
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowSearchResults(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Search functionality
-  useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setSearchResults(null)
-      return
-    }
-
-    const searchData = async () => {
-      setIsLoadingSearch(true)
-      try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`)
-        if (response.ok) {
-          const data = await response.json()
-          setSearchResults(data)
-        }
-      } catch (error) {
-        console.error('Search error:', error)
-      } finally {
-        setIsLoadingSearch(false)
-      }
-    }
-
-    searchData()
-  }, [debouncedQuery])
 
   // Fetch trending shows
   const { data: trendingShows, isLoading: loadingTrending } = useQuery({
@@ -149,33 +92,7 @@ export default function HomePage() {
     staleTime: 10 * 60 * 1000,
   })
 
-  const handleArtistImport = async (artist: any) => {
-    if (importingArtist) return
-    
-    setImportingArtist(true)
-    try {
-      const response = await fetch('/api/import-artist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ticketmasterId: artist.ticketmasterId,
-          name: artist.name,
-          imageUrl: artist.imageUrl
-        })
-      })
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.artist?.slug) {
-          window.location.href = `/artists/${result.artist.slug}`
-        }
-      }
-    } catch (error) {
-      console.error('Import error:', error)
-    } finally {
-      setImportingArtist(false)
-    }
-  }
 
   const genres = [
     { name: 'Rock/Alternative', id: 'rock' },
@@ -220,98 +137,11 @@ export default function HomePage() {
           </div>
 
           {/* Search Bar */}
-          <div ref={searchContainerRef} className="relative max-w-xl mx-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/60" />
-              <input
-                type="text"
-                placeholder="Search for artists, venues, or cities..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setShowSearchResults(true)
-                }}
-                onFocus={() => setShowSearchResults(true)}
-                className="w-full pl-10 pr-4 py-3 text-base bg-black/40 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-              />
-            </div>
-
-            {/* Search Results Dropdown */}
-            {showSearchResults && debouncedQuery && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
-                {isLoadingSearch ? (
-                  <div className="p-4 text-center text-white/60">Searching...</div>
-                ) : searchResults ? (
-                  <div className="p-2">
-                    {/* Artists */}
-                    {searchResults.artists?.length > 0 && (
-                      <div className="mb-4">
-                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Artists</h3>
-                        {searchResults.artists.slice(0, 3).map((artist: any) => (
-                          <button
-                            key={artist.id || artist.ticketmasterId}
-                            onClick={() => handleArtistImport(artist)}
-                            disabled={importingArtist}
-                            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors text-left"
-                          >
-                            {artist.imageUrl && (
-                              <img src={artist.imageUrl} alt={artist.name} className="w-10 h-10 rounded-full object-cover" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-white truncate">{artist.name}</div>
-                              <div className="text-sm text-white/60">
-                                {artist.isFromApi ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                                    New
-                                  </span>
-                                ) : (
-                                  'Artist'
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Shows */}
-                    {searchResults.shows?.length > 0 && (
-                      <div className="mb-4">
-                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Shows</h3>
-                        {searchResults.shows.slice(0, 3).map((show: any) => (
-                          <Link
-                            key={show.id}
-                            href={`/shows/${show.id}`}
-                            className="block p-3 rounded-lg hover:bg-white/10 transition-colors"
-                            onClick={() => setShowSearchResults(false)}
-                          >
-                            <div className="font-medium text-white truncate">{show.artist?.name}</div>
-                            <div className="text-sm text-white/60 truncate">
-                              {show.venue?.name}, {show.venue?.city}
-                            </div>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Venues */}
-                    {searchResults.venues?.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Venues</h3>
-                        {searchResults.venues.slice(0, 3).map((venue: any) => (
-                          <div key={venue.id} className="p-3 rounded-lg hover:bg-white/10 transition-colors">
-                            <div className="font-medium text-white truncate">{venue.name}</div>
-                            <div className="text-sm text-white/60 truncate">{venue.city}, {venue.state}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-4 text-center text-white/60">No results found</div>
-                )}
-              </div>
-            )}
+          <div className="max-w-xl mx-auto">
+            <UnifiedSearch 
+              placeholder="Search artists, venues, cities, or enter zip code..."
+              className="[&_input]:bg-black/40 [&_input]:backdrop-blur-sm [&_input]:border-white/20 [&_input]:text-white [&_input]:placeholder-white/60 [&_input]:focus:ring-primary/50 [&_input]:focus:border-primary/50 [&_svg]:text-white/60"
+            />
           </div>
         </div>
       </div>

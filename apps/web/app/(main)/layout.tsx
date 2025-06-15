@@ -16,10 +16,8 @@ export default function MainLayout({
         {children}
       </main>
 
-      {/* Footer - Hidden on mobile */}
-      <div className="hidden md:block">
-        <Footer />
-      </div>
+      {/* Footer */}
+      <Footer />
     </div>
   )
 }
