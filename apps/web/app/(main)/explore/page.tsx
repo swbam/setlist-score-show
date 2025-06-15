@@ -200,25 +200,25 @@ export default function ExplorePage() {
     <Link
       key={artist.id}
       href={`/artists/${artist.slug}`}
-      className="group block p-4 rounded-xl bg-card hover:bg-card/80 transition-all duration-200 border border-border/50 hover:border-border hover:shadow-lg"
+      className="group block p-3 rounded-lg bg-card hover:bg-card/80 transition-all duration-200 border border-border/50 hover:border-border hover:shadow-lg"
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {artist.imageUrl ? (
           <img
             src={artist.imageUrl}
             alt={artist.name}
-            className="w-12 h-12 rounded-full object-cover border border-border/50"
+            className="w-10 h-10 rounded-full object-cover border border-border/50"
           />
         ) : (
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-            <Users className="w-6 h-6 text-muted-foreground" />
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+            <Users className="w-5 h-5 text-muted-foreground" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+          <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors truncate">
             {artist.name}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {artist.upcomingShowsCount || 0} upcoming shows
           </p>
         </div>
@@ -228,13 +228,13 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 lg:py-6">
         {/* Header */}
-        <div className="mb-6 sm:mb-8 lg:mb-10">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-headline font-bold mb-2 sm:mb-3 gradient-text">
             Explore Shows
           </h1>
-          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body mb-6">
+          <p className="text-muted-foreground text-sm sm:text-base font-body mb-4">
             Discover trending shows, top concerts, and your favorite artists
           </p>
 
@@ -243,7 +243,7 @@ export default function ExplorePage() {
             options={tabOptions}
             value={activeTab}
             onChange={(value: TabType) => setActiveTab(value)}
-            className="mb-6"
+            className="mb-4"
           />
         </div>
 
@@ -255,7 +255,7 @@ export default function ExplorePage() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {trendingShows.map((show: any) => (
                   <ShowCard
                     key={show.id}
@@ -289,27 +289,20 @@ export default function ExplorePage() {
 
         {activeTab === 'UPCOMING' && (
           <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {upcomingShows.map((show) => (
                 <ShowCard key={show.id} show={show} />
               ))}
             </div>
             
             {hasMoreUpcoming && (
-              <div className="flex justify-center mt-8">
+              <div className="flex justify-center mt-6">
                 <button
                   onClick={loadMoreUpcoming}
                   disabled={loadingUpcoming}
-                  className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="btn-primary px-6 py-2 text-sm disabled:opacity-50"
                 >
-                  {loadingUpcoming ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Load More'
-                  )}
+                  {loadingUpcoming ? 'Loading...' : 'Load More'}
                 </button>
               </div>
             )}
@@ -317,15 +310,24 @@ export default function ExplorePage() {
         )}
 
         {activeTab === 'ARTISTS' && (
-          <div className="h-[calc(100vh-300px)]">
-            <InfiniteList
-              items={artists}
-              isLoading={loadingArtists}
-              hasMore={hasMoreArtists}
-              loadMore={loadMoreArtists}
-              itemHeight={80}
-              renderItem={renderArtistCard}
-            />
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {artists.map((artist, index) => 
+                renderArtistCard(artist, index)
+              )}
+            </div>
+            
+            {hasMoreArtists && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={loadMoreArtists}
+                  disabled={loadingArtists}
+                  className="btn-primary px-6 py-2 text-sm disabled:opacity-50"
+                >
+                  {loadingArtists ? 'Loading...' : 'Load More'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

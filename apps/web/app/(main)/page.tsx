@@ -154,21 +154,21 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[url('/bg.jpg')] bg-cover bg-center opacity-20" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/60 to-black/80" />
         
-        <div className="relative w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-12 sm:py-16 lg:py-20">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-headline font-bold mb-4 text-white drop-shadow-lg">
+        <div className="relative w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-8 sm:py-10 lg:py-12">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-headline font-bold mb-3 text-white drop-shadow-lg">
               Vote on Your Favorite
               <span className="block gradient-text">Concert Setlists</span>
             </h1>
-            <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow">
+            <p className="text-base sm:text-lg text-white/90 mb-6 max-w-xl mx-auto drop-shadow">
               Help shape the perfect show by voting on songs you want to hear live
             </p>
           </div>
 
           {/* Search Bar */}
-          <div ref={searchContainerRef} className="relative max-w-2xl mx-auto">
+          <div ref={searchContainerRef} className="relative max-w-xl mx-auto">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/60" />
               <input
                 type="text"
                 placeholder="Search for artists, venues, or cities..."
@@ -178,7 +178,7 @@ export default function HomePage() {
                   setShowSearchResults(true)
                 }}
                 onFocus={() => setShowSearchResults(true)}
-                className="w-full pl-12 pr-4 py-4 text-lg bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                className="w-full pl-10 pr-4 py-3 text-base bg-black/40 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
               />
             </div>
 
@@ -263,33 +263,33 @@ export default function HomePage() {
       </div>
 
       {/* Main Content */}
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-8 sm:py-12 lg:py-16">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-6 sm:py-8 lg:py-10">
         
         {/* Trending Shows Section */}
-        <section className="mb-12 lg:mb-16">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-6 h-6 text-primary" />
-              <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
+        <section className="mb-8 lg:mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              <h2 className="text-xl sm:text-2xl font-headline font-bold gradient-text">
                 Trending This Week
               </h2>
             </div>
             <Link 
               href="/explore?tab=trending"
-              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
+              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium text-sm"
             >
-              View All <ArrowRight className="w-4 h-4" />
+              View All <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           
           {loadingTrending ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="animate-pulse bg-muted rounded-xl h-64" />
+                <div key={i} className="animate-pulse bg-muted rounded-xl h-48" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {trendingShows.slice(0, 8).map((show: any) => (
                 <ShowCard
                   key={show.id}
@@ -321,30 +321,30 @@ export default function HomePage() {
         </section>
 
         {/* Upcoming Shows Section */}
-        <section className="mb-12 lg:mb-16">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-primary" />
-              <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
+        <section className="mb-8 lg:mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              <h2 className="text-xl sm:text-2xl font-headline font-bold gradient-text">
                 Top Shows
               </h2>
             </div>
             <Link 
               href="/explore?tab=upcoming"
-              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
+              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium text-sm"
             >
-              View All <ArrowRight className="w-4 h-4" />
+              View All <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           
           {loadingUpcoming ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="animate-pulse bg-muted rounded-xl h-64" />
+                <div key={i} className="animate-pulse bg-muted rounded-xl h-48" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {upcomingShows?.slice(0, 8).map((show: any) => (
                 <ShowCard key={show.id} show={show} />
               ))}
@@ -354,16 +354,16 @@ export default function HomePage() {
 
         {/* Quick Actions */}
         <section>
-          <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text mb-6">
+          <h2 className="text-xl sm:text-2xl font-headline font-bold gradient-text mb-4">
             Explore More
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <Link
               href="/explore?tab=trending"
-              className="group p-6 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover:border-primary/40 transition-all duration-200 hover:shadow-lg"
+              className="group p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover:border-primary/40 transition-all duration-200 hover:shadow-lg"
             >
-              <TrendingUp className="w-8 h-8 text-primary mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
+              <TrendingUp className="w-6 h-6 text-primary mb-2" />
+              <h3 className="text-base font-semibold mb-1 group-hover:text-primary transition-colors">
                 Trending Shows
               </h3>
               <p className="text-muted-foreground text-sm">
@@ -373,10 +373,10 @@ export default function HomePage() {
 
             <Link
               href="/explore?tab=upcoming"
-              className="group p-6 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover:border-secondary/40 transition-all duration-200 hover:shadow-lg"
+              className="group p-4 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover:border-secondary/40 transition-all duration-200 hover:shadow-lg"
             >
-              <Calendar className="w-8 h-8 text-secondary mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-secondary transition-colors">
+              <Calendar className="w-6 h-6 text-secondary mb-2" />
+              <h3 className="text-base font-semibold mb-1 group-hover:text-secondary transition-colors">
                 Upcoming Concerts
               </h3>
               <p className="text-muted-foreground text-sm">
@@ -386,10 +386,10 @@ export default function HomePage() {
 
             <Link
               href="/explore?tab=artists"
-              className="group p-6 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover:border-accent/40 transition-all duration-200 hover:shadow-lg"
+              className="group p-4 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover:border-accent/40 transition-all duration-200 hover:shadow-lg"
             >
-              <Users className="w-8 h-8 text-accent mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
+              <Users className="w-6 h-6 text-accent mb-2" />
+              <h3 className="text-base font-semibold mb-1 group-hover:text-accent transition-colors">
                 All Artists
               </h3>
               <p className="text-muted-foreground text-sm">

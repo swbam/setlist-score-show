@@ -1,6 +1,5 @@
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
-import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 
 export default function MainLayout({
   children,
@@ -20,11 +19,6 @@ export default function MainLayout({
       {/* Footer - Hidden on mobile */}
       <div className="hidden md:block">
         <Footer />
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden">
-        <MobileBottomNav />
       </div>
     </div>
   )
