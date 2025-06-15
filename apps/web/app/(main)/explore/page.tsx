@@ -1,16 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_TRENDING_SHOWS } from '@/lib/graphql/queries'
-import { TrendingUp, Calendar, Users, Loader2 } from 'lucide-react'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
-import { ShowCard } from '@/components/shows/ShowCard'
-import { InfiniteList } from '@/components/ui/InfiniteList'
-import { supabase } from '@/lib/supabase'
-import Link from 'next/link'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { TrendingUp, Calendar, Users, Loader2 } from 'lucide-react'
+import { ShowCard } from '@/components/shows/ShowCard'
+import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { supabase } from '@/lib/supabase'
+import { useQuery } from '@tanstack/react-query'
+import Link from 'next/link'
+
+const PAGE_SIZE = 20
 
 type TabType = 'TRENDING' | 'UPCOMING' | 'ARTISTS'
 
@@ -22,7 +21,7 @@ interface Artist {
   upcomingShowsCount?: number
 }
 
-export default function ExplorePage() {
+function ExplorePageContent() {
   const searchParams = useSearchParams()
   // Determine initial tab from URL (?tab=trending|upcoming|artists)
   const tabParam = (searchParams.get('tab') || '').toUpperCase()
@@ -31,28 +30,27 @@ export default function ExplorePage() {
     UPCOMING: 'UPCOMING',
     ARTISTS: 'ARTISTS'
   }
-  const [activeTab, setActiveTab] = useState<TabType>(
-    validTabs[tabParam] ?? 'TRENDING'
-  )
+  const [activeTab, setActiveTab] = useState<TabType>(validTabs[tabParam] || 'TRENDING')
+
   const [upcomingShows, setUpcomingShows] = useState<any[]>([])
   const [upcomingPage, setUpcomingPage] = useState(0)
-  const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true)
   const [loadingUpcoming, setLoadingUpcoming] = useState(false)
+  const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true)
+
   const [artists, setArtists] = useState<Artist[]>([])
   const [artistsPage, setArtistsPage] = useState(0)
-  const [hasMoreArtists, setHasMoreArtists] = useState(true)
   const [loadingArtists, setLoadingArtists] = useState(false)
-  
-  const client = useGraphQLClient()
-  const PAGE_SIZE = 24
+  const [hasMoreArtists, setHasMoreArtists] = useState(true)
 
-  // Trending shows query
+  // Fetch trending shows
   const { data: trendingData, isLoading: loadingTrending } = useQuery({
     queryKey: ['trending-shows'],
     queryFn: async () => {
-      return client.request(GET_TRENDING_SHOWS, { limit: PAGE_SIZE })
+      const response = await fetch('/api/trending-shows')
+      if (!response.ok) throw new Error('Failed to fetch trending shows')
+      return response.json()
     },
-    enabled: activeTab === 'TRENDING'
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Load more upcoming shows
@@ -70,15 +68,13 @@ export default function ExplorePage() {
           status,
           view_count,
           popularity,
-          artist_id,
-          venue_id,
-          artists(
+          artists (
             id,
             name,
             slug,
             image_url
           ),
-          venues(
+          venues (
             id,
             name,
             city,
@@ -87,13 +83,13 @@ export default function ExplorePage() {
           )
         `)
         .eq('status', 'upcoming')
-        .gte('date', new Date().toISOString())
+        .gte('date', new Date().toISOString().split('T')[0])
         .order('popularity', { ascending: false })
         .order('date', { ascending: true })
         .range(upcomingPage * PAGE_SIZE, (upcomingPage + 1) * PAGE_SIZE - 1)
 
       if (error) throw error
-
+      
       const newShows = data?.map((show: any) => ({
         id: show.id,
         date: show.date,
@@ -332,5 +328,17 @@ export default function ExplorePage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    }>
+      <ExplorePageContent />
+    </Suspense>
   )
 } 
