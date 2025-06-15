@@ -275,7 +275,7 @@ export default function HomePage() {
               </h2>
             </div>
             <Link 
-              href="/explore"
+              href="/explore?tab=trending"
               className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
             >
               View All <ArrowRight className="w-4 h-4" />
@@ -330,7 +330,7 @@ export default function HomePage() {
               </h2>
             </div>
             <Link 
-              href="/explore"
+              href="/explore?tab=upcoming"
               className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
             >
               View All <ArrowRight className="w-4 h-4" />
@@ -359,7 +359,7 @@ export default function HomePage() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <Link
-              href="/explore"
+              href="/explore?tab=trending"
               className="group p-6 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover:border-primary/40 transition-all duration-200 hover:shadow-lg"
             >
               <TrendingUp className="w-8 h-8 text-primary mb-3" />
@@ -372,7 +372,7 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href="/explore"
+              href="/explore?tab=upcoming"
               className="group p-6 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover:border-secondary/40 transition-all duration-200 hover:shadow-lg"
             >
               <Calendar className="w-8 h-8 text-secondary mb-3" />
@@ -385,7 +385,7 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href="/explore"
+              href="/explore?tab=artists"
               className="group p-6 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover:border-accent/40 transition-all duration-200 hover:shadow-lg"
             >
               <Users className="w-8 h-8 text-accent mb-3" />

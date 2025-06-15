@@ -10,6 +10,7 @@ import { ShowCard } from '@/components/shows/ShowCard'
 import { InfiniteList } from '@/components/ui/InfiniteList'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 type TabType = 'TRENDING' | 'UPCOMING' | 'ARTISTS'
 
@@ -22,7 +23,17 @@ interface Artist {
 }
 
 export default function ExplorePage() {
-  const [activeTab, setActiveTab] = useState<TabType>('TRENDING')
+  const searchParams = useSearchParams()
+  // Determine initial tab from URL (?tab=trending|upcoming|artists)
+  const tabParam = (searchParams.get('tab') || '').toUpperCase()
+  const validTabs: Record<string, TabType> = {
+    TRENDING: 'TRENDING',
+    UPCOMING: 'UPCOMING',
+    ARTISTS: 'ARTISTS'
+  }
+  const [activeTab, setActiveTab] = useState<TabType>(
+    validTabs[tabParam] ?? 'TRENDING'
+  )
   const [upcomingShows, setUpcomingShows] = useState<any[]>([])
   const [upcomingPage, setUpcomingPage] = useState(0)
   const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true)
@@ -167,6 +178,15 @@ export default function ExplorePage() {
       loadMoreArtists()
     }
   }, [activeTab])
+
+  // Keep activeTab in sync if query param changes (e.g., user navigates back)
+  useEffect(() => {
+    const newTabParam = (searchParams.get('tab') || '').toUpperCase()
+    if (validTabs[newTabParam] && validTabs[newTabParam] !== activeTab) {
+      setActiveTab(validTabs[newTabParam])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const tabOptions = [
     { value: 'TRENDING' as const, label: 'Trending', icon: <TrendingUp className="w-4 h-4" /> },
