@@ -3,11 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function ArtistsRedirect() {
+export default function UpcomingRedirect() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/explore?tab=artists')
+    router.replace('/explore?tab=upcoming')
   }, [router])
 
   return (
@@ -18,4 +18,4 @@ export default function ArtistsRedirect() {
       </div>
     </div>
   )
-}
+} 

@@ -4,82 +4,18 @@ import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
-import { SEARCH_ALL } from '@/lib/graphql/queries'
+import { SEARCH_ALL, GET_TRENDING_SHOWS } from '@/lib/graphql/queries'
 import { supabase } from '@/lib/supabase'
-import { ShowCardGrid } from '@/components/shows/ShowCardGrid'
-import { FeaturedArtists } from '@/components/artists/FeaturedArtists'
-import { TrendingShows } from '@/components/shows/TrendingShows'
-import { Search, Music, Users, Calendar } from 'lucide-react'
+import { ShowCard } from '@/components/shows/ShowCard'
+import { Search, TrendingUp, Calendar, Users, ArrowRight } from 'lucide-react'
 
-// Make sure the TrendingShow interface matches the one in TrendingShows.tsx
-// Based on previous tool output for TrendingShows.tsx, the interface is:
-interface TrendingShow {
-  show: {
-    id: string;
-    date: string;
-    title?: string;
-    artist: {
-      id: string;
-      name: string;
-      imageUrl?: string;
-    };
-    venue: {
-      id: string;
-      name: string;
-      city: string;
-    };
-  };
-  totalVotes: number;
-  uniqueVoters: number;
-  trendingScore: number;
-}
-
-interface FeaturedArtist {
-  id: string;
-  name: string;
-  slug: string;
-  imageUrl?: string;
-  genres?: string[];
-  upcomingShowsCount?: number;
-}
-
-interface UpcomingShow {
-  id: string;
-  date: string;
-  title?: string;
-  artist: {
-    id: string;
-    name: string;
-    imageUrl?: string;
-  };
-  venue: {
-    id: string;
-    name: string;
-    city: string;
-  };
-}
-
-interface PopularArtist {
-  id: string;
-  name: string;
-  slug: string;
-  imageUrl?: string;
-  totalVotes: number;
-  upcomingShowsCount: number;
+interface SearchResult {
+  artists: any[]
+  venues: any[]
+  shows: any[]
 }
 
 export default function HomePage() {
-  const [trendingShows, setTrendingShows] = useState<TrendingShow[]>([])
-  const [upcomingThisWeek, setUpcomingThisWeek] = useState<UpcomingShow[]>([])
-  const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtist[]>([])
-  const [popularArtists, setPopularArtists] = useState<PopularArtist[]>([])
-  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
-  const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(true)
-  const [isLoadingFeatured, setIsLoadingFeatured] = useState(true)
-  const [isLoadingPopular, setIsLoadingPopular] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
-  // Search functionality
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [showSearchResults, setShowSearchResults] = useState(false)
@@ -92,7 +28,6 @@ export default function HomePage() {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery)
     }, 300)
-
     return () => clearTimeout(timer)
   }, [searchQuery])
 
@@ -103,11 +38,8 @@ export default function HomePage() {
         setShowSearchResults(false)
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   // Search query
@@ -120,7 +52,63 @@ export default function HomePage() {
     enabled: !!debouncedQuery,
   })
 
-  const searchResults = (searchData as any)?.search
+  // Trending shows
+  const { data: trendingData, isLoading: loadingTrending } = useQuery({
+    queryKey: ['homepage-trending'],
+    queryFn: async () => {
+      return client.request(GET_TRENDING_SHOWS, { limit: 8 })
+    }
+  })
+
+  // Top upcoming shows (auto-imported from Ticketmaster)
+  const { data: upcomingShows, isLoading: loadingUpcoming } = useQuery({
+    queryKey: ['homepage-top-shows'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shows')
+        .select(`
+          id,
+          date,
+          title,
+          status,
+          view_count,
+          popularity,
+          artists(id, name, slug, image_url),
+          venues(id, name, city, state, country)
+        `)
+        .eq('status', 'upcoming')
+        .gte('date', new Date().toISOString())
+        .order('popularity', { ascending: false })
+        .order('date', { ascending: true })
+        .limit(8)
+
+      if (error) throw error
+
+      return data?.map((show: any) => ({
+        id: show.id,
+        date: show.date,
+        title: show.title || `${show.artists?.name} at ${show.venues?.name}`,
+        status: show.status,
+        viewCount: show.view_count || 0,
+        popularity: show.popularity || 0,
+        artist: {
+          id: show.artists?.id,
+          name: show.artists?.name || 'Unknown Artist',
+          slug: show.artists?.slug || '',
+          imageUrl: show.artists?.image_url
+        },
+        venue: {
+          id: show.venues?.id,
+          name: show.venues?.name || 'Unknown Venue',
+          city: show.venues?.city || 'Unknown City',
+          state: show.venues?.state,
+          country: show.venues?.country || 'Unknown Country'
+        }
+      })) || []
+    }
+  })
+
+  const searchResults = (searchData as any)?.search as SearchResult
 
   // Handle artist import from search results
   const handleArtistImport = async (artist: any) => {
@@ -138,13 +126,9 @@ export default function HomePage() {
           })
         })
         
-        if (!response.ok) {
-          throw new Error('Failed to import artist')
-        }
+        if (!response.ok) throw new Error('Failed to import artist')
         
         const data = await response.json()
-        
-        // Clear search and navigate
         setSearchQuery('')
         setShowSearchResults(false)
         window.location.href = `/artists/${data.artist.slug}`
@@ -155,834 +139,266 @@ export default function HomePage() {
         setImportingArtist(false)
       }
     } else {
-      // Artist already in DB, just navigate
       setSearchQuery('')
       setShowSearchResults(false)
       window.location.href = `/artists/${artist.slug}`
     }
   }
 
-  // Helper function to ensure artist diversity across different show lists
-  const ensureArtistDiversity = (shows: any[], usedArtists: Set<string>, maxPerArtist = 1, limit = 10) => {
-    const artistCounts = new Map<string, number>()
-    const diverseShows = []
-    
-    // First pass: Add artists not already used elsewhere
-    for (const show of shows) {
-      const artistId = show.artist_id || show.artist?.id
-      if (!usedArtists.has(artistId) && diverseShows.length < limit) {
-        diverseShows.push(show)
-        artistCounts.set(artistId, 1)
-        usedArtists.add(artistId)
-      }
-    }
-    
-    // Second pass: Fill remaining spots with artists that haven't hit the limit
-    for (const show of shows) {
-      const artistId = show.artist_id || show.artist?.id
-      const currentCount = artistCounts.get(artistId) || 0
-      
-      if (currentCount < maxPerArtist && diverseShows.length < limit) {
-        if (!diverseShows.find(s => (s.artist_id || s.artist?.id) === artistId && s.id === show.id)) {
-          diverseShows.push(show)
-          artistCounts.set(artistId, currentCount + 1)
-        }
-      }
-    }
-    
-    return diverseShows
-  }
-
-  useEffect(() => {
-    const fetchAllData = async () => {
-      setIsLoadingTrending(true)
-      setIsLoadingUpcoming(true)
-      setIsLoadingFeatured(true)
-      setIsLoadingPopular(true)
-      setError(null)
-      
-      try {
-        const usedArtists = new Set<string>()
-        
-        // Fetch trending shows (increased limit for better diversity)
-        const fetchTrendingShows = async () => {
-          try {
-            const { data: trendingData, error: trendingError } = await supabase
-              .from('trending_shows_view')
-              .select('*')
-              .eq('status', 'upcoming')
-              .gte('date', new Date().toISOString())
-              .order('trending_score', { ascending: false })
-              .limit(50) // Get more to allow for better artist diversity
-
-            if (trendingError) throw trendingError
-
-            if (!trendingData || trendingData.length === 0) {
-              // Fallback to upcoming shows if no trending data
-              const { data: fallbackShows, error: fallbackError } = await supabase
-                .from('shows')
-                .select(`
-                  id,
-                  date,
-                  title,
-                  view_count,
-                  artist:artists(
-                    id,
-                    name,
-                    image_url
-                  ),
-                  venue:venues(
-                    id,
-                    name,
-                    city
-                  )
-                `)
-                .eq('status', 'upcoming')
-                .gte('date', new Date().toISOString())
-                .order('view_count', { ascending: false })
-                .limit(30)
-
-              if (fallbackError) throw fallbackError
-
-              const fallbackMapped: TrendingShow[] = (fallbackShows || []).map((show: any) => ({
-                show: {
-                  id: show.id,
-                  date: show.date,
-                  title: show.title,
-                  artist: {
-                    id: show.artist?.id,
-                    name: show.artist?.name,
-                    imageUrl: show.artist?.image_url,
-                  },
-                  venue: {
-                    id: show.venue?.id,
-                    name: show.venue?.name,
-                    city: show.venue?.city,
-                  },
-                },
-                totalVotes: 0,
-                uniqueVoters: 0,
-                trendingScore: show.view_count || 0,
-              }))
-
-              const diverseTrending = ensureArtistDiversity(fallbackMapped.map(t => ({ ...t.show, trending_score: t.trendingScore, total_votes: t.totalVotes, unique_voters: t.uniqueVoters })), usedArtists, 2, 12)
-              const finalTrending = diverseTrending.map((show: any) => ({
-                show: {
-                  id: show.id,
-                  date: show.date,
-                  title: show.title,
-                  artist: show.artist,
-                  venue: show.venue,
-                },
-                totalVotes: show.total_votes || 0,
-                uniqueVoters: show.unique_voters || 0,
-                trendingScore: show.trending_score || 0,
-              }))
-              
-              setTrendingShows(finalTrending)
-              return
-            }
-
-            // Apply advanced artist diversity (max 2 shows per artist for trending)
-            const limitedShows = ensureArtistDiversity(trendingData, usedArtists, 2, 12)
-
-            // Get unique artist and venue IDs to fetch details
-            const artistIds = [...new Set(limitedShows.map(show => show.artist_id))]
-            const venueIds = [...new Set(limitedShows.map(show => show.venue_id))]
-
-            // Fetch artist and venue details
-            const [artistsData, venuesData] = await Promise.all([
-              supabase
-                .from('artists')
-                .select('id, name, image_url')
-                .in('id', artistIds),
-              supabase
-                .from('venues')
-                .select('id, name, city')
-                .in('id', venueIds)
-            ])
-
-            if (artistsData.error) throw artistsData.error
-            if (venuesData.error) throw venuesData.error
-
-            // Create maps for quick lookup
-            const artistsMap = new Map(artistsData.data?.map(a => [a.id, a]) || [])
-            const venuesMap = new Map(venuesData.data?.map(v => [v.id, v]) || [])
-
-            // Transform data to match component interface
-            const mappedData: TrendingShow[] = limitedShows.map((trending: any) => {
-              const artist = artistsMap.get(trending.artist_id)
-              const venue = venuesMap.get(trending.venue_id)
-              
-              return {
-                show: {
-                  id: trending.id,
-                  date: trending.date,
-                  title: trending.title,
-                  artist: {
-                    id: trending.artist_id,
-                    name: artist?.name || 'Unknown Artist',
-                    imageUrl: artist?.image_url,
-                  },
-                  venue: {
-                    id: trending.venue_id,
-                    name: venue?.name || 'Unknown Venue',
-                    city: venue?.city || 'Unknown City',
-                  },
-                },
-                totalVotes: trending.total_votes || 0,
-                uniqueVoters: trending.unique_voters || 0,
-                trendingScore: trending.trending_score || 0,
-              }
-            })
-
-            setTrendingShows(mappedData)
-          } catch (err: any) {
-            console.error('Error fetching trending shows:', err)
-          } finally {
-            setIsLoadingTrending(false)
-          }
-        }
-
-        // Fetch upcoming shows this week
-        const fetchUpcomingThisWeek = async () => {
-          try {
-            const nextWeek = new Date()
-            nextWeek.setDate(nextWeek.getDate() + 7)
-            
-            const { data: upcomingData, error: upcomingError } = await supabase
-              .from('shows')
-              .select(`
-                id,
-                date,
-                title,
-                view_count,
-                artist:artists(
-                  id,
-                  name,
-                  image_url
-                ),
-                venue:venues(
-                  id,
-                  name,
-                  city
-                )
-              `)
-              .eq('status', 'upcoming')
-              .gte('date', new Date().toISOString())
-              .lte('date', nextWeek.toISOString())
-              .order('date', { ascending: true })
-              .limit(40) // Get more for diversity
-
-            if (upcomingError) throw upcomingError
-
-            // Apply artist diversity (max 1 show per artist for this week)
-            const diverseUpcoming = ensureArtistDiversity(
-              upcomingData || [], 
-              usedArtists, 
-              1, 
-              8
-            ).map((show: any) => ({
-              id: show.id,
-              date: show.date,
-              title: show.title,
-              artist: {
-                id: show.artist?.id,
-                name: show.artist?.name,
-                imageUrl: show.artist?.image_url,
-              },
-              venue: {
-                id: show.venue?.id,
-                name: show.venue?.name,
-                city: show.venue?.city,
-              },
-            }))
-
-            setUpcomingThisWeek(diverseUpcoming)
-          } catch (err: any) {
-            console.error('Error fetching upcoming shows:', err)
-          } finally {
-            setIsLoadingUpcoming(false)
-          }
-        }
-
-        // Fetch featured artists (avoiding already used artists)
-        const fetchFeaturedArtists = async () => {
-          try {
-            const { data: artistsData, error: artistsError } = await supabase
-              .from('artists')
-              .select(`
-                id,
-                name,
-                slug,
-                image_url,
-                genres,
-                followers,
-                shows!inner(
-                  id,
-                  status,
-                  date
-                )
-              `)
-              .eq('shows.status', 'upcoming')
-              .gte('shows.date', new Date().toISOString())
-              .order('followers', { ascending: false })
-              .limit(20) // Get more for diversity
-
-            if (artistsError) throw artistsError
-
-            // Filter out artists already used in other sections
-            const availableArtists = (artistsData || []).filter(artist => 
-              !usedArtists.has(artist.id)
-            ).slice(0, 6)
-
-            const featuredData: FeaturedArtist[] = availableArtists.map(artist => {
-              usedArtists.add(artist.id)
-              return {
-                id: artist.id,
-                name: artist.name,
-                slug: artist.slug,
-                imageUrl: artist.image_url,
-                genres: artist.genres,
-                upcomingShowsCount: artist.shows?.length || 0,
-              }
-            })
-
-            setFeaturedArtists(featuredData)
-          } catch (err: any) {
-            console.error('Error fetching featured artists:', err)
-          } finally {
-            setIsLoadingFeatured(false)
-          }
-        }
-
-        // Fetch popular artists based on voting activity
-        const fetchPopularArtists = async () => {
-          try {
-            // Get artists with most votes in their upcoming shows
-            const { data: popularData, error: popularError } = await supabase
-              .rpc('get_popular_artists_by_votes', {
-                limit_count: 15
-              })
-
-            if (popularError) {
-              // Fallback to artists with most shows if RPC doesn't exist
-              const { data: fallbackData, error: fallbackError } = await supabase
-                .from('artists')
-                .select(`
-                  id,
-                  name,
-                  slug,
-                  image_url,
-                  shows!inner(
-                    id,
-                    status,
-                    date
-                  )
-                `)
-                .eq('shows.status', 'upcoming')
-                .gte('shows.date', new Date().toISOString())
-                .order('created_at', { ascending: false })
-                .limit(15)
-
-              if (fallbackError) throw fallbackError
-
-              const fallbackMapped = (fallbackData || []).map(artist => ({
-                id: artist.id,
-                name: artist.name,
-                slug: artist.slug,
-                imageUrl: artist.image_url,
-                totalVotes: 0,
-                upcomingShowsCount: artist.shows?.length || 0,
-              }))
-
-              // Filter out already used artists and take first 6
-              const availablePopular = fallbackMapped.filter(artist => 
-                !usedArtists.has(artist.id)
-              ).slice(0, 6)
-
-              setPopularArtists(availablePopular)
-            } else {
-              // Filter out already used artists
-              const availablePopular = (popularData || []).filter((artist: any) => 
-                !usedArtists.has(artist.id)
-              ).slice(0, 6)
-
-              setPopularArtists(availablePopular)
-            }
-          } catch (err: any) {
-            console.error('Error fetching popular artists:', err)
-            setPopularArtists([])
-          } finally {
-            setIsLoadingPopular(false)
-          }
-        }
-
-        // Execute all fetches
-        await Promise.allSettled([
-          fetchTrendingShows(),
-          fetchUpcomingThisWeek(),
-          fetchFeaturedArtists(),
-          fetchPopularArtists()
-        ])
-        
-      } catch (err: any) {
-        console.error('Error fetching homepage data:', err)
-        setError(err.message || 'Failed to fetch data.')
-      }
-    }
-
-    fetchAllData()
-  }, [])
+  const trendingShows = (trendingData as any)?.trendingShows || []
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="relative py-24 md:py-32 px-4 bg-gradient-to-b from-background to-muted/30 overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <div 
-            className="w-full h-full bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: 'url(/bg.jpg)' }}
-          />
-          {/* Dark gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80"></div>
-        </div>
+      {/* Hero Section with Search */}
+      <div className="relative bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+        <div className="absolute inset-0 bg-[url('/bg.jpg')] bg-cover bg-center opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/60 to-black/80" />
         
-        <div className="container mx-auto text-center relative z-10">
-          <h1 className="text-4xl md:text-6xl font-headline font-bold mb-6 md:mb-8 text-white leading-tight drop-shadow-lg">
-            Vote on the setlists<br />you want to hear.
-          </h1>
-          <p className="text-lg md:text-xl text-white/90 mb-8 md:mb-12 max-w-3xl mx-auto font-body leading-relaxed drop-shadow-md">
-            Help shape the setlist for upcoming concerts by voting on the songs you want to hear most
-          </p>
-          
-          {/* Search Input */}
-          <div ref={searchContainerRef} className="relative max-w-2xl mx-auto mb-8 md:mb-12">
+        <div className="relative w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-12 sm:py-16 lg:py-20">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-headline font-bold mb-4 text-white drop-shadow-lg">
+              Vote on Your Favorite
+              <span className="block gradient-text">Concert Setlists</span>
+            </h1>
+            <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow">
+              Help shape the perfect show by voting on songs you want to hear live
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div ref={searchContainerRef} className="relative max-w-2xl mx-auto">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/60 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60" />
               <input
                 type="text"
                 placeholder="Search for artists, venues, or cities..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
-                  setShowSearchResults(e.target.value.length > 0)
+                  setShowSearchResults(true)
                 }}
-                onFocus={() => setShowSearchResults(searchQuery.length > 0)}
-                className="w-full pl-12 pr-4 py-4 bg-black/40 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:border-white/40 focus:bg-black/50 transition-all text-base shadow-lg"
+                onFocus={() => setShowSearchResults(true)}
+                className="w-full pl-12 pr-4 py-4 text-lg bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
               />
             </div>
-            
-            {/* Search Results */}
-            {showSearchResults && (searchQuery.length > 0) && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
+
+            {/* Search Results Dropdown */}
+            {showSearchResults && debouncedQuery && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
                 {isLoadingSearch ? (
-                  <div className="p-4">
-                    <div className="space-y-3">
-                      {[...Array(3)].map((_, i) => (
-                        <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
-                          <div className="w-10 h-10 bg-white/20 rounded-full" />
-                          <div className="flex-1">
-                            <div className="h-4 bg-white/20 rounded mb-1" />
-                            <div className="h-3 bg-white/20 rounded w-2/3" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : searchResults?.artists?.length > 0 ? (
+                  <div className="p-4 text-center text-white/60">Searching...</div>
+                ) : searchResults ? (
                   <div className="p-2">
-                    <div className="px-3 py-2 text-xs font-medium text-white/60 border-b border-white/20">
-                      Artists
-                    </div>
-                    {searchResults.artists.slice(0, 5).map((artist: any) => (
-                      <button
-                        key={artist.id || artist.ticketmasterId}
-                        onClick={() => handleArtistImport(artist)}
-                        disabled={importingArtist}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-white/10 transition-colors text-left disabled:opacity-50"
-                      >
-                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                          {artist.imageUrl ? (
-                            <img
-                              src={artist.imageUrl}
-                              alt={artist.name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <Users className="w-5 h-5 text-white/60" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-white text-sm truncate">
-                            {artist.name}
-                            {artist.isFromApi && (
-                              <span className="ml-2 text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
-                                New
-                              </span>
+                    {/* Artists */}
+                    {searchResults.artists?.length > 0 && (
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Artists</h3>
+                        {searchResults.artists.slice(0, 3).map((artist: any) => (
+                          <button
+                            key={artist.id || artist.ticketmasterId}
+                            onClick={() => handleArtistImport(artist)}
+                            disabled={importingArtist}
+                            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors text-left"
+                          >
+                            {artist.imageUrl && (
+                              <img src={artist.imageUrl} alt={artist.name} className="w-10 h-10 rounded-full object-cover" />
                             )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-white truncate">{artist.name}</div>
+                              <div className="text-sm text-white/60">
+                                {artist.isFromApi ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+                                    New
+                                  </span>
+                                ) : (
+                                  'Artist'
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Shows */}
+                    {searchResults.shows?.length > 0 && (
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Shows</h3>
+                        {searchResults.shows.slice(0, 3).map((show: any) => (
+                          <Link
+                            key={show.id}
+                            href={`/shows/${show.id}`}
+                            className="block p-3 rounded-lg hover:bg-white/10 transition-colors"
+                            onClick={() => setShowSearchResults(false)}
+                          >
+                            <div className="font-medium text-white truncate">{show.artist?.name}</div>
+                            <div className="text-sm text-white/60 truncate">
+                              {show.venue?.name}, {show.venue?.city}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Venues */}
+                    {searchResults.venues?.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-white/80 px-3 py-2">Venues</h3>
+                        {searchResults.venues.slice(0, 3).map((venue: any) => (
+                          <div key={venue.id} className="p-3 rounded-lg hover:bg-white/10 transition-colors">
+                            <div className="font-medium text-white truncate">{venue.name}</div>
+                            <div className="text-sm text-white/60 truncate">{venue.city}, {venue.state}</div>
                           </div>
-                        
-                        </div>
-                      </button>
-                    ))}
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : debouncedQuery && !isLoadingSearch ? (
-                  <div className="p-4 text-center text-white/60">
-                    <Search className="w-8 h-8 mx-auto mb-2 text-white/40" />
-                    <p className="text-sm">No artists found for "{debouncedQuery}"</p>
-                  </div>
-                ) : null}
+                ) : (
+                  <div className="p-4 text-center text-white/60">No results found</div>
+                )}
               </div>
             )}
           </div>
-          
-          {/* Quick Stats */}
-          <div className="flex flex-wrap justify-center gap-8 mb-8 md:mb-12">
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
-                {isLoadingTrending || isLoadingUpcoming ? (
-                  <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto" />
-                ) : (
-                  `${trendingShows.length + upcomingThisWeek.length}+`
-                )}
-              </div>
-              <div className="text-sm text-white/80 font-body drop-shadow-md">Shows Available</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
-                {isLoadingFeatured || isLoadingPopular ? (
-                  <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto" />
-                ) : (
-                  `${featuredArtists.length + popularArtists.length}+`
-                )}
-              </div>
-              <div className="text-sm text-white/80 font-body drop-shadow-md">Artists Featured</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-headline font-bold text-white drop-shadow-lg">
-                {isLoadingTrending ? (
-                  <div className="animate-pulse bg-white/20 rounded w-16 h-8 mx-auto" />
-                ) : (
-                  `${trendingShows.reduce((sum, show) => sum + show.totalVotes, 0)}+`
-                )}
-              </div>
-              <div className="text-sm text-white/80 font-body drop-shadow-md">Votes Cast</div>
-            </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center items-center">
-            <Link
-              href="/shows"
-              className="btn-primary text-base md:text-lg px-8 md:px-10 shadow-lg hover:shadow-xl transition-shadow inline-flex items-center justify-center"
-            >
-              Discover Shows
-            </Link>
-            <Link
-              href="/artists"
-              className="btn-secondary text-base md:text-lg px-8 md:px-10 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
-            >
-              Find Artists
-            </Link>
-          </div>
         </div>
-      </section>
+      </div>
 
-      {/* Trending Shows Section */}
-      <section className="py-16 md:py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-headline font-bold mb-2 md:mb-4 gradient-text">Trending Shows</h2>
-              <p className="text-muted-foreground text-base md:text-lg font-body">
-                The hottest shows based on voting activity and engagement
-              </p>
+      {/* Main Content */}
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-8 sm:py-12 lg:py-16">
+        
+        {/* Trending Shows Section */}
+        <section className="mb-12 lg:mb-16">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-6 h-6 text-primary" />
+              <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
+                Trending This Week
+              </h2>
             </div>
-            <Link
-              href="/shows"
-              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300 whitespace-nowrap"
+            <Link 
+              href="/explore"
+              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
             >
-              View all →
+              View All <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
           
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-8">
-              <p className="text-destructive text-center font-body">{error}</p>
+          {loadingTrending ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-muted rounded-xl h-64" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {trendingShows.slice(0, 8).map((show: any) => (
+                <ShowCard
+                  key={show.id}
+                  show={{
+                    id: show.id,
+                    date: show.date,
+                    title: show.title || `${show.artist?.name} at ${show.venue?.name}`,
+                    status: 'upcoming',
+                    viewCount: show.viewCount || 0,
+                    trendingScore: show.trendingScore,
+                    artist: {
+                      id: show.artist?.id,
+                      name: show.artist?.name || 'Unknown Artist',
+                      slug: show.artist?.slug || '',
+                      imageUrl: show.artist?.imageUrl
+                    },
+                    venue: {
+                      id: show.venue?.id,
+                      name: show.venue?.name || 'Unknown Venue',
+                      city: show.venue?.city || 'Unknown City',
+                      state: show.venue?.state,
+                      country: show.venue?.country || 'Unknown Country'
+                    }
+                  }}
+                />
+              ))}
             </div>
           )}
-          <ShowCardGrid shows={trendingShows} isLoading={isLoadingTrending} />
-        </div>
-      </section>
+        </section>
 
-      {/* Upcoming This Week Section */}
-      <section className="py-16 md:py-20 bg-muted/10">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-headline font-bold mb-2 md:mb-4 gradient-text">Upcoming This Week</h2>
-              <p className="text-muted-foreground text-base md:text-lg font-body">
-                Don't miss these shows happening in the next 7 days
-              </p>
+        {/* Upcoming Shows Section */}
+        <section className="mb-12 lg:mb-16">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-6 h-6 text-primary" />
+              <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
+                Top Shows
+              </h2>
             </div>
-            <Link
-              href="/shows?filter=this-week"
-              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300 whitespace-nowrap"
+            <Link 
+              href="/explore"
+              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
             >
-              View all →
+              View All <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
           
-          <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {isLoadingUpcoming ? (
-              [...Array(8)].map((_, i) => (
-                <div key={i} className="card-base h-80 animate-pulse">
-                  <div className="aspect-[4/3] bg-muted/50 animate-pulse rounded-t-lg" />
-                  <div className="p-4 space-y-3">
-                    <div className="h-5 bg-muted/50 rounded animate-pulse" />
-                    <div className="h-4 bg-muted/30 rounded animate-pulse w-3/4" />
-                    <div className="h-3 bg-muted/30 rounded animate-pulse w-1/2" />
-                  </div>
-                </div>
-              ))
-            ) : upcomingThisWeek.length > 0 ? (
-              upcomingThisWeek.map((show) => (
-                <Link
-                  key={show.id}
-                  href={`/shows/${show.id}`}
-                  className="card-base overflow-hidden group hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="aspect-[4/3] relative bg-muted overflow-hidden">
-                    {show.artist.imageUrl ? (
-                      <img
-                        src={show.artist.imageUrl}
-                        alt={show.artist.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                        <span className="text-2xl font-headline font-bold text-muted-foreground/50">
-                          {show.artist.name.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-40" />
-                    
-                    {/* Days until show badge */}
-                    <div className="absolute top-3 right-3 bg-accent text-accent-foreground px-3 py-1 rounded-full text-xs font-bold">
-                      {Math.ceil((new Date(show.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}d
-                    </div>
-                    
-                    {/* Genre badge if available */}
-                    <div className="absolute top-3 left-3 bg-primary/80 text-primary-foreground px-2 py-1 rounded text-xs font-medium">
-                      Live
-                    </div>
-                  </div>
-                  
-                  <div className="p-4">
-                    <h3 className="text-lg font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-1">
-                      {show.artist.name}
-                    </h3>
-                    {show.title && (
-                      <h4 className="text-sm font-headline font-medium mb-3 text-muted-foreground line-clamp-1">
-                        {show.title}
-                      </h4>
-                    )}
-                    <div className="space-y-2 text-sm text-muted-foreground font-body mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium line-clamp-1">{show.venue.name}</span>
-                      </div>
-                      <div className="text-muted-foreground/70 font-medium line-clamp-1">
-                        {show.venue.city}
-                      </div>
-                      <div className="text-accent font-semibold">
-                        {new Date(show.date).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </div>
-                    </div>
-                    <div className="pt-3 border-t border-border/30">
-                      <span className="text-sm font-headline font-semibold text-primary group-hover:gradient-text transition-all duration-300">
-                        Vote Now →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-20">
-                <p className="text-muted-foreground text-xl font-body">No shows coming up this week.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+          {loadingUpcoming ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-muted rounded-xl h-64" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {upcomingShows?.slice(0, 8).map((show: any) => (
+                <ShowCard key={show.id} show={show} />
+              ))}
+            </div>
+          )}
+        </section>
 
-      {/* Popular Artists Section */}
-      <section className="py-16 md:py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-headline font-bold mb-2 md:mb-4 gradient-text">Popular Artists</h2>
-              <p className="text-muted-foreground text-base md:text-lg font-body">
-                Artists getting the most votes from fans
-              </p>
-            </div>
-            <Link
-              href="/artists"
-              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300 whitespace-nowrap"
-            >
-              View all →
-            </Link>
-          </div>
-          
-          <div className="grid gap-4 md:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-            {isLoadingPopular ? (
-              [...Array(6)].map((_, i) => (
-                <div key={i} className="card-base h-64 animate-pulse">
-                  <div className="aspect-square bg-muted/50 animate-pulse" />
-                  <div className="p-4 space-y-2">
-                    <div className="h-4 bg-muted/50 rounded animate-pulse" />
-                    <div className="h-3 bg-muted/30 rounded animate-pulse w-2/3" />
-                  </div>
-                </div>
-              ))
-            ) : popularArtists.length > 0 ? (
-              popularArtists.map((artist) => (
-                <Link
-                  key={artist.id}
-                  href={`/artists/${artist.slug}`}
-                  className="card-base overflow-hidden group text-center"
-                >
-                  <div className="aspect-square relative bg-muted overflow-hidden">
-                    {artist.imageUrl ? (
-                      <img
-                        src={artist.imageUrl}
-                        alt={artist.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center">
-                        <span className="text-3xl font-headline font-bold text-muted-foreground/50">
-                          {artist.name.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent opacity-80" />
-                    
-                    {/* Vote count badge */}
-                    {artist.totalVotes > 0 && (
-                      <div className="absolute top-3 right-3 bg-primary text-primary-foreground px-2 py-1 rounded-full text-xs font-bold">
-                        {artist.totalVotes} votes
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="p-4">
-                    <h3 className="text-sm font-headline font-bold mb-2 text-foreground group-hover:gradient-text transition-all duration-300 line-clamp-2">
-                      {artist.name}
-                    </h3>
-                    <div className="text-xs text-muted-foreground font-body">
-                      {artist.upcomingShowsCount} {artist.upcomingShowsCount === 1 ? 'show' : 'shows'}
-                    </div>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-20">
-                <p className="text-muted-foreground text-xl font-body">No popular artists at the moment.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Artists Section */}
-      <section className="py-16 md:py-20 bg-muted/20">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-headline font-bold mb-2 md:mb-4 gradient-text">Featured Artists</h2>
-              <p className="text-muted-foreground text-base md:text-lg font-body">
-                Top artists with upcoming shows to vote on
-              </p>
-            </div>
-            <Link
-              href="/artists"
-              className="text-primary font-headline font-semibold hover:gradient-text transition-all duration-300 whitespace-nowrap"
-            >
-              View all →
-            </Link>
-          </div>
-          
-          <FeaturedArtists artists={featuredArtists} isLoading={isLoadingFeatured} />
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-24 bg-gradient-to-b from-background to-muted/10">
-        <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-headline font-bold text-center mb-16 text-foreground">How It Works</h2>
-          <div className="grid md:grid-cols-3 gap-12 max-w-5xl mx-auto">
-            <div className="text-center group">
-              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
-                <span className="text-2xl font-headline font-bold gradient-text">1</span>
-              </div>
-              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">Find a Show</h3>
-              <p className="text-muted-foreground font-body leading-relaxed">
-                Search for upcoming concerts from your favorite artists
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
-                <span className="text-2xl font-headline font-bold gradient-text">2</span>
-              </div>
-              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">Vote for Songs</h3>
-              <p className="text-muted-foreground font-body leading-relaxed">
-                Cast your votes for the songs you want to hear live
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="w-20 h-20 glass mx-auto mb-6 flex items-center justify-center transition-all duration-300 group-hover:scale-110">
-                <span className="text-2xl font-headline font-bold gradient-text">3</span>
-              </div>
-              <h3 className="text-2xl font-headline font-semibold mb-4 text-foreground">See Results</h3>
-              <p className="text-muted-foreground font-body leading-relaxed">
-                Watch in real-time as votes come in and influence the setlist
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 bg-muted/10">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">
-            Ready to influence your favorite concerts?
+        {/* Quick Actions */}
+        <section>
+          <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text mb-6">
+            Explore More
           </h2>
-          <p className="text-xl mb-8 text-muted-foreground max-w-2xl mx-auto">
-            Join thousands of fans voting on setlists for upcoming shows
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <Link
-              href="/signup"
-              className="btn-primary px-8 py-3"
+              href="/explore"
+              className="group p-6 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover:border-primary/40 transition-all duration-200 hover:shadow-lg"
             >
-              Get Started Free
+              <TrendingUp className="w-8 h-8 text-primary mb-3" />
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
+                Trending Shows
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                Discover the hottest shows based on fan engagement
+              </p>
             </Link>
+
             <Link
-              href="/shows"
-              className="btn-secondary px-8 py-3"
+              href="/explore"
+              className="group p-6 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover:border-secondary/40 transition-all duration-200 hover:shadow-lg"
             >
-              Browse Shows
+              <Calendar className="w-8 h-8 text-secondary mb-3" />
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-secondary transition-colors">
+                Upcoming Concerts
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                Browse all upcoming shows and start voting
+              </p>
+            </Link>
+
+            <Link
+              href="/explore"
+              className="group p-6 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover:border-accent/40 transition-all duration-200 hover:shadow-lg"
+            >
+              <Users className="w-8 h-8 text-accent mb-3" />
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
+                All Artists
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                Explore artists and follow your favorites
+              </p>
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   )
 }

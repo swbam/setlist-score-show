@@ -3,6 +3,7 @@ import { PrismaClient } from '@setlist/database'
 import pLimit from 'p-limit'
 import { SetlistFmClient } from '../lib/setlistfm'
 import { SpotifyClient } from '../lib/spotify'
+import 'dotenv/config'
 
 export class SetlistSyncJob {
   private limit = pLimit(3) // Max 3 concurrent API calls
@@ -247,4 +248,36 @@ export class SetlistSyncJob {
       })
     })
   }
+}
+
+// Main execution when run directly
+async function main() {
+  const { PrismaClient } = await import('@setlist/database')
+  const { SetlistFmClient } = await import('../lib/setlistfm')
+  const { SpotifyClient } = await import('../lib/spotify')
+  
+  const prisma = new PrismaClient()
+  const setlistFm = new SetlistFmClient(process.env.SETLISTFM_API_KEY!)
+  const spotify = new SpotifyClient(
+    process.env.SPOTIFY_CLIENT_ID!,
+    process.env.SPOTIFY_CLIENT_SECRET!
+  )
+  
+  const job = new SetlistSyncJob(prisma, setlistFm, spotify)
+  
+  try {
+    console.log('Starting setlist sync job...')
+    await job.syncRecentShows()
+    console.log('Setlist sync completed successfully')
+  } catch (error) {
+    console.error('Setlist sync failed:', error)
+    process.exit(1)
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+// Run if this file is executed directly
+if (require.main === module) {
+  main().catch(console.error)
 }

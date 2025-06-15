@@ -38,22 +38,10 @@ export function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
             <Link
-              href="/shows"
+              href="/explore"
               className="text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
             >
-              Shows
-            </Link>
-            <Link
-              href="/artists"
-              className="text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
-            >
-              Artists
-            </Link>
-            <Link
-              href="/trending"
-              className="text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
-            >
-              Trending
+              Explore
             </Link>
             {user && (
               <Link
@@ -126,25 +114,11 @@ export function Header() {
         <div className="md:hidden border-t border-border">
           <nav className="px-4 py-4 space-y-4">
             <Link
-              href="/shows"
+              href="/explore"
               className="block text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
-              Shows
-            </Link>
-            <Link
-              href="/artists"
-              className="block text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Artists
-            </Link>
-            <Link
-              href="/trending"
-              className="block text-muted-foreground hover:text-foreground transition-colors font-body font-medium"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Trending
+              Explore
             </Link>
             {user && (
               <Link

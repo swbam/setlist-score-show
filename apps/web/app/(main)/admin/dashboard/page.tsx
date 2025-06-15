@@ -12,7 +12,9 @@ import {
   Activity,
   RefreshCw,
   Database,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Star
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -104,6 +106,9 @@ export default function AdminDashboard() {
           break
         case 'setlists':
           endpoint = '/api/cron/sync-setlists'
+          break
+        case 'top-shows':
+          endpoint = '/api/cron/sync-top-shows'
           break
         default:
           throw new Error('Unknown sync type')
@@ -232,7 +237,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Data Sync */}
           <div className="card-base rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -264,6 +269,34 @@ export default function AdminDashboard() {
                 <span>Calculate Trending</span>
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
               </button>
+              <button
+                onClick={() => handleSyncData('top-shows')}
+                disabled={isSyncing}
+                className="w-full px-4 py-2 bg-primary/20 rounded-lg hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
+              >
+                <span>Sync Top Shows</span>
+                <Star className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Artist Import */}
+          <div className="card-base rounded-lg p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Download className="w-5 h-5" />
+              Artist Import
+            </h2>
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push('/admin/import-top-artists')}
+                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors flex items-center justify-between"
+              >
+                <span>Import Top Artists</span>
+                <Users className="w-4 h-4" />
+              </button>
+              <div className="text-sm text-muted-foreground">
+                View and import popular artists with upcoming US shows that aren't in your database yet.
+              </div>
             </div>
           </div>
 

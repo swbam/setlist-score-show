@@ -9,7 +9,7 @@
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test": "echo 'No tests configured yet'",
-    "sync:setlists": "tsx src/jobs/sync-setlists.ts",
+    "sync:setlists": "pnpm build && node dist/jobs/sync-setlists.js",
     "sync:spotify": "tsx src/jobs/sync-spotify.ts",
     "calculate:trending": "tsx src/jobs/calculate-trending.ts"
   },

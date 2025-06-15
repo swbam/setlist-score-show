@@ -96,6 +96,8 @@ main() {
     "sync-spotify"
     "calculate-trending"
     "sync-artists"
+    "sync-top-shows"
+    "fetch-top-artists"
     "cleanup-old-data"
   )
   

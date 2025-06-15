@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, TrendingUp, User } from 'lucide-react'
+import { Home, Compass, User, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function MobileBottomNav() {
@@ -15,14 +15,14 @@ export function MobileBottomNav() {
       label: 'Home',
     },
     {
-      href: '/shows',
-      icon: Calendar,
-      label: 'Shows',
+      href: '/explore',
+      icon: Compass,
+      label: 'Explore',
     },
     {
-      href: '/trending',
-      icon: TrendingUp,
-      label: 'Trending',
+      href: '/search',
+      icon: Search,
+      label: 'Search',
     },
     {
       href: '/profile',
@@ -36,7 +36,8 @@ export function MobileBottomNav() {
       <div className="grid grid-cols-4 gap-1 px-2 py-2">
         {navItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || 
+            (item.href === '/explore' && (pathname === '/trending' || pathname === '/upcoming' || pathname === '/artists'))
           
           return (
             <Link
