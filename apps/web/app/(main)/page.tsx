@@ -14,60 +14,30 @@ export default function HomePage() {
   const { data: trendingShows, isLoading: loadingTrending } = useQuery({
     queryKey: ['trending-shows'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('shows')
-        .select(`
-          id,
-          date,
-          title,
-          status,
-          view_count,
-          popularity,
-          artists (
-            id,
-            name,
-            slug,
-            image_url
-          ),
-          venues (
-            id,
-            name,
-            city,
-            state,
-            country
-          )
-        `)
-        .eq('status', 'upcoming')
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('popularity', { ascending: false })
-        .order('date', { ascending: true })
-        .limit(6)
-
+      const { data, error } = await supabase.rpc('get_trending_shows_limited', { limit_count: 6 })
       if (error) throw error
-      
-      return data?.map((show: any) => ({
-        id: show.id,
+
+      return (
+        data || []
+      ).map((show: any) => ({
+        id: show.show_id,
         date: show.date,
-        title: show.title || `${show.artists?.name} at ${show.venues?.name}`,
-        status: show.status,
-        viewCount: show.view_count || 0,
-        popularity: show.popularity || 0,
+        title: show.title,
+        trendingScore: show.trending_score,
         artist: {
-          id: show.artists?.id,
-          name: show.artists?.name || 'Unknown Artist',
-          slug: show.artists?.slug || '',
-          imageUrl: show.artists?.image_url
+          id: show.artist_id,
+          name: show.artist_name,
+          slug: show.artist_slug,
+          imageUrl: show.artist_image_url,
         },
         venue: {
-          id: show.venues?.id,
-          name: show.venues?.name || 'Unknown Venue',
-          city: show.venues?.city || 'Unknown City',
-          state: show.venues?.state,
-          country: show.venues?.country || 'Unknown Country'
-        }
-      })) || []
+          id: show.venue_id,
+          name: show.venue_name,
+          city: show.venue_city,
+        },
+      }))
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
   })
 
   // Fetch featured artists
@@ -126,18 +96,18 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
               <Link
                 href="/explore?tab=upcoming"
-                className="btn-primary px-6 py-3 text-base font-semibold"
+                className="px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all"
               >
                 Browse Upcoming Shows
               </Link>
-              <button className="px-6 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all font-semibold">
+              <button className="px-5 py-2.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white hover:bg-white/20 transition-all text-sm font-semibold">
                 How It Works
               </button>
             </div>
           </div>
 
           {/* Search Bar */}
-          <div className="max-w-xl mx-auto">
+          <div className="max-w-md mx-auto">
             <UnifiedSearch 
               placeholder="Search artists, venues, cities, or enter zip code..."
               className="[&_input]:bg-black/40 [&_input]:backdrop-blur-sm [&_input]:border-white/20 [&_input]:text-white [&_input]:placeholder-white/60 [&_input]:focus:ring-primary/50 [&_input]:focus:border-primary/50 [&_svg]:text-white/60"
