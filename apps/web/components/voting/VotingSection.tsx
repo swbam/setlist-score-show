@@ -148,7 +148,7 @@ export function VotingSection({
               <p className="text-sm text-muted-foreground font-body mb-3">Add a song to this setlist:</p>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <select
-                  className="bg-input border border-border text-foreground px-4 py-2 rounded-lg font-body flex-1 focus:outline-none focus:border-primary transition-colors"
+                  className="bg-input border border-border text-foreground px-4 py-2 rounded-[2px] font-body flex-1 focus:outline-none focus:border-primary transition-colors"
                   value={selectedSongToAdd?.id || ''}
                   onChange={(e) => {
                     const song = availableSongs.find(s => s.id === e.target.value) || null
@@ -163,7 +163,7 @@ export function VotingSection({
                 <button
                   onClick={onAddSong}
                   disabled={!selectedSongToAdd || isAddingSong}
-                  className="bg-muted hover:bg-muted/80 text-foreground px-4 py-2 rounded-lg font-body disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                  className="bg-muted hover:bg-muted/80 text-foreground px-4 py-2 rounded-[2px] font-body disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                 >
                   {isAddingSong ? 'Adding...' : 'Add to Setlist'}
                 </button>

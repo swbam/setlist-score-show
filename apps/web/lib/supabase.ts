@@ -8,4 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Create and export a single instance for client components
-export const supabase = createClientComponentClient()
+export const supabase = createClientComponentClient({
+  supabaseUrl,
+  supabaseKey: supabaseAnonKey
+})

@@ -44,7 +44,7 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors",
+                "flex flex-col items-center gap-1 py-2 px-3 rounded-[2px] transition-colors",
                 isActive
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"

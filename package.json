@@ -17,7 +17,11 @@
     "sync:setlists": "pnpm --filter @setlist/api sync:setlists",
     "db:migrate:deploy": "supabase db push && pnpm --filter @setlist/database db:push",
     "refresh:trending": "supabase functions invoke refresh_trending_shows",
-    "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending"
+    "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending",
+    "backend:test": "chmod +x scripts/test-backend-sync-system.sh && scripts/test-backend-sync-system.sh",
+    "manual-sync": "chmod +x scripts/manual-sync-all.sh && scripts/manual-sync-all.sh",
+    "manual-sync:orchestrator": "chmod +x scripts/manual-sync-all.sh && scripts/manual-sync-all.sh orchestrator",
+    "sync:trending": "chmod +x scripts/manual-sync-all.sh && scripts/manual-sync-all.sh trending"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

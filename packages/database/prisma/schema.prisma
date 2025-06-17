@@ -149,6 +149,7 @@ model User {
   displayName String?  @map("display_name")
   avatarUrl   String?  @map("avatar_url")
   spotifyId   String?  @unique @map("spotify_id")
+  role        String   @default("user")
   preferences Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

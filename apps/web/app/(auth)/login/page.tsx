@@ -53,7 +53,7 @@ export default async function LoginPage() {
           {/* Sign Up Link */}
           <Link
             href="/signup"
-            className="block w-full text-center py-3 px-4 rounded-lg border border-gray-700 hover:bg-gray-700 transition-colors duration-200 font-medium"
+            className="block w-full text-center py-3 px-4 rounded-[2px] border border-gray-700 hover:bg-gray-700 transition-colors duration-200 font-medium"
           >
             Create an account
           </Link>

@@ -64,7 +64,7 @@ export function SignUpForm() {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             required
-            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
+            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-[2px] focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
             placeholder="Your name"
           />
           <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -83,7 +83,7 @@ export function SignUpForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
+            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-[2px] focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
             placeholder="you@example.com"
           />
           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -103,7 +103,7 @@ export function SignUpForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
-            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
+            className="w-full px-4 py-3 pl-12 bg-gray-700 border border-gray-600 rounded-[2px] focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-colors"
             placeholder="••••••••"
           />
           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />

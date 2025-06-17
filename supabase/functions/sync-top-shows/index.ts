@@ -1,22 +1,34 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
-import { createServiceClient } from '../_shared/supabase.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { verifyAuth } from '../_shared/auth.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+
+function createServiceClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+}
 
 serve(async (req) => {
   const startTime = Date.now();
   
   // Handle CORS
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
-    // Verify cron secret for scheduled runs or API key for manual runs
-    const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
+    // Verify authentication
+    const { isAuthorized } = await verifyAuth(req);
     
-    if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
-      console.error('Unauthorized top shows sync request');
+    if (!isAuthorized) {
       return new Response(
         JSON.stringify({ success: false, message: 'Unauthorized' }), 
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -32,7 +44,6 @@ serve(async (req) => {
       throw new Error('TICKETMASTER_API_KEY not configured');
     }
 
-    // Fetch top 50 upcoming shows across the US
     console.log('🔥 Fetching top upcoming shows nationwide...');
     
     const topShowsUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
@@ -40,10 +51,9 @@ serve(async (req) => {
     topShowsUrl.searchParams.append('classificationName', 'Music');
     topShowsUrl.searchParams.append('countryCode', 'US');
     topShowsUrl.searchParams.append('size', '50');
-    topShowsUrl.searchParams.append('sort', 'relevance,desc'); // Get most relevant/popular
+    topShowsUrl.searchParams.append('sort', 'relevance,desc');
     topShowsUrl.searchParams.append('startDateTime', new Date().toISOString());
     
-    // Get events for next 6 months
     const endDate = new Date();
     endDate.setMonth(endDate.getMonth() + 6);
     topShowsUrl.searchParams.append('endDateTime', endDate.toISOString());
@@ -62,7 +72,6 @@ serve(async (req) => {
     let newArtistsFound = 0;
     let newShowsStored = 0;
     let newVenuesCreated = 0;
-    let artistsQueued = 0;
 
     for (const event of events) {
       try {
@@ -72,13 +81,57 @@ serve(async (req) => {
           // Check if we already have this artist
           const { data: existingArtist } = await supabase
             .from('artists')
-            .select('id, name, spotify_id')
+            .select('id, name')
             .or(`name.ilike.%${attraction.name}%,ticketmaster_id.eq.${attraction.id}`)
             .single();
 
           let artistRecord = existingArtist;
 
           if (!existingArtist) {
+            // Try to find Spotify ID for the artist
+            let spotifyId = null;
+            
+            try {
+              // Get Spotify access token
+              const spotifyClientId = Deno.env.get('SPOTIFY_CLIENT_ID');
+              const spotifyClientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+              
+              if (spotifyClientId && spotifyClientSecret) {
+                const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': 'Basic ' + btoa(`${spotifyClientId}:${spotifyClientSecret}`),
+                  },
+                  body: 'grant_type=client_credentials',
+                });
+
+                if (tokenResponse.ok) {
+                  const tokenData = await tokenResponse.json();
+                  const accessToken = tokenData.access_token;
+
+                  // Search for artist on Spotify
+                  const searchResponse = await fetch(
+                    `https://api.spotify.com/v1/search?q=${encodeURIComponent(attraction.name)}&type=artist&limit=1`,
+                    {
+                      headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                      },
+                    }
+                  );
+
+                  if (searchResponse.ok) {
+                    const searchData = await searchResponse.json();
+                    if (searchData.artists?.items?.length > 0) {
+                      spotifyId = searchData.artists.items[0].id;
+                    }
+                  }
+                }
+              }
+            } catch (spotifyError) {
+              console.warn('Error searching for artist on Spotify:', spotifyError);
+            }
+
             // Create new top artist
             const { data: newArtist, error: artistError } = await supabase
               .from('artists')
@@ -86,9 +139,10 @@ serve(async (req) => {
                 name: attraction.name,
                 slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                 ticketmaster_id: attraction.id,
+                spotify_id: spotifyId,
                 image_url: attraction.images?.[0]?.url || null,
                 genres: attraction.classifications?.[0]?.genre?.name ? [attraction.classifications[0].genre.name] : [],
-                popularity: 75, // High popularity for top shows
+                popularity: 75,
                 followers: 0,
                 last_synced_at: new Date().toISOString(),
               })
@@ -98,16 +152,8 @@ serve(async (req) => {
             if (!artistError && newArtist) {
               artistRecord = newArtist;
               newArtistsFound++;
-              console.log(`🆕 Added top artist: ${attraction.name}`);
-
-              // Queue for Spotify sync if we don't have Spotify data
-              await enqueueSpotifySync(supabase, newArtist.id);
-              artistsQueued++;
+              console.log(`🆕 Added top artist: ${attraction.name}${spotifyId ? ' with Spotify ID' : ''}`);
             }
-          } else if (!existingArtist.spotify_id) {
-            // Queue existing artist for Spotify sync if missing
-            await enqueueSpotifySync(supabase, existingArtist.id);
-            artistsQueued++;
           }
 
           // Store the top show
@@ -126,7 +172,7 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime;
-    const response = {
+    const responseData = {
       success: true,
       message: 'Top shows sync completed',
       stats: {
@@ -134,7 +180,6 @@ serve(async (req) => {
         newArtistsFound,
         newShowsStored,
         newVenuesCreated,
-        artistsQueuedForSpotify: artistsQueued,
       },
       duration,
     };
@@ -143,7 +188,7 @@ serve(async (req) => {
     console.log(`📊 Stats: ${newArtistsFound} new artists, ${newShowsStored} new shows, ${newVenuesCreated} new venues`);
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -160,33 +205,6 @@ serve(async (req) => {
     );
   }
 });
-
-// Helper function to queue artist for Spotify sync
-async function enqueueSpotifySync(supabase: any, artistId: string): Promise<void> {
-  try {
-    // Check if already queued
-    const { data: existing } = await supabase
-      .from('artist_sync_queue')
-      .select('id')
-      .eq('artist_id', artistId)
-      .eq('sync_type', 'spotify')
-      .eq('status', 'pending')
-      .single();
-
-    if (!existing) {
-      await supabase
-        .from('artist_sync_queue')
-        .insert({
-          artist_id: artistId,
-          sync_type: 'spotify',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        });
-    }
-  } catch (error) {
-    console.warn(`Failed to queue Spotify sync for artist ${artistId}:`, error);
-  }
-}
 
 // Helper function to process a single event for an artist
 async function processEventForArtist(supabase: any, artist: any, event: any): Promise<{showCreated: boolean, venueCreated: boolean}> {
@@ -250,7 +268,7 @@ async function processEventForArtist(supabase: any, artist: any, event: any): Pr
         ticketmaster_url: event.url,
         status: 'upcoming',
         view_count: 0,
-        popularity: 75, // High popularity for top shows
+        popularity: 75,
       })
       .select('id')
       .single();
@@ -268,26 +286,105 @@ async function processEventForArtist(supabase: any, artist: any, event: any): Pr
       .select('id')
       .single();
 
-    if (!setlistError && setlist) {
-      // Add popular songs to setlist if we have them
-      const { data: artistSongs } = await supabase
-        .from('songs')
-        .select('id')
-        .eq('artist_id', artist.id)
-        .order('popularity', { ascending: false })
-        .limit(15);
+    if (!setlist || setlistError) {
+      console.warn('Failed to create setlist:', setlistError);
+      return { showCreated: true, venueCreated };
+    }
 
-      if (artistSongs && artistSongs.length > 0) {
-        const setlistSongs = artistSongs.map((song: any, index: number) => ({
-          setlist_id: setlist.id,
-          song_id: song.id,
-          position: index + 1,
-          vote_count: 0,
-        }));
+    // Now we need to populate the setlist with songs
+    // First, check if artist has spotify_id
+    if (artist.spotify_id) {
+      try {
+        // Get Spotify access token
+        const spotifyClientId = Deno.env.get('SPOTIFY_CLIENT_ID');
+        const spotifyClientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+        
+        if (spotifyClientId && spotifyClientSecret) {
+          const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': 'Basic ' + btoa(`${spotifyClientId}:${spotifyClientSecret}`),
+            },
+            body: 'grant_type=client_credentials',
+          });
 
-        await supabase
-          .from('setlist_songs')
-          .insert(setlistSongs);
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            const accessToken = tokenData.access_token;
+
+            // Get artist's top tracks
+            const topTracksResponse = await fetch(
+              `https://api.spotify.com/v1/artists/${artist.spotify_id}/top-tracks?market=US`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                },
+              }
+            );
+
+            if (topTracksResponse.ok) {
+              const topTracksData = await topTracksResponse.json();
+              const tracks = topTracksData.tracks || [];
+              
+              // Limit to 10 tracks for the default setlist
+              const setlistTracks = tracks.slice(0, 10);
+              
+              for (let i = 0; i < setlistTracks.length; i++) {
+                const track = setlistTracks[i];
+                
+                // Check if song exists
+                const { data: existingSong } = await supabase
+                  .from('songs')
+                  .select('id')
+                  .eq('artist_id', artist.id)
+                  .eq('title', track.name)
+                  .single();
+
+                let songId: string;
+                
+                if (existingSong) {
+                  songId = existingSong.id;
+                } else {
+                  // Create new song
+                  const { data: newSong, error: songError } = await supabase
+                    .from('songs')
+                    .insert({
+                      artist_id: artist.id,
+                      title: track.name,
+                      spotify_id: track.id,
+                      popularity: track.popularity || 0,
+                      duration_ms: track.duration_ms || 0,
+                      preview_url: track.preview_url,
+                      spotify_url: track.external_urls?.spotify || null,
+                    })
+                    .select('id')
+                    .single();
+
+                  if (songError || !newSong) {
+                    console.warn('Failed to create song:', songError);
+                    continue;
+                  }
+                  
+                  songId = newSong.id;
+                }
+
+                // Create setlist_song entry
+                await supabase
+                  .from('setlist_songs')
+                  .insert({
+                    setlist_id: setlist.id,
+                    song_id: songId,
+                    position: i,
+                  });
+              }
+              
+              console.log(`Added ${setlistTracks.length} songs to setlist for ${event.name}`);
+            }
+          }
+        }
+      } catch (spotifyError) {
+        console.warn('Error fetching Spotify tracks for setlist:', spotifyError);
       }
     }
 

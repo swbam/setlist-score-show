@@ -139,7 +139,7 @@ function ShowsSidebar() {
             <Link
               key={filter.name}
               href={filter.href}
-              className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-muted/20 transition-colors group"
+              className="flex items-center gap-2 sm:gap-3 p-2 rounded-[2px] hover:bg-muted/20 transition-colors group"
             >
               <div className="flex-1 min-w-0">
                 <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
@@ -161,7 +161,7 @@ function ShowsSidebar() {
         <div className="space-y-2 sm:space-y-3">
           <Link 
             href="/trending" 
-            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-[2px] bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
             <Vote className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
             <div className="flex-1 min-w-0">
@@ -176,7 +176,7 @@ function ShowsSidebar() {
           
           <Link 
             href="/artists" 
-            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
+            className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-[2px] bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
             <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
             <div className="flex-1 min-w-0">

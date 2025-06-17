@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { verifyAuth } from '../_shared/auth.ts';
 
 interface SpotifyToken {
   access_token: string;
@@ -24,12 +25,10 @@ serve(async (req) => {
   if (corsResponse) return corsResponse;
 
   try {
-    // Verify cron secret for scheduled runs or API key for manual runs
-    const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
+    // Verify authentication
+    const { isAuthorized } = await verifyAuth(req);
     
-    if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
+    if (!isAuthorized) {
       console.error('Unauthorized Spotify sync request');
       return new Response(
         JSON.stringify({ success: false, message: 'Unauthorized' }), 

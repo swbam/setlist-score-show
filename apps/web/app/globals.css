@@ -138,6 +138,14 @@
   }
 
   /* Modern button styles */
+  .btn {
+    @apply rounded-sm px-4 py-2 font-medium transition-all duration-200
+           border border-white/10 hover:border-white/20
+           bg-white/5 hover:bg-white/10
+           flex items-center justify-center gap-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
   .btn-primary {
     background: #ffffff;
     color: #000222;
@@ -218,5 +226,82 @@
 
   .shadow-strong {
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Text clamp utilities */
+  .line-clamp-1 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  /* Enhanced animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in-from-top {
+    from {
+      transform: translateY(-8px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-in {
+    animation-duration: 150ms;
+    animation-fill-mode: both;
+  }
+
+  .fade-in {
+    animation-name: fade-in;
+  }
+
+  .slide-in-from-top-2 {
+    animation-name: slide-in-from-top;
   }
 }
