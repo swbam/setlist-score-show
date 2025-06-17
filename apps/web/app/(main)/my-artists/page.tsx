@@ -3,32 +3,68 @@
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
-import { useQuery } from '@tanstack/react-query'
-import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_MY_ARTISTS } from '@/lib/graphql/queries'
-import { useAuth } from '@/hooks/useAuth'
-import { ArtistGrid } from '@/components/artists/ArtistGrid'
-import { Skeleton } from '@/components/ui/skeleton'
-import Link from 'next/link'
-import { Music2, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useCallback } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { useQuery } from '@tanstack/react-query'
+import { 
+  Music, 
+  Calendar, 
+  Users, 
+  Star, 
+  TrendingUp, 
+  Plus,
+  ExternalLink,
+  ArrowRight,
+  Loader2,
+  RefreshCw,
+  SparklesIcon as Sparkles
+} from 'lucide-react'
+import Link from 'next/link'
+import { ShowCard } from '@/components/shows/ShowCard'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+interface Artist {
+  id: string
+  name: string
+  slug: string
+  image_url?: string
+  genres: string[]
+  popularity: number
+  followers?: number
+  upcoming_shows?: number
+  last_synced_at?: string
+}
+
+interface UpcomingShow {
+  id: string
+  title?: string
+  date: string
+  status: string
+  artist: {
+    id: string
+    name: string
+    slug: string
+    imageUrl?: string
+  }
+  venue: {
+    id: string
+    name: string
+    city: string
+    state?: string
+    country?: string
+  }
+  _count?: {
+    votes: number
+  }
+}
 
 export default function MyArtistsPage() {
   const { user, loading } = useAuth()
-  const client = useGraphQLClient()
   const router = useRouter()
   const [isImporting, setIsImporting] = useState(false)
-
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['myArtists', user?.id],
-    queryFn: async () => {
-      return client.request(GET_MY_ARTISTS)
-    },
-    enabled: !!user,
-  })
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -37,147 +73,505 @@ export default function MyArtistsPage() {
     }
   }, [user, loading, router])
 
-  const handleImportFromSpotify = useCallback(async () => {
-    if (!user) return
+  // Fetch user's followed artists
+  const { data: artistsData, isLoading: isLoadingArtists, refetch: refetchArtists } = useQuery({
+    queryKey: ['my-artists', user?.id],
+    queryFn: async () => {
+      if (!user) return []
+      
+      const { data, error } = await supabase
+        .from('spotify_top_artists')
+        .select(`
+          rank,
+          artists (
+            id,
+            name,
+            slug,
+            image_url,
+            genres,
+            popularity,
+            followers,
+            last_synced_at
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('rank', { ascending: true })
+
+      if (error) throw error
+
+      // Get upcoming shows count for each artist
+      const artistIds = data?.map(item => item.artists.id).filter(Boolean) || []
+      
+      if (artistIds.length > 0) {
+        const { data: showCounts } = await supabase
+          .from('shows')
+          .select('artist_id')
+          .in('artist_id', artistIds)
+          .eq('status', 'upcoming')
+          .gte('date', new Date().toISOString().split('T')[0])
+
+        const showCountMap = showCounts?.reduce((acc, show) => {
+          acc[show.artist_id] = (acc[show.artist_id] || 0) + 1
+          return acc
+        }, {} as Record<string, number>) || {}
+
+        return data?.map(item => ({
+          ...(item.artists as any),
+          rank: item.rank,
+          upcoming_shows: showCountMap[(item.artists as any).id] || 0
+        })) || []
+      }
+
+      return data?.map(item => ({
+        ...(item.artists as any),
+        rank: item.rank,
+        upcoming_shows: 0
+      })) || []
+    },
+    enabled: !!user
+  })
+
+  // Fetch upcoming shows from followed artists
+  const { data: upcomingShows, isLoading: isLoadingShows } = useQuery({
+    queryKey: ['my-artists-shows', user?.id],
+    queryFn: async () => {
+      if (!user || !artistsData?.length) return []
+      
+      const artistIds = (artistsData as any[]).map((artist: any) => artist.id)
+      
+      const { data, error } = await supabase
+        .from('shows')
+        .select(`
+          id,
+          title,
+          date,
+          status,
+          artists (
+            id,
+            name,
+            slug,
+            image_url
+          ),
+          venues (
+            id,
+            name,
+            city,
+            state,
+            country
+          ),
+          setlists (
+            id,
+            setlist_songs (
+              vote_count
+            )
+          )
+        `)
+        .in('artist_id', artistIds)
+        .eq('status', 'upcoming')
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
+        .limit(12)
+
+      if (error) throw error
+
+      return data?.map(show => ({
+        ...show,
+        artist: {
+          id: (show.artists as any).id,
+          name: (show.artists as any).name,
+          slug: (show.artists as any).slug,
+          imageUrl: (show.artists as any).image_url
+        },
+        venue: {
+          id: (show.venues as any).id,
+          name: (show.venues as any).name,
+          city: (show.venues as any).city,
+          state: (show.venues as any).state,
+          country: (show.venues as any).country
+        },
+        _count: {
+          votes: show.setlists?.[0]?.setlist_songs?.reduce((sum, song) => sum + (song.vote_count || 0), 0) || 0
+        }
+      })) || []
+    },
+    enabled: !!user && !!artistsData?.length
+  })
+
+  const handleImportFromSpotify = async () => {
+    if (!user) {
+      toast.error('Please sign in to import artists')
+      return
+    }
+
     setIsImporting(true)
+    
     try {
-      // Check if user has Spotify connected
-      if (!user.app_metadata?.provider || user.app_metadata.provider !== 'spotify') {
-        // Redirect to Spotify auth
-        const { data: { url }, error } = await supabase.auth.signInWithOAuth({
-          provider: 'spotify',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback?redirect=/my-artists&action=import`,
-            scopes: 'user-top-read user-follow-read',
-          },
-        })
-        
-        if (error) {
-          toast.error('Failed to connect with Spotify')
-          return
-        }
-        
-        if (url) {
-          window.location.href = url
-        }
-        return
+      // Call the sync function
+      const response = await fetch('/api/admin/trigger/sync-spotify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to sync Spotify data')
       }
+
+      const data = await response.json()
       
-      // Import artists via Supabase adapter
-      toast.info('Importing your Spotify artists...')
-      const adapter = new (await import('@/lib/supabase-adapter')).SupabaseAdapter()
-      const { importSpotifyArtists: imported } = await adapter.importSpotifyArtists()
-      
-      if (imported.length > 0) {
-        toast.success(`Imported ${imported.length} artists from Spotify!`)
-        refetch()
+      if (data.success) {
+        toast.success('Successfully imported your top artists from Spotify!')
+        refetchArtists()
       } else {
-        toast.info('No new artists to import')
+        throw new Error(data.error || 'Sync failed')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Import error:', error)
-      toast.error('Failed to import artists from Spotify')
+      toast.error('Failed to import Spotify artists. Please try again.')
     } finally {
       setIsImporting(false)
     }
-  }, [user, refetch])
-
-  // Check for action parameter on page load (after Spotify OAuth redirect)
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    const action = searchParams.get('action')
-    
-    if (action === 'import' && user && !isImporting) {
-      // Clear the action parameter from URL
-      const url = new URL(window.location.href)
-      url.searchParams.delete('action')
-      window.history.replaceState({}, '', url)
-      
-      // Trigger import
-      handleImportFromSpotify()
-    }
-  }, [user, isImporting, handleImportFromSpotify])
+  }
 
   if (loading) {
-    return <div>Loading...</div>
+    return <MyArtistsPageSkeleton />
   }
 
   if (!user) {
     return null
   }
 
-  const followedArtists = (data as any)?.myArtists || []
+  const artists = artistsData || []
+  const totalUpcomingShows = artists.reduce((sum, artist) => sum + (artist.upcoming_shows || 0), 0)
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-black">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4 gradient-text">My Artists</h1>
-          <p className="text-muted-foreground text-lg">
-            Artists you follow and their upcoming shows
-          </p>
+        <div className="mb-8 sm:mb-12">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 flex items-center gap-3">
+                <div className="p-2 rounded-sm bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+                  <Star className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400" />
+                </div>
+                My Artists
+              </h1>
+              <p className="text-lg sm:text-xl text-white/70">
+                {artists.length > 0 
+                  ? `Following ${artists.length} artist${artists.length !== 1 ? 's' : ''} with ${totalUpcomingShows} upcoming show${totalUpcomingShows !== 1 ? 's' : ''}`
+                  : 'Discover and follow your favorite artists'
+                }
+              </p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleImportFromSpotify}
+                disabled={isImporting}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-sm font-semibold transition-all text-sm sm:text-base",
+                  "bg-green-600 hover:bg-green-700 text-white",
+                  isImporting && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                    <span>Importing...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>Sync from Spotify</span>
+                  </>
+                )}
+              </button>
+              
+              <Link
+                href="/explore?tab=artists"
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-white/10 border border-white/20 rounded-sm text-white font-semibold hover:bg-white/20 transition-all text-sm sm:text-base"
+              >
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>Discover Artists</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-12">
+          <div className="bg-white/5 backdrop-blur-xl rounded-lg border border-white/10 p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Users className="w-5 h-5 text-blue-400" />
+              <span className="text-sm text-white/60">Artists</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {artists.length}
+            </div>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-xl rounded-lg border border-white/10 p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Calendar className="w-5 h-5 text-green-400" />
+              <span className="text-sm text-white/60">Upcoming Shows</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {totalUpcomingShows}
+            </div>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-xl rounded-lg border border-white/10 p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp className="w-5 h-5 text-orange-400" />
+              <span className="text-sm text-white/60">Hot Artists</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {artists.filter(a => (a.upcoming_shows || 0) > 0).length}
+            </div>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-xl rounded-lg border border-white/10 p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              <span className="text-sm text-white/60">Avg Popularity</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {artists.length > 0 ? Math.round(artists.reduce((sum, a) => sum + a.popularity, 0) / artists.length) : 0}
+            </div>
+          </div>
         </div>
 
         {/* Content */}
-        {isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-64" />
-            ))}
+        {isLoadingArtists ? (
+          <div className="space-y-8">
+            <ArtistsGridSkeleton />
           </div>
-        ) : !followedArtists.length ? (
-          <div className="text-center py-16">
-            <Music2 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">No artists yet</h2>
-            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-              Start following artists to see their upcoming shows and vote on setlists
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/artists"
-                className="btn-primary"
-              >
-                <Plus className="w-5 h-5" />
-                Browse Artists
-              </Link>
-              <button
-                onClick={handleImportFromSpotify}
-                disabled={isImporting}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#1DB954] text-white rounded-lg font-medium hover:bg-[#1aa34a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-                {isImporting ? 'Importing...' : 'Import from Spotify'}
-              </button>
-            </div>
-          </div>
+        ) : artists.length === 0 ? (
+          <EmptyState onImport={handleImportFromSpotify} isImporting={isImporting} />
         ) : (
-          <div>
-            <div className="mb-4 flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">
-                Following {followedArtists.length} {followedArtists.length === 1 ? 'artist' : 'artists'}
-              </span>
-              <button
-                onClick={handleImportFromSpotify}
-                disabled={isImporting}
-                className="btn-primary"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-                {isImporting ? 'Importing...' : 'Import More'}
-              </button>
-            </div>
-            <ArtistGrid 
-              artists={followedArtists.map((fa: any) => ({
-                ...fa.artist,
-                followedAt: fa.followed_at || fa.followedAt
-              }))} 
-            />
+          <div className="space-y-8 sm:space-y-12">
+            {/* Artists Grid */}
+            <section>
+              <div className="flex items-center justify-between mb-6 sm:mb-8">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
+                  <Music className="w-6 h-6 text-white/60" />
+                  Your Artists
+                </h2>
+                <Link
+                  href="/explore?tab=artists"
+                  className="text-white/80 hover:text-white transition-colors flex items-center gap-2 text-sm sm:text-base"
+                >
+                  Discover more
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 sm:gap-6">
+                {artists.map((artist) => (
+                  <ArtistCard key={artist.id} artist={artist} />
+                ))}
+              </div>
+            </section>
+
+            {/* Upcoming Shows */}
+            {upcomingShows && upcomingShows.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-6 sm:mb-8">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
+                    <Calendar className="w-6 h-6 text-white/60" />
+                    Upcoming Shows
+                  </h2>
+                  <Link
+                    href="/explore?tab=upcoming"
+                    className="text-white/80 hover:text-white transition-colors flex items-center gap-2 text-sm sm:text-base"
+                  >
+                    View all shows
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+                
+                {isLoadingShows ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-64 bg-white/5 rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                    {upcomingShows.slice(0, 8).map((show) => (
+                      <ShowCard 
+                        key={show.id} 
+                        show={{
+                          ...show,
+                          title: show.title || `${show.artist.name} Live`
+                        }} 
+                        variant="grid" 
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function ArtistCard({ artist }: { artist: Artist }) {
+  return (
+    <Link
+      href={`/artists/${artist.slug}`}
+      className="group block"
+    >
+      <div className="bg-white/5 backdrop-blur-xl rounded-lg border border-white/10 hover:border-white/20 transition-all duration-300 hover:transform hover:scale-105 overflow-hidden">
+        {/* Artist Image */}
+        <div className="aspect-square relative">
+          {artist.image_url ? (
+            <>
+              <img
+                src={artist.image_url}
+                alt={artist.name}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            </>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+              <Music className="w-8 h-8 sm:w-12 sm:h-12 text-gray-500" />
+            </div>
+          )}
+          
+          {/* Upcoming shows badge */}
+          {(artist.upcoming_shows || 0) > 0 && (
+            <div className="absolute top-2 right-2 px-2 py-1 bg-green-500/80 backdrop-blur-xl rounded-full text-white text-xs font-semibold">
+              {artist.upcoming_shows} show{artist.upcoming_shows !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+        
+        {/* Artist Info */}
+        <div className="p-3 sm:p-4">
+          <h3 className="font-bold text-sm sm:text-base text-white mb-1 truncate group-hover:text-gray-200 transition-colors">
+            {artist.name}
+          </h3>
+          <p className="text-xs text-white/60 mb-2 truncate">
+            {Array.isArray(artist.genres) && artist.genres.length > 0 
+              ? artist.genres.slice(0, 2).join(', ')
+              : 'Music Artist'
+            }
+          </p>
+          
+          {/* Stats */}
+          <div className="flex items-center justify-between text-xs text-white/80">
+            <div className="flex items-center gap-1">
+              <Star className="w-3 h-3 text-yellow-500" />
+              <span>{artist.popularity}</span>
+            </div>
+            {artist.followers && (
+              <div className="flex items-center gap-1">
+                <Users className="w-3 h-3 text-blue-400" />
+                <span>{(artist.followers / 1000000).toFixed(1)}M</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+function EmptyState({ onImport, isImporting }: { onImport: () => void; isImporting: boolean }) {
+  return (
+    <div className="text-center py-12 sm:py-20">
+      <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-white/5 mb-6 sm:mb-8">
+        <Music className="w-8 h-8 sm:w-10 sm:h-10 text-white/40" />
+      </div>
+      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">No artists yet</h2>
+      <p className="text-white/60 mb-8 sm:mb-10 max-w-md mx-auto text-sm sm:text-base px-4">
+        Import your top artists from Spotify or discover new ones to start building your personalized music experience.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <button
+          onClick={onImport}
+          disabled={isImporting}
+          className={cn(
+            "flex items-center gap-2 px-6 py-3 rounded-sm font-semibold transition-all",
+            "bg-green-600 hover:bg-green-700 text-white",
+            isImporting && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          {isImporting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Importing from Spotify...
+            </>
+          ) : (
+            <>
+              <ExternalLink className="w-5 h-5" />
+              Import from Spotify
+            </>
+          )}
+        </button>
+        <Link
+          href="/explore?tab=artists"
+          className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded-sm text-white font-semibold hover:bg-white/20 transition-all"
+        >
+          <Plus className="w-5 h-5" />
+          Discover Artists
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function ArtistsGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 sm:gap-6">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} className="bg-white/5 rounded-lg overflow-hidden">
+          <div className="aspect-square bg-white/10 animate-pulse" />
+          <div className="p-4 space-y-2">
+            <div className="h-4 bg-white/10 rounded animate-pulse" />
+            <div className="h-3 bg-white/10 rounded animate-pulse w-2/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MyArtistsPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        {/* Header Skeleton */}
+        <div className="mb-12">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <div className="h-12 w-64 bg-white/10 rounded-lg mb-4 animate-pulse" />
+              <div className="h-6 w-96 bg-white/10 rounded-lg animate-pulse" />
+            </div>
+            <div className="flex gap-4">
+              <div className="h-12 w-32 bg-white/10 rounded-sm animate-pulse" />
+              <div className="h-12 w-32 bg-white/10 rounded-sm animate-pulse" />
+            </div>
+          </div>
+        </div>
+        
+        {/* Stats Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 bg-white/5 rounded-lg animate-pulse" />
+          ))}
+        </div>
+        
+        {/* Content Skeleton */}
+        <ArtistsGridSkeleton />
       </div>
     </div>
   )
