@@ -232,7 +232,7 @@ async function HomepageContent() {
                         slug: show.artist.slug || '',
                         imageUrl: show.artist.imageUrl
                       }
-                    }} 
+                    } as any} 
                     variant="featured" 
                   />
                 ))}
@@ -357,7 +357,19 @@ async function HomepageContent() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {trendingShows.slice(12, 24).map((show: HomepageShow) => (
-                  <ShowCard key={show.id} show={show} variant="featured" />
+                  <ShowCard 
+                    key={show.id} 
+                    show={{
+                      ...show,
+                      title: show.title || show.name || `${show.artist.name} Live`,
+                      artist: {
+                        ...show.artist,
+                        slug: show.artist.slug || '',
+                        imageUrl: show.artist.imageUrl
+                      }
+                    } as any} 
+                    variant="featured" 
+                  />
                 ))}
               </div>
             </section>

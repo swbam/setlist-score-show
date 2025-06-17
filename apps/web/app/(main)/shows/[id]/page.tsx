@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_SHOW } from '@/lib/graphql/queries'
+import { GET_SHOW_WITH_SETLIST } from '@/lib/graphql/queries'
 import { 
   Calendar, 
   MapPin, 
@@ -38,7 +38,7 @@ export default function ShowPage({ params }: { params: { id: string } }) {
     queryKey: ['show', params.id],
     queryFn: async () => {
       try {
-        const data = await client.request(GET_SHOW, { id: params.id })
+        const data = await client.request(GET_SHOW_WITH_SETLIST, { id: params.id })
         return (data as any)?.show
       } catch (error) {
         console.error('GraphQL error, trying direct Supabase query:', error)

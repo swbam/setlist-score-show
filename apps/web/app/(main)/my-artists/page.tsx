@@ -100,7 +100,7 @@ export default function MyArtistsPage() {
       if (error) throw error
 
       // Get upcoming shows count for each artist
-      const artistIds = data?.map(item => item.artists.id).filter(Boolean) || []
+      const artistIds = data?.map(item => (item.artists as any)?.id).filter(Boolean) || []
       
       if (artistIds.length > 0) {
         const { data: showCounts } = await supabase
