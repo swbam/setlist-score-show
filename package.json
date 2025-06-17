@@ -11,6 +11,7 @@
     "test": "turbo test",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
+    "updateall": "chmod +x scripts/updateall.sh && scripts/updateall.sh",
     "db:migrate": "pnpm --filter @setlist/database migrate",
     "db:push": "pnpm --filter @setlist/database push",
     "db:seed": "pnpm --filter @setlist/database seed",
