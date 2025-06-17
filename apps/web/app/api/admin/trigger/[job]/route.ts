@@ -5,11 +5,10 @@ import { createServerClient } from '@/lib/supabase-server';
 const ALLOWED_JOBS = [
   'sync-homepage-orchestrator',
   'sync-top-shows', 
-  'sync-ticketmaster-shows',
   'sync-artists',
   'sync-spotify',
   'calculate-trending',
-  'refresh-trending-shows',
+  'refresh_trending_shows',
   'sync-setlists',
   'fetch-top-artists'
 ] as const;
@@ -28,52 +27,47 @@ export async function POST(
     }
 
     // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (userError || userData?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    if (profile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Validate job name
     if (!ALLOWED_JOBS.includes(params.job as any)) {
-      return NextResponse.json({ 
-        error: 'Invalid job name',
-        allowed_jobs: ALLOWED_JOBS 
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid job' }, { status: 400 });
     }
 
-    // Create service role client for triggering edge functions
+    // Create service role client
     const serviceSupabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Trigger the edge function with proper authentication
-    const { data, error } = await serviceSupabase.functions.invoke(params.job, {
-      headers: {
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`
-      }
-    });
+    try {
+      const { data, error } = await serviceSupabase.functions.invoke(params.job, {
+        headers: {
+          Authorization: `Bearer ${process.env.CRON_SECRET}`
+        }
+      });
 
-    if (error) {
+      if (error) throw error;
+
+      return NextResponse.json({ 
+        success: true, 
+        job: params.job,
+        data 
+      });
+    } catch (error) {
       console.error(`Failed to trigger ${params.job}:`, error);
       return NextResponse.json({ 
-        error: `Failed to trigger job: ${error.message}`,
-        details: error
+        error: `Failed to trigger job: ${error.message}` 
       }, { status: 500 });
     }
-
-    return NextResponse.json({ 
-      success: true, 
-      job: params.job,
-      data,
-      message: `Successfully triggered ${params.job}`
-    });
-
   } catch (error) {
     console.error(`Error in admin trigger API:`, error);
     return NextResponse.json({ 
@@ -91,6 +85,7 @@ export async function GET(
   return NextResponse.json({
     job: params.job,
     allowed: ALLOWED_JOBS.includes(params.job as any),
+    allowed_jobs: ALLOWED_JOBS,
     method: 'Use POST to trigger this job'
   });
 }

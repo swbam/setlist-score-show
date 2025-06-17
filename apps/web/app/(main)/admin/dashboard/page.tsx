@@ -13,8 +13,9 @@ import {
   RefreshCw,
   Database,
   AlertCircle,
-  Download,
-  Star
+  CheckCircle,
+  XCircle,
+  Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -26,6 +27,51 @@ interface Stats {
   activeUsers: number
   upcomingShows: number
 }
+
+const SYNC_JOBS = [
+  {
+    id: 'sync-homepage-orchestrator',
+    name: 'Full Homepage Sync',
+    description: 'Sync all artists, shows, and venues',
+    icon: Database,
+    color: 'from-blue-500 to-cyan-500'
+  },
+  {
+    id: 'sync-top-shows',
+    name: 'Top Shows Sync',
+    description: 'Import trending shows from external APIs',
+    icon: Calendar,
+    color: 'from-purple-500 to-pink-500'
+  },
+  {
+    id: 'sync-spotify',
+    name: 'Spotify Sync',
+    description: 'Update artist song catalogs from Spotify',
+    icon: Music,
+    color: 'from-green-500 to-emerald-500'
+  },
+  {
+    id: 'calculate-trending',
+    name: 'Calculate Trending',
+    description: 'Update trending shows and artists',
+    icon: TrendingUp,
+    color: 'from-orange-500 to-red-500'
+  },
+  {
+    id: 'sync-setlists',
+    name: 'Import Setlists',
+    description: 'Import actual performed setlists',
+    icon: RefreshCw,
+    color: 'from-indigo-500 to-purple-500'
+  },
+  {
+    id: 'fetch-top-artists',
+    name: 'Fetch Top Artists',
+    description: 'Import popular artists with upcoming shows',
+    icon: Users,
+    color: 'from-pink-500 to-rose-500'
+  }
+];
 
 export default function AdminDashboard() {
   const { user, loading, isAdmin } = useAuth()
@@ -39,7 +85,8 @@ export default function AdminDashboard() {
     upcomingShows: 0
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [isSyncing, setIsSyncing] = useState(false)
+  const [running, setRunning] = useState<Record<string, boolean>>({})
+  const [results, setResults] = useState<Record<string, 'success' | 'error'>>({})
 
   // Check admin access
   useEffect(() => {
@@ -95,67 +142,43 @@ export default function AdminDashboard() {
     }
   }, [user, isAdmin])
 
-  const handleSyncData = async (type: string) => {
-    setIsSyncing(true)
-    
-    try {
-      let endpoint = ''
-      switch (type) {
-        case 'trending':
-          endpoint = '/api/cron/calculate-trending'
-          break
-        case 'setlists':
-          endpoint = '/api/cron/sync-setlists'
-          break
-        case 'top-shows':
-          endpoint = '/api/cron/sync-top-shows'
-          break
-        default:
-          throw new Error('Unknown sync type')
-      }
+  const triggerSync = async (jobId: string) => {
+    setRunning(prev => ({ ...prev, [jobId]: true }));
+    setResults(prev => ({ ...prev, [jobId]: undefined }));
 
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'secure-cron-token-12345'}`
-        }
-      })
+    try {
+      const response = await fetch(`/api/admin/trigger/${jobId}`, {
+        method: 'POST'
+      });
+
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error('Sync failed')
+        throw new Error(data.error || 'Failed to trigger sync');
       }
 
-      toast.success(`${type} sync completed successfully`)
+      setResults(prev => ({ ...prev, [jobId]: 'success' }));
+      toast.success(`${jobId} has been triggered successfully`);
     } catch (error) {
-      console.error('Sync error:', error)
-      toast.error(`Failed to sync ${type}`)
+      setResults(prev => ({ ...prev, [jobId]: 'error' }));
+      toast.error(error.message || 'Sync failed');
     } finally {
-      setIsSyncing(false)
+      setRunning(prev => ({ ...prev, [jobId]: false }));
     }
-  }
+  };
 
-  const handleRefreshTrending = async () => {
-    setIsSyncing(true)
-    
-    try {
-      // Call the RPC function to refresh trending shows
-      const { error } = await supabase.rpc('refresh_trending_shows')
-      
-      if (error) throw error
-      
-      toast.success('Trending shows refreshed successfully')
-    } catch (error) {
-      console.error('Error refreshing trending:', error)
-      toast.error('Failed to refresh trending shows')
-    } finally {
-      setIsSyncing(false)
+  const runAllSyncJobs = async () => {
+    for (const job of SYNC_JOBS) {
+      await triggerSync(job.id);
+      // Add a small delay between jobs to prevent overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-  }
+  };
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
       </div>
     )
   }
@@ -165,160 +188,144 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-black">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 gradient-text">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Manage your TheSet platform</p>
+          <h1 className="text-4xl font-bold text-white mb-2">Admin Dashboard</h1>
+          <p className="text-gray-400">Manage your TheSet platform</p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="card-base rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
-              <Users className="w-8 h-8 text-foreground" />
-              <span className="text-sm text-muted-foreground">Total</span>
+              <Users className="w-8 h-8 text-white" />
+              <span className="text-sm text-gray-400">Total</span>
             </div>
-            <div className="text-3xl font-bold mb-1">{stats.totalUsers.toLocaleString()}</div>
-            <div className="text-muted-foreground">Registered Users</div>
+            <div className="text-3xl font-bold text-white mb-1">{stats.totalUsers.toLocaleString()}</div>
+            <div className="text-gray-400">Registered Users</div>
             <div className="mt-2 text-sm text-green-400">
               {stats.activeUsers} active this week
             </div>
           </div>
 
-          <div className="card-base rounded-lg p-6">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
-              <Calendar className="w-8 h-8 text-foreground" />
-              <span className="text-sm text-muted-foreground">Total</span>
+              <Calendar className="w-8 h-8 text-white" />
+              <span className="text-sm text-gray-400">Total</span>
             </div>
-            <div className="text-3xl font-bold mb-1">{stats.totalShows.toLocaleString()}</div>
-            <div className="text-muted-foreground">Shows</div>
-            <div className="mt-2 text-sm text-foreground">
+            <div className="text-3xl font-bold text-white mb-1">{stats.totalShows.toLocaleString()}</div>
+            <div className="text-gray-400">Shows</div>
+            <div className="mt-2 text-sm text-white">
               {stats.upcomingShows} upcoming
             </div>
           </div>
 
-          <div className="card-base rounded-lg p-6">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
               <Music className="w-8 h-8 text-purple-500" />
-              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-sm text-gray-400">Total</span>
             </div>
-            <div className="text-3xl font-bold mb-1">{stats.totalArtists.toLocaleString()}</div>
-            <div className="text-muted-foreground">Artists</div>
+            <div className="text-3xl font-bold text-white mb-1">{stats.totalArtists.toLocaleString()}</div>
+            <div className="text-gray-400">Artists</div>
           </div>
 
-          <div className="card-base rounded-lg p-6">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="w-8 h-8 text-green-500" />
-              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-sm text-gray-400">Total</span>
             </div>
-            <div className="text-3xl font-bold mb-1">{stats.totalVotes.toLocaleString()}</div>
-            <div className="text-muted-foreground">Votes Cast</div>
+            <div className="text-3xl font-bold text-white mb-1">{stats.totalVotes.toLocaleString()}</div>
+            <div className="text-gray-400">Votes Cast</div>
           </div>
 
-          <div className="card-base rounded-lg p-6">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
               <Activity className="w-8 h-8 text-orange-500" />
-              <span className="text-sm text-muted-foreground">System</span>
+              <span className="text-sm text-gray-400">System</span>
             </div>
-            <div className="text-xl font-bold mb-1 text-green-400">Healthy</div>
-            <div className="text-muted-foreground">Status</div>
+            <div className="text-xl font-bold text-green-400 mb-1">Healthy</div>
+            <div className="text-gray-400">Status</div>
           </div>
 
-          <div className="card-base rounded-lg p-6">
+          <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
               <Database className="w-8 h-8 text-red-500" />
-              <span className="text-sm text-muted-foreground">Database</span>
+              <span className="text-sm text-gray-400">Database</span>
             </div>
-            <div className="text-xl font-bold mb-1 text-green-400">Connected</div>
-            <div className="text-muted-foreground">Supabase</div>
+            <div className="text-xl font-bold text-green-400 mb-1">Connected</div>
+            <div className="text-gray-400">Supabase</div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Data Sync */}
-          <div className="card-base rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <RefreshCw className="w-5 h-5" />
-              Data Sync
-            </h2>
-            <div className="space-y-3">
-              <button
-                onClick={() => handleRefreshTrending()}
-                disabled={isSyncing}
-                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
-              >
-                <span>Refresh Trending Shows</span>
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={() => handleSyncData('setlists')}
-                disabled={isSyncing}
-                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
-              >
-                <span>Sync Setlists</span>
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={() => handleSyncData('trending')}
-                disabled={isSyncing}
-                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
-              >
-                <span>Calculate Trending</span>
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={() => handleSyncData('top-shows')}
-                disabled={isSyncing}
-                className="w-full px-4 py-2 bg-primary/20 rounded-lg hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
-              >
-                <span>Sync Top Shows</span>
-                <Star className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              </button>
+        {/* Admin Controls */}
+        <div className="bg-gray-900/50 border border-white/10 rounded-lg p-6 backdrop-blur-sm">
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Admin Controls</h3>
+              <p className="text-sm text-gray-400">
+                Manually trigger data sync operations
+              </p>
             </div>
-          </div>
 
-          {/* Artist Import */}
-          <div className="card-base rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Download className="w-5 h-5" />
-              Artist Import
-            </h2>
-            <div className="space-y-3">
-              <button
-                onClick={() => router.push('/admin/import-top-artists')}
-                className="w-full px-4 py-2 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors flex items-center justify-between"
-              >
-                <span>Import Top Artists</span>
-                <Users className="w-4 h-4" />
-              </button>
-              <div className="text-sm text-muted-foreground">
-                View and import popular artists with upcoming US shows that aren't in your database yet.
-              </div>
+            <div className="grid gap-4">
+              {SYNC_JOBS.map((job) => {
+                const Icon = job.icon;
+                const isRunning = running[job.id];
+                const result = results[job.id];
+
+                return (
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between p-4 rounded-lg bg-black/50 border border-white/10"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-lg bg-gradient-to-br ${job.color}`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-white">{job.name}</h4>
+                        <p className="text-sm text-gray-400">{job.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {result === 'success' && (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                      {result === 'error' && (
+                        <XCircle className="w-5 h-5 text-red-500" />
+                      )}
+                      
+                      <button
+                        onClick={() => triggerSync(job.id)}
+                        disabled={isRunning}
+                        className="rounded-sm px-4 py-2 font-medium transition-all duration-200 border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isRunning ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Running...
+                          </>
+                        ) : (
+                          'Run'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
 
-          {/* Recent Activity */}
-          <div className="card-base rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5" />
-              Recent Activity
-            </h2>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-muted-foreground">System operational</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-white rounded-full"></div>
-                <span className="text-muted-foreground">Database connected</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                <span className="text-muted-foreground">Background jobs pending</span>
-              </div>
+            <div className="pt-4 border-t border-white/10">
+              <button
+                onClick={runAllSyncJobs}
+                className="w-full rounded-sm px-4 py-2 font-medium transition-all duration-200 border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Run All Sync Jobs
+              </button>
             </div>
           </div>
         </div>
@@ -329,7 +336,7 @@ export default function AdminDashboard() {
           <div>
             <p className="text-yellow-200 font-medium">Admin Access</p>
             <p className="text-yellow-300/80 text-sm mt-1">
-              This dashboard has limited functionality. Full admin features require API server connection.
+              Use sync jobs to update data from external APIs. Monitor the results carefully.
             </p>
           </div>
         </div>
