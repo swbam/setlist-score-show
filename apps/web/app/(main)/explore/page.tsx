@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_TRENDING_SHOWS } from '@/lib/graphql/queries'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { TrendingUp, Calendar, Users, Loader2 } from 'lucide-react'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { ShowCard } from '@/components/shows/ShowCard'
 import { InfiniteList } from '@/components/ui/InfiniteList'
-import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { ArtistCard } from '@/components/home/ArtistCard'
 
 type TabType = 'TRENDING' | 'UPCOMING' | 'ARTISTS'
 
@@ -32,16 +31,24 @@ export default function ExplorePage() {
   const [hasMoreArtists, setHasMoreArtists] = useState(true)
   const [loadingArtists, setLoadingArtists] = useState(false)
   
-  const client = useGraphQLClient()
+  const supabase = createClientComponentClient()
   const PAGE_SIZE = 24
 
   // Trending shows query
   const { data: trendingData, isLoading: loadingTrending } = useQuery({
     queryKey: ['trending-shows'],
+    enabled: activeTab === 'TRENDING',
     queryFn: async () => {
-      return client.request(GET_TRENDING_SHOWS, { limit: PAGE_SIZE })
-    },
-    enabled: activeTab === 'TRENDING'
+      const { data, error } = await supabase
+        .from('homepage_cache')
+        .select('data')
+        .eq('cache_key', 'top_shows')
+        .gte('expires_at', new Date().toISOString())
+        .single()
+
+      if (error) throw error
+      return data?.data || []
+    }
   })
 
   // Load more upcoming shows
@@ -174,36 +181,21 @@ export default function ExplorePage() {
     { value: 'ARTISTS' as const, label: 'Artists', icon: <Users className="w-4 h-4" /> }
   ]
 
-  const trendingShows = (trendingData as any)?.trendingShows || []
+  const trendingShows = trendingData || []
 
   const renderArtistCard = (artist: Artist, index: number) => (
-    <Link
+    <ArtistCard
       key={artist.id}
-      href={`/artists/${artist.slug}`}
-      className="group block p-4 rounded-xl bg-card hover:bg-card/80 transition-all duration-200 border border-border/50 hover:border-border hover:shadow-lg"
-    >
-      <div className="flex items-center gap-4">
-        {artist.imageUrl ? (
-          <img
-            src={artist.imageUrl}
-            alt={artist.name}
-            className="w-12 h-12 rounded-full object-cover border border-border/50"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-            <Users className="w-6 h-6 text-muted-foreground" />
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-            {artist.name}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {artist.upcomingShowsCount || 0} upcoming shows
-          </p>
-        </div>
-      </div>
-    </Link>
+      artist={{
+        id: artist.id,
+        name: artist.name,
+        slug: artist.slug,
+        image_url: artist.imageUrl || null,
+        upcoming_shows_count: artist.upcomingShowsCount,
+        popularity: undefined
+      }}
+      index={index}
+    />
   )
 
   return (

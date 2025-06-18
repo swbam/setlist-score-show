@@ -1,9 +1,13 @@
+'use client'
+
 import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VoteButton } from './VoteButton';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, Clock, AlertCircle, Users, Share, Users2 } from 'lucide-react';
+import { TrendingUp, Clock, AlertCircle, Users, Share, Users2, Music, ChevronUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
 
 interface Song {
   id: string;
@@ -19,7 +23,16 @@ interface SetlistSong {
   votes: number;
   hasVoted: boolean;
   canVote: boolean;
-  song: Song;
+  notes?: string;
+  song: {
+    id: string;
+    name: string;
+    album?: string;
+    duration?: number;
+    popularity?: number;
+    previewUrl?: string;
+    spotifyUrl?: string;
+  };
 }
 
 interface CatalogSong {
@@ -29,390 +42,321 @@ interface CatalogSong {
 }
 
 interface VotingSectionProps {
-  songs: SetlistSong[];
-  onVote: (songId: string, setlistSongId: string) => Promise<void>;
-  isLoading?: boolean;
   showId: string;
-  voteLimits?: {
-    showVotesRemaining: number;
-    dailyVotesRemaining: number;
-  };
-  artistSongs?: CatalogSong[];
-  selectedSongToAdd?: CatalogSong | null;
-  onSongSelect?: (song: CatalogSong | null) => void;
-  onAddSong?: () => void;
-  isAddingSong?: boolean;
-  user?: any;
-  showData?: any;
+  songs: SetlistSong[];
+  showData: any;
+  userVotes: any[];
+  onVote: (songId: string, setlistSongId: string) => Promise<void>;
 }
 
-export function VotingSection({ 
-  songs, 
-  onVote, 
-  isLoading, 
-  showId,
-  voteLimits,
-  artistSongs = [],
-  selectedSongToAdd,
-  onSongSelect,
-  onAddSong,
-  isAddingSong = false,
-  user,
-  showData
-}: VotingSectionProps) {
-  const [sortedSongs, setSortedSongs] = useState<SetlistSong[]>([]);
-  const [sortBy, setSortBy] = useState<'votes' | 'position'>('votes');
+type SortOption = 'votes' | 'position' | 'name' | 'popularity';
 
+export function VotingSection({ showId, songs, showData, userVotes, onVote }: VotingSectionProps) {
+  const [sortedSongs, setSortedSongs] = useState<SetlistSong[]>(songs);
+  const [sortBy, setSortBy] = useState<SortOption>('votes');
+  const [isVoting, setIsVoting] = useState<string | null>(null);
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+  const [userVoteSet, setUserVoteSet] = useState<Set<string>>(new Set());
+  const [totalVotes, setTotalVotes] = useState(0);
+  const supabase = createClientComponentClient();
+
+  // Initialize vote counts and user votes
+  useEffect(() => {
+    const initialCounts: Record<string, number> = {};
+    let total = 0;
+    
+    songs.forEach(song => {
+      initialCounts[song.id] = song.votes;
+      total += song.votes;
+    });
+    
+    setVoteCounts(initialCounts);
+    setTotalVotes(total);
+    setUserVoteSet(new Set(userVotes.map(v => v.setlist_song_id)));
+  }, [songs, userVotes]);
+
+  // Sort songs based on current sort option
   useEffect(() => {
     const sorted = [...songs].sort((a, b) => {
-      if (sortBy === 'votes') {
-        return b.votes - a.votes;
+      switch (sortBy) {
+        case 'votes':
+          const aVotes = voteCounts[a.id] || a.votes;
+          const bVotes = voteCounts[b.id] || b.votes;
+          return bVotes - aVotes;
+        case 'position':
+          return a.position - b.position;
+        case 'name':
+          return a.song.name.localeCompare(b.song.name);
+        case 'popularity':
+          return (b.song.popularity || 0) - (a.song.popularity || 0);
+        default:
+          return 0;
       }
-      return a.position - b.position;
     });
     setSortedSongs(sorted);
-  }, [songs, sortBy]);
+  }, [songs, sortBy, voteCounts]);
 
-  const totalVotes = songs.reduce((sum, s) => sum + s.votes, 0);
-  const votedUsersCount = 127; // This would come from props or API
-  const votingCloseTime = "2d 14h"; // This would be calculated from show date
+  const handleVote = async (songId: string, setlistSongId: string) => {
+    setIsVoting(setlistSongId);
+    
+    try {
+      const response = await fetch('/api/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          songId,
+          showId,
+          setlistSongId,
+          isAnonymous: false
+        })
+      });
 
-  // Ensure we always have a usable array even if the prop is temporarily undefined
-  const catalogSongsSafed: CatalogSong[] = Array.isArray(artistSongs) ? artistSongs : []
+      const result = await response.json();
 
-  const availableSongs = catalogSongsSafed
-    .filter((catalogSong) => !songs.some((setlistSong) => setlistSong.song.id === catalogSong.id))
-    .sort((a, b) => a.title.localeCompare(b.title));
+      if (result.success) {
+        // Update local state optimistically
+        setVoteCounts(prev => ({
+          ...prev,
+          [setlistSongId]: result.newVoteCount
+        }));
+        
+        setUserVoteSet(prev => new Set([...prev, setlistSongId]));
+        setTotalVotes(prev => prev + 1);
+      } else {
+        throw new Error(result.error || 'Failed to vote');
+      }
+    } catch (error) {
+      console.error('Vote failed:', error);
+      // You could add a toast notification here
+    } finally {
+      setIsVoting(null);
+    }
+  };
 
-  // ---- Played-vs-Voted stats (completed shows) ----
-  const officialSetlist = (showData?.status === 'completed')
-    ? showData?.setlists?.find((s: any) => s.is_official || s.name?.toLowerCase().includes('actual'))
-    : null
+  const formatDuration = (ms: number) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
-  const playedSongs: { id: string; title: string }[] = officialSetlist?.setlistSongs?.map((ss: any) => ({
-    id: ss.song?.id || ss.song_id || ss.songId || '',
-    title: ss.song?.title || ss.song_name || 'Unknown'
-  })) || []
-
-  const playedIds = new Set(playedSongs.map((s) => s.id))
-  const votedPlayed = songs.filter((s) => playedIds.has(s.song.id))
-  const accuracyPct = playedSongs.length ? Math.round((votedPlayed.length / playedSongs.length) * 100) : 0
-
-  const topVotedPlayed = votedPlayed.sort((a, b) => b.votes - a.votes)[0]
-  const surpriseCount = playedSongs.filter((p) => !songs.some((s) => s.song.id === p.id)).length
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-        <div className="flex-1">
-          <div className="h-12 bg-muted rounded-lg animate-pulse mb-8" />
-          <div className="space-y-3">
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
-            ))}
-          </div>
-        </div>
-        <div className="w-full lg:w-80">
-          <div className="h-64 bg-muted rounded-lg animate-pulse" />
-        </div>
-      </div>
-    );
-  }
+  const getTopSongs = () => {
+    return [...sortedSongs]
+      .sort((a, b) => (voteCounts[b.id] || b.votes) - (voteCounts[a.id] || a.votes))
+      .slice(0, 3);
+  };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-      {/* Main Voting Area */}
-      <div className="flex-1 order-2 lg:order-1">
-        {/* Main Setlist Card */}
-        <div className="card-base p-4 sm:p-6">
-          {/* Header with dropdown */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-headline font-bold mb-2 text-foreground">What do you want to hear?</h2>
-              <p className="text-sm sm:text-base text-muted-foreground font-body">
-                Vote for songs you want to hear at this show
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Users2 className="w-4 h-4" />
-              <span>0 votes</span>
-              <Share className="w-4 h-4 ml-4" />
-              <span>Share</span>
-            </div>
+    <div className="space-y-8">
+      {/* Voting Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{totalVotes}</div>
+          <div className="text-sm text-muted-foreground">Total Votes</div>
+        </Card>
+        <Card className="p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{songs.length}</div>
+          <div className="text-sm text-muted-foreground">Songs</div>
+        </Card>
+        <Card className="p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{userVoteSet.size}</div>
+          <div className="text-sm text-muted-foreground">Your Votes</div>
+        </Card>
+        <Card className="p-4 text-center">
+          <div className="text-2xl font-bold text-primary">
+            {Math.max(0, getTopSongs()[0] ? (voteCounts[getTopSongs()[0].id] || getTopSongs()[0].votes) : 0)}
           </div>
+          <div className="text-sm text-muted-foreground">Top Song</div>
+        </Card>
+      </div>
 
-          {/* Add Song Section */}
-          {showData?.setlists?.[0]?.id && (
-            <div className="mb-6 pb-6 border-b border-border/30">
-              <p className="text-sm text-muted-foreground font-body mb-3">Add a song to this setlist:</p>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <select
-                  className="bg-input border border-border text-foreground px-4 py-2 rounded-lg font-body flex-1 focus:outline-none focus:border-primary transition-colors"
-                  value={selectedSongToAdd?.id || ''}
-                  onChange={(e) => {
-                    const song = availableSongs.find(s => s.id === e.target.value) || null
-                    onSongSelect?.(song)
-                  }}
-                >
-                  <option value="">Select a song</option>
-                  {availableSongs.map((song) => (
-                    <option key={song.id} value={song.id}>{song.title}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={onAddSong}
-                  disabled={!selectedSongToAdd || isAddingSong}
-                  className="bg-muted hover:bg-muted/80 text-foreground px-4 py-2 rounded-lg font-body disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                >
-                  {isAddingSong ? 'Adding...' : 'Add to Setlist'}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground font-body mt-2">{availableSongs.length} songs available in the catalog</p>
-            </div>
-          )}
-
-          {/* Vote Limits Warning */}
-          {voteLimits && voteLimits.showVotesRemaining === 0 && (
-            <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4 flex items-start gap-3 mb-6">
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-yellow-200 font-medium">Vote limit reached</p>
-                <p className="text-yellow-300/80 text-sm mt-1">
-                  You've used all your votes for this show. Come back tomorrow to vote again!
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Songs Table */}
-          <div className="space-y-0">
-            {/* Table Header - Hidden on mobile */}
-            <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border/30 font-body">
-              <div className="col-span-1">#</div>
-              <div className="col-span-9">SONG</div>
-              <div className="col-span-2 text-center">VOTE</div>
-            </div>
-
-            {/* Songs List */}
-            <AnimatePresence mode="popLayout">
-              {sortedSongs.map((setlistSong, index) => (
-                <motion.div
-                  key={setlistSong.id}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.02 }}
-                  className="grid grid-cols-12 sm:grid-cols-12 gap-2 sm:gap-4 px-3 sm:px-4 py-3 sm:py-4 border-b border-border/20 hover:bg-muted/20 transition-colors group"
-                >
-                  {/* Rank Number */}
-                  <div className="col-span-2 sm:col-span-1 flex items-center">
-                    <span className={cn(
-                      "text-base sm:text-lg font-headline font-bold",
-                      index === 0 && sortBy === 'votes' 
-                        ? "text-yellow-500" 
-                        : "text-muted-foreground" 
-                    )}>
-                      {sortBy === 'votes' ? index + 1 : setlistSong.position}
-                    </span>
+      {/* Top 3 Songs Highlight */}
+      {getTopSongs().length > 0 && (
+        <Card className="p-6 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
+          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            Most Wanted Songs
+          </h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            {getTopSongs().map((song, index) => (
+              <div 
+                key={song.id}
+                className={cn(
+                  "p-4 rounded-lg border",
+                  index === 0 && "bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800",
+                  index === 1 && "bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700",
+                  index === 2 && "bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800"
+                )}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="text-2xl font-bold">
+                    {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
                   </div>
+                  <Badge variant="secondary">
+                    {voteCounts[song.id] || song.votes} votes
+                  </Badge>
+                </div>
+                <h4 className="font-semibold truncate">{song.song.name}</h4>
+                {song.song.album && (
+                  <p className="text-sm text-muted-foreground truncate">{song.song.album}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
-                  {/* Song Info */}
-                  <div className="col-span-7 sm:col-span-9 flex items-center min-w-0">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-medium text-sm sm:text-base text-foreground font-body truncate">
-                        {setlistSong.song.name}
-                      </h3>
-                      {setlistSong.song.album && (
-                        <p className="text-xs sm:text-sm text-muted-foreground font-body truncate">
-                          {setlistSong.song.album}
-                        </p>
-                      )}
+      {/* Sort Controls */}
+      <div className="flex flex-wrap gap-2 justify-center">
+        <span className="text-sm text-muted-foreground self-center mr-2">Sort by:</span>
+        {[
+          { value: 'votes' as const, label: 'Most Voted', icon: TrendingUp },
+          { value: 'position' as const, label: 'Position', icon: ChevronUp },
+          { value: 'name' as const, label: 'Song Name', icon: Music },
+          { value: 'popularity' as const, label: 'Popularity', icon: Users }
+        ].map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            onClick={() => setSortBy(value)}
+            className={cn(
+              "px-3 py-1 rounded-full text-sm font-medium transition-colors flex items-center gap-1",
+              sortBy === value
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted hover:bg-muted/80"
+            )}
+          >
+            <Icon className="w-3 h-3" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Songs List */}
+      <div className="space-y-3">
+        {sortedSongs.map((setlistSong, index) => {
+          const currentVotes = voteCounts[setlistSong.id] || setlistSong.votes;
+          const hasVoted = userVoteSet.has(setlistSong.id);
+          const isCurrentlyVoting = isVoting === setlistSong.id;
+          
+          return (
+            <Card 
+              key={setlistSong.id}
+              className={cn(
+                "p-4 transition-all duration-200 hover:shadow-md",
+                hasVoted && "ring-2 ring-primary/20 bg-primary/5"
+              )}
+            >
+              <div className="flex items-center gap-4">
+                {/* Position/Rank */}
+                <div className="text-center min-w-[3rem]">
+                  <div className="text-2xl font-bold text-muted-foreground">
+                    {sortBy === 'votes' ? index + 1 : setlistSong.position}
+                  </div>
+                  {sortBy === 'votes' && index < 3 && (
+                    <div className="text-xs">
+                      {index === 0 ? '👑' : index === 1 ? '🔥' : '⭐'}
                     </div>
-                    {setlistSong.hasVoted && (
-                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-md font-medium ml-2 flex-shrink-0">
-                        Voted
+                  )}
+                </div>
+
+                {/* Song Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-lg truncate flex items-center gap-2">
+                    {setlistSong.song.name}
+                    {hasVoted && (
+                      <Badge variant="secondary" className="text-xs">
+                        ✓ Voted
+                      </Badge>
+                    )}
+                  </h3>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    {setlistSong.song.album && (
+                      <span className="truncate">{setlistSong.song.album}</span>
+                    )}
+                    {setlistSong.song.duration && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDuration(setlistSong.song.duration)}
+                      </span>
+                    )}
+                    {setlistSong.song.popularity && (
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" />
+                        {setlistSong.song.popularity}%
                       </span>
                     )}
                   </div>
+                  {setlistSong.notes && (
+                    <p className="text-sm text-muted-foreground mt-1 italic">
+                      {setlistSong.notes}
+                    </p>
+                  )}
+                </div>
 
-                  {/* Vote Button */}
-                  <div className="col-span-3 sm:col-span-2 flex items-center justify-center">
-                    <VoteButton
-                      songId={setlistSong.song.id}
-                      showId={showId}
-                      setlistSongId={setlistSong.id}
-                      currentVotes={setlistSong.votes}
-                      hasVoted={setlistSong.hasVoted}
-                      position={setlistSong.position}
-                      onVote={(songId) => onVote(songId, setlistSong.id)}
-                      disabled={!setlistSong.canVote}
-                    />
+                {/* Vote Button */}
+                <div className="flex items-center gap-3">
+                  <div className="text-center min-w-[4rem]">
+                    <div className="text-xl font-bold text-primary">
+                      {currentVotes}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {currentVotes === 1 ? 'vote' : 'votes'}
+                    </div>
                   </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+                  
+                  <VoteButton
+                    songId={setlistSong.song.id}
+                    showId={showId}
+                    setlistSongId={setlistSong.id}
+                    currentVotes={currentVotes}
+                    hasVoted={hasVoted}
+                    position={setlistSong.position}
+                    onVote={handleVote}
+                    disabled={!setlistSong.canVote || isCurrentlyVoting}
+                    isLoading={isCurrentlyVoting}
+                  />
+                </div>
 
-          {/* Footer */}
-          <div className="mt-6 pt-4 border-t border-border/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-muted-foreground">
-            <span>
-              {user 
-                ? `You've used ${10 - (voteLimits?.showVotesRemaining || 10)}/10 votes for this show`
-                : `You've used ${3 - (voteLimits?.showVotesRemaining || 3)}/3 free votes`
-              }
-            </span>
-            <span className="text-xs sm:text-sm">Last updated less than a minute ago</span>
-          </div>
-        </div>
+                {/* External Links */}
+                <div className="flex gap-2">
+                  {setlistSong.song.spotifyUrl && (
+                    <a
+                      href={setlistSong.song.spotifyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-lg bg-[#1DB954] text-white hover:bg-[#1aa34a] transition-colors"
+                      title="Listen on Spotify"
+                    >
+                      <Music className="w-4 h-4" />
+                    </a>
+                  )}
+                  {setlistSong.song.previewUrl && (
+                    <button
+                      className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                      title="Preview"
+                    >
+                      <Music className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Right Sidebar - Voting Stats */}
-      <div className="w-full lg:w-80 space-y-4 lg:space-y-6 order-1 lg:order-2">
-        {/* Voting Stats Card */}
-        <div className="card-base p-4 sm:p-6">
-          <h3 className="text-lg sm:text-xl font-headline font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Voting Stats
-          </h3>
-          
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6">
-            {/* Total Votes */}
-            <div className="lg:mb-6">
-              <p className="text-sm text-muted-foreground font-body mb-1">Total Votes</p>
-              <p className="text-2xl sm:text-3xl font-headline font-bold text-foreground">{totalVotes}</p>
-            </div>
-
-            {/* Votes Used */}
-            <div className="lg:mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground font-body">
-                  {user ? 'Show Votes Used' : 'Free Votes Used'}
-                </p>
-                {!user && (
-                  <button className="text-xs text-primary hover:underline font-body">Log in for more</button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="text-lg sm:text-xl font-headline font-bold text-foreground">
-                  {user 
-                    ? `${voteLimits ? 10 - voteLimits.showVotesRemaining : 0}/10`
-                    : `${voteLimits ? 3 - voteLimits.showVotesRemaining : 0}/3`
-                  }
-                </p>
-              </div>
-              <div className="w-full bg-secondary/30 rounded-full h-1 mt-2">
-                <div 
-                  className="bg-primary h-1 rounded-full transition-all duration-300"
-                  style={{ 
-                    width: user 
-                      ? `${voteLimits ? ((10 - voteLimits.showVotesRemaining) / 10) * 100 : 0}%`
-                      : `${voteLimits ? ((3 - voteLimits.showVotesRemaining) / 3) * 100 : 0}%`
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6 mt-4 lg:mt-0">
-            {/* Voting Closes In */}
-            <div className="lg:mb-6">
-              <p className="text-sm text-muted-foreground font-body mb-1">Voting Closes In</p>
-              <p className="text-lg sm:text-xl font-headline font-bold text-foreground">{votingCloseTime}</p>
-            </div>
-
-            {/* Fans Voted */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground font-body">
-              <Users className="w-4 h-4" />
-              <span><span className="font-semibold text-foreground">{votedUsersCount}</span> fans have voted</span>
-            </div>
-          </div>
+      {/* Help Text */}
+      <Card className="p-6 bg-muted/50">
+        <h3 className="font-semibold mb-2">How to Vote</h3>
+        <div className="text-sm text-muted-foreground space-y-1">
+          <p>• Click the vote button next to any song you'd like to hear</p>
+          <p>• You can vote for multiple songs at this show</p>
+          <p>• Songs with more votes have a better chance of being played</p>
+          <p>• Your votes help the artist plan the perfect setlist</p>
+          <p>• Come back anytime to change your votes before the show!</p>
         </div>
-
-        {/* Show Insights - only for completed shows */}
-        {showData?.status === 'completed' && (
-          <div className="card-base p-4 sm:p-6">
-            <h3 className="text-lg sm:text-xl font-headline font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
-              🎤 Show Insights
-            </h3>
-            <div className="space-y-4">
-              {/* Accuracy */}
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary font-headline font-bold text-base">
-                  {accuracyPct}%
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Fan Accuracy</p>
-                  <p className="text-xs text-muted-foreground font-body">of songs fans voted for were actually played</p>
-                </div>
-              </div>
-
-              {/* Top predicted */}
-              {topVotedPlayed && (
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-accent/20 text-accent font-headline font-bold text-base">
-                    ★
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Most Predicted Song</p>
-                    <p className="text-xs text-muted-foreground font-body truncate">{topVotedPlayed.song.name} ({topVotedPlayed.votes} votes)</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Surprises */}
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-destructive/20 text-destructive font-headline font-bold text-base">
-                  {surpriseCount}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm sm:text-base font-headline font-semibold text-foreground">Surprise Tracks</p>
-                  <p className="text-xs text-muted-foreground font-body">played that fans didn't vote on</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* How It Works Card - Hidden on mobile to save space */}
-        <div className="card-base p-4 sm:p-6 hidden lg:block">
-          <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            How It Works
-          </h3>
-          
-          <div className="space-y-4 text-sm font-body">
-            <div className="flex gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">1</span>
-              <p className="text-muted-foreground">
-                Vote for songs you want to hear at this show. The most voted songs rise to the top of the list.
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">2</span>
-              <p className="text-muted-foreground">
-                Anyone can add songs to the setlist! Select from the dropdown above to help build the perfect concert.
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">3</span>
-              <p className="text-muted-foreground">
-                Non-logged in users can vote for up to 3 songs. Create an account to vote for unlimited songs!
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">4</span>
-              <p className="text-muted-foreground">
-                Voting closes 2 hours before the show
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      </Card>
     </div>
   );
 }

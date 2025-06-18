@@ -1,9 +1,11 @@
 // components/voting/VoteButton.tsx
+'use client'
+
 import { useState } from 'react'
+import { Heart, Loader2, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
-import { ChevronUp, Check } from 'lucide-react'
-import { useVoting } from '@/hooks/useVoting'
-import { motion } from 'framer-motion'
 
 interface VoteButtonProps {
   songId: string
@@ -12,63 +14,100 @@ interface VoteButtonProps {
   currentVotes: number
   hasVoted: boolean
   position: number
-  onVote?: (songId: string) => Promise<void>
+  onVote: (songId: string, setlistSongId: string) => Promise<void>
   disabled?: boolean
+  isLoading?: boolean
+  className?: string
 }
 
-export function VoteButton({ 
-  songId, 
-  showId, 
+export function VoteButton({
+  songId,
+  showId,
   setlistSongId,
-  currentVotes, 
-  hasVoted, 
+  currentVotes,
+  hasVoted,
   position,
   onVote,
-  disabled = false
+  disabled = false,
+  isLoading = false,
+  className
 }: VoteButtonProps) {
-  const { vote, isVoting } = useVoting()
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [isVoting, setIsVoting] = useState(false)
+  const [justVoted, setJustVoted] = useState(false)
+  const { user } = useAuth()
 
   const handleVote = async () => {
-    if (hasVoted || isVoting || disabled) return
+    if (!setlistSongId || disabled || isVoting || hasVoted) return
+
+    // Check if user is logged in
+    if (!user) {
+      // Redirect to login or show login modal
+      window.location.href = '/login'
+      return
+    }
+
+    setIsVoting(true)
     
-    if (onVote) {
-      await onVote(songId)
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 2000)
-    } else if (setlistSongId) {
-      const result = await vote({ songId, showId, setlistSongId })
-      if (result.success) {
-        setShowSuccess(true)
-        setTimeout(() => setShowSuccess(false), 2000)
-      }
+    try {
+      await onVote(songId, setlistSongId)
+      setJustVoted(true)
+      
+      // Reset the "just voted" state after animation
+      setTimeout(() => setJustVoted(false), 2000)
+    } catch (error) {
+      console.error('Vote failed:', error)
+      // You could show an error toast here
+    } finally {
+      setIsVoting(false)
     }
   }
 
-  return (
-    <div className="flex flex-col items-center w-12">
-      <span className="font-headline font-semibold text-base leading-none text-foreground mb-1">
-        {currentVotes}
-      </span>
+  const buttonVariant = hasVoted ? 'default' : 'outline'
+  const buttonState = isVoting || isLoading
 
-      <motion.button
-        whileHover={{ y: hasVoted ? 0 : -2 }}
-        whileTap={{ scale: hasVoted ? 1 : 0.9 }}
-        onClick={handleVote}
-        disabled={hasVoted || isVoting || disabled}
-        className={cn(
-          "flex items-center justify-center p-1 transition-colors",
-          hasVoted || disabled
-            ? "text-primary cursor-default"
-            : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        {showSuccess ? (
-          <Check className="w-5 h-5 text-green-400" />
-        ) : (
-          <ChevronUp className="w-5 h-5" />
-        )}
-      </motion.button>
-    </div>
+  return (
+    <Button
+      onClick={handleVote}
+      disabled={disabled || buttonState || hasVoted}
+      variant={buttonVariant}
+      size="sm"
+      className={cn(
+        "relative min-w-[80px] transition-all duration-200",
+        hasVoted && "bg-primary text-primary-foreground hover:bg-primary/90",
+        justVoted && "scale-110",
+        !user && "opacity-75",
+        className
+      )}
+    >
+      {buttonState ? (
+        <>
+          <Loader2 className="w-4 h-4 animate-spin mr-1" />
+          Voting...
+        </>
+      ) : hasVoted ? (
+        <>
+          <Check className="w-4 h-4 mr-1" />
+          Voted
+        </>
+      ) : (
+        <>
+          <Heart className={cn(
+            "w-4 h-4 mr-1 transition-colors",
+            !user && "opacity-50"
+          )} />
+          Vote
+        </>
+      )}
+      
+      {/* Vote count badge */}
+      {currentVotes > 0 && (
+        <span className={cn(
+          "absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center font-medium",
+          hasVoted && "bg-primary-foreground text-primary"
+        )}>
+          {currentVotes}
+        </span>
+      )}
+    </Button>
   )
 }

@@ -1,56 +1,60 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { useGraphQLClient } from '@/lib/graphql-client'
-import { GET_SHOWS } from '@/lib/graphql/queries'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Calendar, Activity, Music, Users, Vote, Clock } from 'lucide-react'
-import { ShowCardGrid } from '@/components/shows/ShowCardGrid'
+import { ShowCard } from '@/components/shows/ShowCard'
 import Link from 'next/link'
 
 export default function ShowsPage() {
-  const client = useGraphQLClient()
+  const supabase = createClientComponentClient()
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['shows'],
+  const { data: shows = [], isLoading } = useQuery({
+    queryKey: ['shows', 'upcoming'],
     queryFn: async () => {
-      return client.request(GET_SHOWS, {
-        limit: 24,
-        status: 'upcoming'
+      const { data, error } = await supabase
+        .from('shows')
+        .select(`
+          id, date, title, status, view_count,
+          artist:artists(id, name, slug, image_url),
+          venue:venues(id, name, city, state, country),
+          setlists(setlist_songs(vote_count))
+        `)
+        .eq('status', 'upcoming')
+        .gte('date', new Date().toISOString())
+        .order('date', { ascending: true })
+        .limit(60)
+
+      if (error) throw error
+
+      return (data || []).map((show: any) => {
+        const totalVotes = show.setlists?.reduce((sum: number, sl: any) =>
+          sum + (sl.setlist_songs?.reduce((acc: number, s: any) => acc + (s.vote_count || 0), 0) || 0)
+        , 0) || 0
+
+        return {
+          id: show.id,
+          date: show.date,
+          title: show.title || `${show.artist?.name} at ${show.venue?.name}`,
+          viewCount: show.view_count || 0,
+          artist: {
+            id: show.artist?.id,
+            name: show.artist?.name,
+            slug: show.artist?.slug,
+            imageUrl: show.artist?.image_url
+          },
+          venue: {
+            id: show.venue?.id,
+            name: show.venue?.name,
+            city: show.venue?.city,
+            state: show.venue?.state,
+            country: show.venue?.country
+          },
+          totalVotes
+        }
       })
     }
   })
-
-  const rawData = (data as any)?.shows || []
-  
-  // Transform the data structure to match what ShowCardGrid expects
-  const shows = Array.isArray(rawData) ? rawData.map((show: any) => {
-    // If it's already in the correct format, return as is
-    if (show.show && show.totalVotes !== undefined) {
-      return show
-    }
-    
-    // Otherwise transform it
-    return {
-      show: {
-        id: show.id,
-        date: show.date,
-        title: show.title,
-        artist: {
-          id: show.artist?.id,
-          name: show.artist?.name || 'Unknown Artist',
-          imageUrl: show.artist?.imageUrl
-        },
-        venue: {
-          id: show.venue?.id,
-          name: show.venue?.name || 'Unknown Venue',
-          city: show.venue?.city || 'Unknown City'
-        }
-      },
-      totalVotes: show.totalVotes || 0,
-      uniqueVoters: show.uniqueVoters || 0,
-      trendingScore: show.viewCount || 0
-    }
-  }) : []
 
   return (
     <div className="min-h-screen bg-background">
@@ -67,9 +71,26 @@ export default function ShowsPage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
-          {/* Main Content - Shows Grid */}
+          {/* Main Content */}
           <div className="flex-1 min-w-0">
-            <ShowCardGrid shows={shows} isLoading={isLoading} />
+            {isLoading ? (
+              <p>Loading…</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                {shows.map((show: any) => (
+                  <ShowCard key={show.id} show={{
+                    id: show.id,
+                    date: show.date,
+                    title: show.title,
+                    status: 'upcoming',
+                    artist: show.artist,
+                    venue: show.venue,
+                    _count: { votes: show.totalVotes },
+                    viewCount: show.viewCount
+                  }} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Sidebar - Quick Filters & Stats */}

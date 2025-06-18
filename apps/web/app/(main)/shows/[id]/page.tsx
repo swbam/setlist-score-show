@@ -1,21 +1,19 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { Calendar, MapPin, ExternalLink } from 'lucide-react'
+import { Calendar, MapPin, ExternalLink, Music, TrendingUp, Heart } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { SimpleVotingDemo } from '@/components/voting/SimpleVotingDemo'
+import { VotingSection } from '@/components/voting/VotingSection'
 
-// Simple show page without the complex voting section for now
 export default async function ShowPage({ params }: { params: { id: string } }) {
   const supabase = createServerComponentClient({ cookies })
 
-  // Get show data from Supabase with basic relations
+  // Get show data with full voting relationships
   const { data: showData, error } = await supabase
     .from('shows')
     .select(`
       id,
       date,
-      name,
       title,
       status,
       ticketmaster_url,
@@ -34,6 +32,27 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
         city,
         state,
         country
+      ),
+      setlists!inner (
+        id,
+        name,
+        order_index,
+        is_encore,
+        setlist_songs!inner (
+          id,
+          position,
+          vote_count,
+          notes,
+          song:songs!inner (
+            id,
+            title,
+            album,
+            popularity,
+            duration_ms,
+            preview_url,
+            spotify_url
+          )
+        )
       )
     `)
     .eq('id', params.id)
@@ -44,14 +63,52 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
     notFound()
   }
 
-  // Transform the data structure since Supabase returns arrays for relations
+  // Transform the data structure for our components
   const show = {
     ...showData,
     artist: Array.isArray(showData.artist) ? showData.artist[0] : showData.artist,
     venue: Array.isArray(showData.venue) ? showData.venue[0] : showData.venue,
   }
 
-  const showTitle = show.title || show.name || `${show.artist?.name} at ${show.venue?.name}`
+  const showTitle = show.title || `${show.artist?.name} at ${show.venue?.name}`
+
+  // Get current user for voting features
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Get user's votes for this show if logged in
+  let userVotes: any[] = []
+  if (user) {
+    const { data: votes } = await supabase
+      .from('votes')
+      .select('setlist_song_id')
+      .eq('user_id', user.id)
+      .eq('show_id', params.id)
+    
+    userVotes = votes || []
+  }
+
+  // Transform setlist data for voting component
+  const setlistSongs = show.setlists?.[0]?.setlist_songs?.map((ss: any) => ({
+    id: ss.id,
+    position: ss.position,
+    votes: ss.vote_count || 0,
+    notes: ss.notes,
+    hasVoted: userVotes.some(v => v.setlist_song_id === ss.id),
+    canVote: true, // Allow voting for all users
+    song: {
+      id: ss.song.id,
+      name: ss.song.title,
+      album: ss.song.album,
+      duration: ss.song.duration_ms,
+      duration_ms: ss.song.duration_ms, // Add this for interface compatibility
+      popularity: ss.song.popularity,
+      previewUrl: ss.song.preview_url,
+      spotifyUrl: ss.song.spotify_url
+    }
+  })) || []
+
+  // Calculate total votes for this show
+  const totalVotes = setlistSongs.reduce((sum, song) => sum + song.votes, 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,6 +159,13 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
                       {show.venue?.name}, {show.venue?.city}, {show.venue?.state || show.venue?.country}
                     </span>
                   </div>
+
+                  <div className="flex items-center gap-2 sm:gap-3 justify-center md:justify-start">
+                    <TrendingUp className="w-5 h-5 text-white/80" />
+                    <span className="text-white/90 text-sm sm:text-base">
+                      {totalVotes} total votes on {setlistSongs.length} songs
+                    </span>
+                  </div>
                 </div>
 
                 {/* Actions */}
@@ -126,11 +190,9 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1DB954] text-white rounded-lg font-medium hover:bg-[#1aa34a] transition-colors text-sm sm:text-base"
                     >
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                      </svg>
-                      <span className="hidden sm:inline">Spotify</span>
-                      <span className="sm:hidden">♪</span>
+                      <Music className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden sm:inline">Listen on Spotify</span>
+                      <span className="sm:hidden">Spotify</span>
                     </Link>
                   )}
                 </div>
@@ -140,30 +202,88 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* Voting/Setlist Section */}
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">🎵 Vote on Songs</h2>
-          <p className="text-muted-foreground mb-6">
-            Help shape the setlist! Vote on songs you'd love to hear at this show.
-          </p>
-          
-          {/* Simple voting simulation */}
-          <SimpleVotingDemo />
-          
-          <div className="flex gap-4 justify-center mt-8">
-            <Link
-              href={`/artists/${show.artist?.slug}`}
-              className="btn-primary"
-            >
-              View Artist
-            </Link>
-            <Link
-              href="/shows"
-              className="btn-secondary"
-            >
-              Browse Shows
-            </Link>
+      {/* Voting Section */}
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4 flex items-center justify-center gap-2">
+              <Heart className="w-8 h-8 text-red-500" />
+              Vote on the Setlist
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              Help shape the perfect concert! Vote on songs you'd love to hear {show.artist?.name} perform at this show.
+              {!user && " Sign in to cast your votes and make your voice heard!"}
+            </p>
+            {user && (
+              <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium">
+                ✓ You're signed in and ready to vote!
+              </p>
+            )}
+          </div>
+
+          {/* Voting Component */}
+          <VotingSection 
+            showId={params.id}
+            songs={setlistSongs}
+            showData={show}
+            userVotes={userVotes}
+            onVote={async (songId: string, setlistSongId: string) => {
+              // This will be handled by the VotingSection component's client-side logic
+              console.log('Vote triggered:', { songId, setlistSongId })
+            }}
+          />
+
+          {/* Additional Show Info */}
+          <div className="mt-12 grid md:grid-cols-2 gap-8">
+            <div className="bg-card rounded-xl p-6 border border-border">
+              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Music className="w-5 h-5" />
+                About This Show
+              </h3>
+              <div className="space-y-3 text-sm">
+                <p><strong>Artist:</strong> {show.artist?.name}</p>
+                <p><strong>Venue:</strong> {show.venue?.name}</p>
+                <p><strong>Date:</strong> {new Date(show.date).toLocaleDateString()}</p>
+                <p><strong>Status:</strong> {show.status}</p>
+                <p><strong>Total Votes:</strong> {totalVotes}</p>
+                <p><strong>Competing Songs:</strong> {setlistSongs.length}</p>
+              </div>
+            </div>
+
+            <div className="bg-card rounded-xl p-6 border border-border">
+              <h3 className="text-xl font-semibold mb-4">How Voting Works</h3>
+              <div className="space-y-3 text-sm">
+                <p>• Vote for songs you want to hear at this concert</p>
+                <p>• Songs with more votes are more likely to be played</p>
+                <p>• You can vote on multiple songs per show</p>
+                <p>• Voting helps artists understand fan preferences</p>
+                <p>• Results influence the actual setlist planning</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Related Actions */}
+          <div className="mt-12 text-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href={`/artists/${show.artist?.slug}`}
+                className="btn-primary"
+              >
+                View More {show.artist?.name} Shows
+              </Link>
+              <Link
+                href="/shows"
+                className="btn-secondary"
+              >
+                Explore All Shows
+              </Link>
+              <Link
+                href="/trending"
+                className="btn-secondary"
+              >
+                See Trending Shows
+              </Link>
+            </div>
           </div>
         </div>
       </div>

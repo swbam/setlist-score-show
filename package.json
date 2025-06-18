@@ -18,7 +18,8 @@
     "db:migrate:deploy": "supabase db push && pnpm --filter @setlist/database db:push",
     "refresh:trending": "supabase functions invoke refresh_trending_shows",
     "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending",
-    "sync": "bash ./scripts/full-sync.sh"
+    "sync": "bash ./scripts/full-sync.sh",
+    "updateall": "bash ./scripts/updateall.sh"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
