@@ -330,3 +330,35 @@ export class TrendingCalculationJob {
     };
   }
 }
+
+// Main function to run the job
+async function main() {
+  const prisma = new PrismaClient();
+  const job = new TrendingCalculationJob(prisma);
+  
+  try {
+    logger.info('Starting trending calculation job...');
+    
+    // Test database connection
+    const showCount = await prisma.show.count();
+    logger.info(`Found ${showCount} shows in database`);
+    
+    const result = await job.calculateTrendingScores();
+    logger.info('Job completed successfully:', result);
+    process.exit(0);
+  } catch (error) {
+    logger.error('Job failed:', error);
+    if (error instanceof Error) {
+      logger.error('Error message:', error.message);
+      logger.error('Error stack:', error.stack);
+    }
+    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Run if called directly
+if (require.main === module) {
+  main();
+}

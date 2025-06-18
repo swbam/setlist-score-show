@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { verifyAuth } from '../_shared/auth.ts';
 
 interface SpotifyToken {
   access_token: string;
@@ -19,24 +20,13 @@ interface SpotifyTrack {
 serve(async (req) => {
   const startTime = Date.now();
   
-  // Handle CORS
+  // Handle CORS & Auth
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
+  const authResponse = verifyAuth(req);
+  if (authResponse) return authResponse;
 
   try {
-    // Verify cron secret for scheduled runs or API key for manual runs
-    const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    
-    if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
-      console.error('Unauthorized Spotify sync request');
-      return new Response(
-        JSON.stringify({ success: false, message: 'Unauthorized' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     console.log('🎵 Starting Spotify catalog sync job');
     
     const supabase = createServiceClient();
@@ -184,7 +174,7 @@ serve(async (req) => {
         if (uniqueTracks.length > 0) {
           const songsToInsert = uniqueTracks.map(track => ({
             artist_id: artist.id,
-            title: track.name,
+            name: track.name,
             spotify_id: track.id,
             popularity: track.popularity || 0,
             duration_ms: track.duration_ms || 0,
@@ -197,8 +187,7 @@ serve(async (req) => {
             const { error: insertError } = await supabase
               .from('songs')
               .upsert(batch, {
-                onConflict: 'artist_id,title',
-                ignoreDuplicates: false,
+                onConflict: 'artist_id,name'
               });
 
             if (insertError) {

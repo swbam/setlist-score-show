@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { verifyAuth } from '../_shared/auth.ts';
 
 interface SetlistFmApiShow {
   id: string;
@@ -31,28 +32,19 @@ interface SetlistFmApiShow {
   };
 }
 
+const BATCH_SIZE = 10;
+const RATE_LIMIT_MS = 1000;
+
 serve(async (req) => {
   const startTime = Date.now();
   
-  // Handle CORS
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
+  const authResponse = verifyAuth(req);
+  if (authResponse) return authResponse;
 
   try {
-    // Verify cron secret for scheduled runs or API key for manual runs
-    const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    
-    if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
-      console.error('Unauthorized setlist sync request');
-      return new Response(
-        JSON.stringify({ success: false, message: 'Unauthorized' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('🎭 Starting setlist sync job');
+    console.log('📜 Starting setlist sync job');
     
     const supabase = createServiceClient();
     const setlistFmApiKey = Deno.env.get('SETLISTFM_API_KEY');
@@ -197,29 +189,54 @@ serve(async (req) => {
             }
 
             if (songs.length > 0 && newShow) {
-              // Create a setlist for this show
+              // Create official setlist row
               const { data: newSetlist, error: setlistError } = await supabase
                 .from('setlists')
                 .insert({
                   show_id: newShow.id,
-                  name: 'Actual Setlist',
+                  artist_id: artist.id,
+                  name: 'Official',
                   is_official: true,
                 })
                 .select('id')
                 .single();
 
               if (!setlistError && newSetlist) {
-                // Add songs to setlist
-                const setlistSongs = songs.map((songName, index) => ({
-                  setlist_id: newSetlist.id,
-                  song_name: songName,
-                  position: index + 1,
-                  votes: 0,
-                }));
+                // Resolve song ids (create if missing)
+                const setlistSongRows = [] as any[];
+                for (let i = 0; i < songs.length; i++) {
+                  const songName = songs[i];
+                  // Look up song by name
+                  let songId: string | null = null;
+                  const { data: existingSong } = await supabase
+                    .from('songs')
+                    .select('id')
+                    .eq('artist_id', artist.id)
+                    .ilike('name', songName)
+                    .single();
+                  if (existingSong) {
+                    songId = existingSong.id;
+                  } else {
+                    const { data: newSong } = await supabase
+                      .from('songs')
+                      .insert({ artist_id: artist.id, name: songName })
+                      .select('id')
+                      .single();
+                    songId = newSong?.id || null;
+                  }
+                  if (songId) {
+                    setlistSongRows.push({
+                      setlist_id: newSetlist.id,
+                      song_id: songId,
+                      position: i + 1,
+                      vote_count: 0,
+                    });
+                  }
+                }
 
-                await supabase
-                  .from('setlist_songs')
-                  .insert(setlistSongs);
+                if (setlistSongRows.length) {
+                  await supabase.from('setlist_songs').insert(setlistSongRows);
+                }
               }
             }
 

@@ -1,0 +1,1566 @@
+# MASTER FIXES - TheSet Concert Setlist Voting Platform
+
+## Table of Contents
+1. [Application Overview](#application-overview)
+2. [Current System Architecture](#current-system-architecture)
+3. [Data Flow & Sync System](#data-flow--sync-system)
+4. [Critical Issues Identified](#critical-issues-identified)
+5. [Homepage Revamp Plan](#homepage-revamp-plan)
+6. [Database Reset & Seed Implementation](#database-reset--seed-implementation)
+7. [Search System Unification](#search-system-unification)
+8. [Implementation Steps](#implementation-steps)
+
+---
+
+## Application Overview
+
+**TheSet** is a fan-powered concert setlist voting platform that transforms how music fans interact with live shows. The platform operates autonomously by:
+
+- **Importing artist profiles** from Spotify API (including full song catalogs)
+- **Fetching concert data** from Ticketmaster API (shows, venues, tour information)
+- **Syncing actual setlists** from setlist.fm API after shows occur
+- **Enabling real-time voting** on setlists for upcoming concerts via Supabase Realtime
+- **Comparing predictions** with actual performed setlists post-show
+
+### Core User Journey
+1. User discovers trending artists/shows on homepage
+2. Searches for specific artists or browses upcoming concerts
+3. Votes on songs for upcoming show setlists (max 10 votes per show)
+4. Views real-time voting updates as community participates
+5. After show, compares fan-voted setlist with actual performed setlist
+
+### Tech Stack
+- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Framer Motion
+- **Backend**: Fastify + GraphQL API, Supabase (Database + Auth + Realtime)
+- **External APIs**: Spotify, Ticketmaster, setlist.fm
+- **Infrastructure**: Vercel (Web), Railway (API), Supabase (Database/Functions)
+- **Background Jobs**: Supabase Edge Functions with cron scheduling
+
+---
+
+
+SUPABASE PROJECT ID: ailrmwtahifvstpfhbgn
+#-----------------------------------------------------------------------------------------------
+# Database Configuration
+#-----------------------------------------------------------------------------------------------
+DATABASE_URL=postgresql://postgres.ailrmwtahifvstpfhbgn:Bambseth1590@aws-0-us-east-2.pooler.supabase.com:6543/postgres
+DIRECT_URL=postgresql://postgres.ailrmwtahifvstpfhbgn:Bambseth1590@aws-0-us-east-2.pooler.supabase.com:6543/postgres
+
+#-----------------------------------------------------------------------------------------------
+# Supabase Configuration
+#-----------------------------------------------------------------------------------------------
+NEXT_PUBLIC_SUPABASE_URL=https://ailrmwtahifvstpfhbgn.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpbHJtd3RhaGlmdnN0cGZoYmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5NTQ0NjEsImV4cCI6MjA2MzUzMDQ2MX0.WYKAEqCo8yJpnxa6S0_TQaSUm4SR1kKZlfXiwyvk2vw
+SUPABASE_URL=https://ailrmwtahifvstpfhbgn.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpbHJtd3RhaGlmdnN0cGZoYmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5NTQ0NjEsImV4cCI6MjA2MzUzMDQ2MX0.WYKAEqCo8yJpnxa6S0_TQaSUm4SR1kKZlfXiwyvk2vw
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpbHJtd3RhaGlmdnN0cGZoYmduIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Nzk1NDQ2MSwiZXhwIjoyMDYzNTMwNDYxfQ.HxuJ0ND0_EF3EMSxMZgqUjiRJwQ86X2e5KBmMOYz3lA
+
+#-----------------------------------------------------------------------------------------------
+# JWT Configuration
+#-----------------------------------------------------------------------------------------------
+JWT_SECRET=Oe2aZP81MvMZc7yZPRpsR6ktGbF839UvBylrKh4LZAipcvxRDQCVKswNYiXQpWWw1IODmkayavU1lmN2d0VXeg==
+
+#-----------------------------------------------------------------------------------------------
+# External API Keys
+#-----------------------------------------------------------------------------------------------
+SETLIST_FM_API_KEY=xkutflW-aRy_Df9rF4OkJyCsHBYN88V37EBL
+SETLISTFM_API_KEY=xkutflW-aRy_Df9rF4OkJyCsHBYN88V37EBL
+
+#-----------------------------------------------------------------------------------------------
+# Spotify API Credentials
+#-----------------------------------------------------------------------------------------------
+SPOTIFY_CLIENT_ID=2946864dc822469b9c672292ead45f43
+SPOTIFY_CLIENT_SECRET=feaf0fc901124b839b11e02f97d18a8d
+
+#-----------------------------------------------------------------------------------------------
+# Ticketmaster API
+#-----------------------------------------------------------------------------------------------
+TICKETMASTER_API_KEY=k8GrSAkbFaN0w7qDxGl7ohr8LwdAQm9b
+
+#-----------------------------------------------------------------------------------------------
+# Background Jobs & Cron
+#-----------------------------------------------------------------------------------------------
+CRON_SECRET=6155002300
+
+#-----------------------------------------------------------------------------------------------
+# Development Configuration
+#-----------------------------------------------------------------------------------------------
+NODE_ENV=production
+API_URL=https://ailrmwtahifvstpfhbgn.supabase.co
+NEXT_PUBLIC_API_URL=https://ailrmwtahifvstpfhbgn.supabase.co
+NEXT_PUBLIC_GRAPHQL_URL=https://ailrmwtahifvstpfhbgn.supabase.co/graphql/v1
+
+#-----------------------------------------------------------------------------------------------
+# Frontend Configuration  
+#-----------------------------------------------------------------------------------------------
+FRONTEND_URL=https://thesetclaude4.vercel.app/
+NEXT_PUBLIC_APP_URL=https://thesetclaude4.vercel.app/
+
+#-----------------------------------------------------------------------------------------------
+# Redis Configuration
+#-----------------------------------------------------------------------------------------------
+REDIS_URL=redis://localhost:6379
+
+## Current System Architecture
+
+### Monorepo Structure (Turborepo)
+```
+setlist-score-show/
+├── apps/
+│   ├── web/              # Next.js 14 frontend
+│   └── api/              # Fastify GraphQL API
+├── packages/
+│   ├── database/         # Prisma schema & client
+│   ├── ui/               # Shared UI components
+│   ├── config/           # Shared configurations
+│   └── types/            # TypeScript types
+└── supabase/
+    └── functions/        # Edge functions for sync jobs
+```
+
+### Database Schema (Key Tables)
+- **artists**: Spotify/Ticketmaster IDs, metadata, popularity scores
+- **venues**: Location data, capacity, Ticketmaster integration
+- **shows**: Concert events with artist/venue relationships
+- **songs**: Complete artist catalogs from Spotify
+- **setlists**: Fan-created setlists for each show
+- **setlist_songs**: Junction table with vote counts
+- **votes**: Individual user votes with limits (10/show, 50/day)
+- **played_setlists**: Actual performed setlists from setlist.fm
+
+---
+
+## Data Flow & Sync System
+
+### 1. Artist Import Flow
+```
+Ticketmaster API → Discover artists with shows → Check if exists in DB
+    ↓ (if new)
+Create artist with Ticketmaster data → Queue for Spotify sync
+    ↓
+Spotify API → Fetch full metadata + song catalog → Update artist record
+```
+
+### 2. Show Import Flow
+```
+Ticketmaster API (Top Shows) → Extract venue + artist data
+    ↓
+Create/update venues → Create/update artists → Create shows
+    ↓
+Auto-generate initial setlist with 5 random songs (0 votes)
+```
+
+### 3. Sync Jobs (Supabase Edge Functions)
+- **sync-top-shows**: Hourly - Imports top 50 US concerts from Ticketmaster
+- **sync-spotify-data**: Every 6 hours - Updates artist catalogs
+- **sync-setlists**: Daily - Imports actual setlists from setlist.fm
+- **calculate-trending**: Hourly - Updates trending scores
+
+---
+
+## Critical Issues Identified
+
+### 1. Homepage Data Loading Failure
+**Problem**: The `getTopHomepageContent()` function is querying non-existent database views/tables
+```typescript
+// Current broken query in apps/web/app/(main)/page.tsx
+const { data } = await supabase
+  .from('homepage_content')  // This view doesn't exist!
+  .select('*')
+```
+
+**Root Cause**: Missing materialized views for homepage optimization
+
+### 2. Design Quality Issues
+- Current implementation is at ~20% of target quality
+- No proper loading states or error handling
+- Artist cards missing images
+- Poor mobile responsiveness
+- No visual hierarchy or modern design patterns
+
+### 3. Search System Fragmentation
+- Multiple inconsistent search implementations
+- Mixed artist/show search causing confusion
+- No proper debouncing or caching
+- Results display inconsistently
+
+### 4. Data Duplication
+- No duplicate prevention in show imports
+- Artists appearing multiple times
+- Venue duplicates with slight name variations
+
+---
+
+## Homepage Revamp Plan
+
+### Design Philosophy (Apple-Tier Quality)
+1. **Clean, Minimalist Layout**: Focus on content with ample whitespace
+2. **Fluid Animations**: Smooth transitions using Framer Motion
+3. **Glassmorphism Elements**: Subtle blur effects with gradients
+4. **Dynamic Content**: Real-time updates without jarring refreshes
+5. **Responsive Grid**: Adaptive layouts for all screen sizes
+
+### Homepage Sections Architecture
+
+#### 1. Hero Section
+```tsx
+// Gradient background with search overlay
+<section className="relative h-[70vh] overflow-hidden">
+  <div className="absolute inset-0 bg-gradient-to-br from-teal-600 via-cyan-600 to-blue-700" />
+  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
+  
+  <div className="relative z-10 container mx-auto px-4 h-full flex flex-col justify-center">
+    <h1 className="text-6xl font-bold text-white mb-4">
+      Shape the Show
+    </h1>
+    <p className="text-xl text-white/90 mb-8">
+      Vote on setlists for upcoming concerts
+    </p>
+    <UnifiedSearchBar />
+  </div>
+</section>
+```
+
+#### 2. Trending Artists Section
+```tsx
+// Apple Music-inspired artist cards
+<section className="py-16">
+  <h2 className="text-3xl font-semibold mb-8">Trending Artists</h2>
+  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+    {artists.map(artist => (
+      <ArtistCard
+        key={artist.id}
+        artist={artist}
+        showsCount={artist.upcoming_shows_count}
+        imageUrl={artist.image_url}
+        popularity={artist.popularity}
+      />
+    ))}
+  </div>
+</section>
+```
+
+#### 3. Top Shows Section
+```tsx
+// Event cards with venue info and countdown
+<section className="py-16 bg-gray-50 dark:bg-gray-900/50">
+  <h2 className="text-3xl font-semibold mb-8">Hot Shows This Week</h2>
+  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {shows.map(show => (
+      <ShowCard
+        key={show.id}
+        show={show}
+        artist={show.artist}
+        venue={show.venue}
+        voteCount={show.total_votes}
+        daysUntil={calculateDaysUntil(show.date)}
+      />
+    ))}
+  </div>
+</section>
+```
+
+### New Homepage Data Query
+```typescript
+// Create proper database views first
+async function getTopHomepageContent() {
+  // Get top US artists with upcoming shows
+  const { data: artists } = await supabase
+    .from('artists')
+    .select(`
+      *,
+      shows!inner(
+        id,
+        date,
+        status
+      )
+    `)
+    .eq('shows.status', 'upcoming')
+    .gte('shows.date', new Date().toISOString())
+    .order('popularity', { ascending: false })
+    .limit(24);
+
+  // Get top upcoming shows with high engagement
+  const { data: shows } = await supabase
+    .from('shows')
+    .select(`
+      *,
+      artist:artists(*),
+      venue:venues(*),
+      setlists(
+        setlist_songs(
+          vote_count
+        )
+      )
+    `)
+    .eq('status', 'upcoming')
+    .gte('date', new Date().toISOString())
+    .lte('date', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+    .order('popularity', { ascending: false })
+    .limit(20);
+
+  return { artists, shows };
+}
+```
+
+---
+
+## Database Reset & Seed Implementation
+
+### 1. Create Migration Script
+```sql
+-- filepath: supabase/migrations/20240101000001_initial_schema.sql
+
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+-- Artists table with proper indexes
+CREATE TABLE artists (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  spotify_id TEXT UNIQUE,
+  ticketmaster_id TEXT,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  image_url TEXT,
+  genres TEXT[],
+  popularity INTEGER DEFAULT 0,
+  followers INTEGER DEFAULT 0,
+  last_synced_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_artists_popularity ON artists(popularity DESC);
+CREATE INDEX idx_artists_name_search ON artists USING gin(name gin_trgm_ops);
+
+-- Continue with all tables from TheSet-Fixes.md schema...
+```
+
+### 2. Seed Data Script
+```typescript
+// filepath: supabase/seed.ts
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+async function seed() {
+  // 1. Create sample artists
+  const artists = [
+    {
+      name: 'Taylor Swift',
+      spotify_id: '06HL4z0CvFAxyc27GXpf02',
+      popularity: 100,
+      genres: ['pop', 'country'],
+      image_url: 'https://i.scdn.co/image/...',
+    },
+    // Add 20+ popular artists
+  ];
+
+  const { data: insertedArtists } = await supabase
+    .from('artists')
+    .insert(artists)
+    .select();
+
+  // 2. Create sample venues
+  const venues = [
+    {
+      name: 'Madison Square Garden',
+      city: 'New York',
+      state: 'NY',
+      country: 'US',
+      capacity: 20000,
+    },
+    // Add major venues
+  ];
+
+  // 3. Create upcoming shows
+  // 4. Create initial setlists with 5 songs each
+  // 5. Add sample votes
+}
+```
+
+### 3. Reset Commands
+```bash
+# Reset remote database
+supabase db reset --db-url $DATABASE_URL
+
+# Run migrations
+supabase db push --db-url $DATABASE_URL
+
+# Run seed
+npm run seed
+```
+
+---
+
+## Search System Unification
+
+### Unified Search Component
+```tsx
+// filepath: apps/web/components/search/UnifiedSearch.tsx
+
+interface UnifiedSearchProps {
+  placeholder?: string;
+  onResultClick?: (result: SearchResult) => void;
+  className?: string;
+}
+
+export function UnifiedSearch({ 
+  placeholder = "Search artists...",
+  onResultClick,
+  className 
+}: UnifiedSearchProps) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Artist[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Debounced search
+  const debouncedSearch = useDebouncedCallback(async (searchQuery: string) => {
+    if (searchQuery.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    setIsLoading(true);
+    
+    const { data } = await supabase
+      .from('artists')
+      .select('*')
+      .ilike('name', `%${searchQuery}%`)
+      .order('popularity', { ascending: false })
+      .limit(5);
+    
+    setResults(data || []);
+    setIsLoading(false);
+  }, 300);
+
+  return (
+    <div className={cn("relative w-full max-w-xl", className)}>
+      <div className="relative">
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            debouncedSearch(e.target.value);
+          }}
+          placeholder={placeholder}
+          className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-md 
+                     border border-white/20 rounded-xl text-white 
+                     placeholder-white/60 focus:outline-none focus:ring-2 
+                     focus:ring-teal-500"
+        />
+      </div>
+      
+      {/* Results dropdown */}
+      {results.length > 0 && (
+        <div className="absolute top-full mt-2 w-full bg-white dark:bg-gray-800 
+                        rounded-xl shadow-2xl border border-gray-200 
+                        dark:border-gray-700 overflow-hidden z-50">
+          {results.map((artist) => (
+            <Link
+              key={artist.id}
+              href={`/artists/${artist.slug}`}
+              onClick={() => {
+                setQuery('');
+                setResults([]);
+                onResultClick?.({ type: 'artist', data: artist });
+              }}
+              className="flex items-center gap-3 p-3 hover:bg-gray-50 
+                         dark:hover:bg-gray-700 transition-colors"
+            >
+              <img
+                src={artist.image_url || '/placeholder-artist.jpg'}
+                alt={artist.name}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+              <div>
+                <p className="font-semibold">{artist.name}</p>
+                <p className="text-sm text-gray-500">
+                  {artist.genres?.slice(0, 2).join(', ')}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Search Integration Points
+1. **Homepage Hero**: Primary search bar
+2. **Header Navigation**: Persistent search in navbar
+3. **Mobile**: Full-screen search overlay
+4. **Artists Page**: Filter existing artist grid
+
+---
+
+## Implementation Steps
+
+### Phase 1: Database Foundation (Day 1)
+1. **Reset & Migrate**
+   ```bash
+   # Create migration files from TheSet-Fixes.md schema
+   supabase migration new initial_schema
+   
+   # Apply to remote
+   supabase db push --db-url $DATABASE_URL
+   ```
+
+2. **Create Database Views**
+   ```sql
+   -- Trending artists view
+   CREATE MATERIALIZED VIEW trending_artists AS
+   SELECT 
+     a.*,
+     COUNT(DISTINCT s.id) as upcoming_shows_count,
+     SUM(ss.vote_count) as total_votes
+   FROM artists a
+   JOIN shows s ON s.artist_id = a.id
+   LEFT JOIN setlists sl ON sl.show_id = s.id
+   LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
+   WHERE s.status = 'upcoming'
+     AND s.date >= CURRENT_DATE
+   GROUP BY a.id
+   ORDER BY a.popularity DESC, total_votes DESC;
+
+   -- Create indexes
+   CREATE UNIQUE INDEX idx_trending_artists_id ON trending_artists(id);
+   ```
+
+3. **Seed Initial Data**
+   - Run Ticketmaster sync to populate shows
+   - Trigger Spotify sync for artist catalogs
+   - Generate initial setlists
+
+### Phase 2: Homepage Revamp (Days 2-3)
+1. **Component Architecture**
+   ```
+   apps/web/components/
+   ├── home/
+   │   ├── HeroSection.tsx
+   │   ├── TrendingArtists.tsx
+   │   ├── TopShows.tsx
+   │   └── FeaturedTours.tsx
+   ├── cards/
+   │   ├── ArtistCard.tsx
+   │   ├── ShowCard.tsx
+   │   └── TourCard.tsx
+   └── search/
+       └── UnifiedSearch.tsx
+       
+   ```
+
+
+   IMPORTANT SYNC AND SEARCH FIXES/IMPROVEMENTS:
+
+   After reviewing your sync system, here's my detailed analysis and implementation:
+
+## Sync System Analysis
+
+Your current sync system is **functional but inefficient**. Here's why and how to improve it:
+
+### Current Issues:
+1. **Limited Coverage**: Only fetching 50 shows per sync
+2. **No Deduplication**: Creating duplicate venues/artists
+3. **Inefficient Queries**: Not using Ticketmaster's pagination properly
+4. **Poor Homepage Data**: Not enough variety for a compelling homepage
+
+### Improved Sync Strategy:
+
+````typescript
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const TICKETMASTER_API_KEY = Deno.env.get('TICKETMASTER_API_KEY')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+serve(async (req) => {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  
+  // Get sync cursor from last run
+  const { data: syncState } = await supabase
+    .from('sync_state')
+    .select('*')
+    .eq('job_name', 'ticketmaster_shows')
+    .single()
+  
+  const lastSyncDate = syncState?.last_sync_date || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  
+  // Fetch shows in sliding window (next 90 days)
+  const startDate = new Date().toISOString().split('T')[0]
+  const endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  
+  let page = 0
+  let hasMore = true
+  const allShows = []
+  
+  while (hasMore && page < 10) { // Max 10 pages = 2000 shows
+    const response = await fetch(
+      `https://app.ticketmaster.com/discovery/v2/events?` +
+      `apikey=${TICKETMASTER_API_KEY}` +
+      `&countryCode=US` +
+      `&classificationName=Music` +
+      `&startDateTime=${startDate}T00:00:00Z` +
+      `&endDateTime=${endDate}T23:59:59Z` +
+      `&size=200` + // Max page size
+      `&page=${page}` +
+      `&sort=relevance,desc` +
+      `&includeTBA=no` +
+      `&includeTBD=no`
+    )
+    
+    const data = await response.json()
+    
+    if (data._embedded?.events) {
+      allShows.push(...data._embedded.events)
+    }
+    
+    hasMore = data.page.number < data.page.totalPages - 1
+    page++
+  }
+  
+  // Process shows with proper deduplication
+  const processedShows = []
+  const venueMap = new Map()
+  const artistMap = new Map()
+  
+  for (const event of allShows) {
+    // Skip if no artist info
+    const attractions = event._embedded?.attractions
+    if (!attractions?.length) continue
+    
+    // Process venue first
+    const venueData = event._embedded?.venues?.[0]
+    if (!venueData) continue
+    
+    let venueId = venueMap.get(venueData.id)
+    if (!venueId) {
+      // Check if venue exists by ticketmaster_id
+      const { data: existingVenue } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('ticketmaster_id', venueData.id)
+        .single()
+      
+      if (existingVenue) {
+        venueId = existingVenue.id
+      } else {
+        // Create new venue with PostGIS point
+        const { data: newVenue } = await supabase
+          .from('venues')
+          .insert({
+            ticketmaster_id: venueData.id,
+            name: venueData.name,
+            city: venueData.city?.name,
+            state: venueData.state?.stateCode,
+            country: venueData.country?.countryCode,
+            address: venueData.address?.line1,
+            capacity: venueData.generalInfo?.generalRule?.match(/\d+/)?.[0] || null,
+            location: venueData.location ? 
+              `POINT(${venueData.location.longitude} ${venueData.location.latitude})` : null,
+            postal_code: venueData.postalCode
+          })
+          .select('id')
+          .single()
+        
+        venueId = newVenue.id
+      }
+      venueMap.set(venueData.id, venueId)
+    }
+    
+    // Process artist
+    const attraction = attractions[0]
+    let artistId = artistMap.get(attraction.id)
+    
+    if (!artistId) {
+      const { data: existingArtist } = await supabase
+        .from('artists')
+        .select('id')
+        .eq('ticketmaster_id', attraction.id)
+        .single()
+      
+      if (existingArtist) {
+        artistId = existingArtist.id
+      } else {
+        // Create artist with better metadata
+        const { data: newArtist } = await supabase
+          .from('artists')
+          .insert({
+            ticketmaster_id: attraction.id,
+            name: attraction.name,
+            slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            image_url: attraction.images?.find(img => img.ratio === '16_9')?.url,
+            genres: attraction.classifications?.[0]?.genre?.name ? 
+              [attraction.classifications[0].genre.name] : [],
+            popularity: Math.floor(Math.random() * 50) + 50, // Temporary until Spotify sync
+            needs_spotify_sync: true
+          })
+          .select('id')
+          .single()
+        
+        artistId = newArtist.id
+      }
+      artistMap.set(attraction.id, artistId)
+    }
+    
+    // Check if show already exists
+    const { data: existingShow } = await supabase
+      .from('shows')
+      .select('id')
+      .eq('ticketmaster_id', event.id)
+      .single()
+    
+    if (!existingShow) {
+      processedShows.push({
+        ticketmaster_id: event.id,
+        artist_id: artistId,
+        venue_id: venueId,
+        name: event.name,
+        date: event.dates.start.dateTime || `${event.dates.start.localDate}T20:00:00Z`,
+        status: 'upcoming',
+        tickets_url: event.url,
+        min_price: event.priceRanges?.[0]?.min,
+        max_price: event.priceRanges?.[0]?.max,
+        popularity: event.score || 50,
+        sales_status: event.dates.status.code,
+        presale_date: event.sales?.presales?.[0]?.startDateTime,
+        onsale_date: event.sales?.public?.startDateTime
+      })
+    }
+  }
+  
+  // Bulk insert new shows
+  if (processedShows.length > 0) {
+    const { data: insertedShows } = await supabase
+      .from('shows')
+      .insert(processedShows)
+      .select('id, artist_id')
+    
+    // Create initial setlists for new shows
+    for (const show of insertedShows) {
+      await supabase.rpc('create_initial_setlist', { 
+        show_id: show.id,
+        artist_id: show.artist_id 
+      })
+    }
+  }
+  
+  // Update sync state
+  await supabase
+    .from('sync_state')
+    .upsert({
+      job_name: 'ticketmaster_shows',
+      last_sync_date: new Date().toISOString(),
+      records_processed: allShows.length,
+      records_created: processedShows.length
+    })
+  
+  // Trigger homepage cache refresh
+  await supabase.rpc('refresh_homepage_cache')
+  
+  return new Response(JSON.stringify({ 
+    processed: allShows.length,
+    created: processedShows.length 
+  }), {
+    headers: { 'Content-Type': 'application/json' }
+  })
+})
+````
+
+### Homepage Optimization with Materialized Views:
+
+````sql
+-- Create PostGIS extension for location queries
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Add location column to venues
+ALTER TABLE venues 
+ADD COLUMN IF NOT EXISTS location geography(Point, 4326);
+
+-- Update existing venues with location data
+UPDATE venues 
+SET location = ST_SetSRID(ST_MakePoint(
+  CAST(longitude AS float), 
+  CAST(latitude AS float)
+), 4326)
+WHERE longitude IS NOT NULL AND latitude IS NOT NULL;
+
+-- Create spatial index
+CREATE INDEX idx_venues_location ON venues USING GIST (location);
+
+-- Homepage cache table for fast loading
+CREATE TABLE homepage_cache (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  cache_key TEXT UNIQUE NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Function to refresh homepage data
+CREATE OR REPLACE FUNCTION refresh_homepage_cache()
+RETURNS void AS $$
+BEGIN
+  -- Top artists with upcoming shows
+  INSERT INTO homepage_cache (cache_key, data, expires_at)
+  VALUES (
+    'top_artists',
+    (
+      SELECT jsonb_agg(artist_data)
+      FROM (
+        SELECT 
+          a.id,
+          a.name,
+          a.slug,
+          a.image_url,
+          a.genres,
+          a.popularity,
+          COUNT(DISTINCT s.id) as upcoming_shows_count,
+          MIN(s.date) as next_show_date,
+          array_agg(DISTINCT v.city || ', ' || v.state) FILTER (WHERE v.city IS NOT NULL) as tour_cities
+        FROM artists a
+        JOIN shows s ON s.artist_id = a.id
+        JOIN venues v ON v.id = s.venue_id
+        WHERE s.status = 'upcoming'
+          AND s.date >= CURRENT_DATE
+          AND s.date <= CURRENT_DATE + INTERVAL '90 days'
+          AND a.image_url IS NOT NULL
+        GROUP BY a.id
+        ORDER BY a.popularity DESC, upcoming_shows_count DESC
+        LIMIT 24
+      ) artist_data
+    ),
+    NOW() + INTERVAL '10 minutes'
+  )
+  ON CONFLICT (cache_key) 
+  DO UPDATE SET 
+    data = EXCLUDED.data,
+    expires_at = EXCLUDED.expires_at;
+  
+  -- Top shows by engagement
+  INSERT INTO homepage_cache (cache_key, data, expires_at)
+  VALUES (
+    'top_shows',
+    (
+      SELECT jsonb_agg(show_data)
+      FROM (
+        SELECT 
+          s.id,
+          s.name,
+          s.date,
+          s.tickets_url,
+          s.min_price,
+          s.max_price,
+          jsonb_build_object(
+            'id', a.id,
+            'name', a.name,
+            'slug', a.slug,
+            'image_url', a.image_url
+          ) as artist,
+          jsonb_build_object(
+            'id', v.id,
+            'name', v.name,
+            'city', v.city,
+            'state', v.state,
+            'capacity', v.capacity
+          ) as venue,
+          COALESCE(SUM(ss.vote_count), 0) as total_votes,
+          COUNT(DISTINCT ss.song_id) as songs_voted
+        FROM shows s
+        JOIN artists a ON a.id = s.artist_id
+        JOIN venues v ON v.id = s.venue_id
+        LEFT JOIN setlists sl ON sl.show_id = s.id
+        LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
+        WHERE s.status = 'upcoming'
+          AND s.date >= CURRENT_DATE
+          AND s.date <= CURRENT_DATE + INTERVAL '30 days'
+          AND v.capacity > 1000
+        GROUP BY s.id, a.id, v.id
+        ORDER BY total_votes DESC, v.capacity DESC NULLS LAST
+        LIMIT 20
+      ) show_data
+    ),
+    NOW() + INTERVAL '10 minutes'
+  )
+  ON CONFLICT (cache_key) 
+  DO UPDATE SET 
+    data = EXCLUDED.data,
+    expires_at = EXCLUDED.expires_at;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Auto-refresh every 10 minutes via cron
+SELECT cron.schedule(
+  'refresh-homepage-cache',
+  '*/10 * * * *',
+  'SELECT refresh_homepage_cache()'
+);
+````
+
+## ZIP Code Search Implementation
+
+### Database Setup:
+
+````sql
+-- Create ZIP code lookup table
+CREATE TABLE zip_codes (
+  zip_code CHAR(5) PRIMARY KEY,
+  city TEXT NOT NULL,
+  state CHAR(2) NOT NULL,
+  latitude DECIMAL(10, 7) NOT NULL,
+  longitude DECIMAL(10, 7) NOT NULL,
+  timezone TEXT
+);
+
+-- Import ZIP data (you'll need to load a CSV)
+-- Source: https://simplemaps.com/data/us-zips
+
+-- Function to find nearby shows
+CREATE OR REPLACE FUNCTION get_nearby_shows(
+  p_zip_code TEXT,
+  p_radius_km INTEGER DEFAULT 160 -- ~100 miles
+)
+RETURNS TABLE (
+  show_id UUID,
+  show_name TEXT,
+  show_date TIMESTAMPTZ,
+  artist_id UUID,
+  artist_name TEXT,
+  artist_slug TEXT,
+  artist_image TEXT,
+  venue_id UUID,
+  venue_name TEXT,
+  venue_city TEXT,
+  venue_state TEXT,
+  venue_capacity INTEGER,
+  distance_km FLOAT,
+  total_votes BIGINT
+) AS $$
+DECLARE
+  v_lat DECIMAL;
+  v_lng DECIMAL;
+  v_location geography;
+BEGIN
+  -- Get coordinates for ZIP
+  SELECT latitude, longitude 
+  INTO v_lat, v_lng
+  FROM zip_codes 
+  WHERE zip_code = p_zip_code;
+  
+  IF v_lat IS NULL THEN
+    RAISE EXCEPTION 'Invalid ZIP code: %', p_zip_code;
+  END IF;
+  
+  v_location := ST_SetSRID(ST_MakePoint(v_lng, v_lat), 4326)::geography;
+  
+  RETURN QUERY
+  SELECT 
+    s.id as show_id,
+    s.name as show_name,
+    s.date as show_date,
+    a.id as artist_id,
+    a.name as artist_name,
+    a.slug as artist_slug,
+    a.image_url as artist_image,
+    v.id as venue_id,
+    v.name as venue_name,
+    v.city as venue_city,
+    v.state as venue_state,
+    v.capacity as venue_capacity,
+    ST_Distance(v.location, v_location) / 1000 as distance_km,
+    COALESCE(SUM(ss.vote_count), 0) as total_votes
+  FROM shows s
+  JOIN artists a ON a.id = s.artist_id
+  JOIN venues v ON v.id = s.venue_id
+  LEFT JOIN setlists sl ON sl.show_id = s.id
+  LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
+  WHERE s.status = 'upcoming'
+    AND s.date >= CURRENT_DATE
+    AND ST_DWithin(v.location, v_location, p_radius_km * 1000)
+  GROUP BY s.id, a.id, v.id
+  ORDER BY 
+    v.capacity DESC NULLS LAST,
+    distance_km ASC,
+    s.date ASC
+  LIMIT 50;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC to create show/artist/venue if clicking from external source
+CREATE OR REPLACE FUNCTION create_or_get_show(
+  p_ticketmaster_id TEXT,
+  p_artist_name TEXT,
+  p_venue_name TEXT,
+  p_show_date TIMESTAMPTZ,
+  p_venue_city TEXT DEFAULT NULL,
+  p_venue_state TEXT DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+  v_artist_id UUID;
+  v_venue_id UUID;
+  v_show_id UUID;
+BEGIN
+  -- Get or create artist
+  SELECT id INTO v_artist_id
+  FROM artists
+  WHERE ticketmaster_id = p_ticketmaster_id
+    OR LOWER(name) = LOWER(p_artist_name);
+  
+  IF v_artist_id IS NULL THEN
+    INSERT INTO artists (name, slug, needs_spotify_sync)
+    VALUES (
+      p_artist_name,
+      LOWER(REGEXP_REPLACE(p_artist_name, '[^a-zA-Z0-9]+', '-', 'g')),
+      true
+    )
+    RETURNING id INTO v_artist_id;
+  END IF;
+  
+  -- Get or create venue
+  SELECT id INTO v_venue_id
+  FROM venues
+  WHERE LOWER(name) = LOWER(p_venue_name)
+    AND (city = p_venue_city OR p_venue_city IS NULL);
+  
+  IF v_venue_id IS NULL THEN
+    INSERT INTO venues (name, city, state)
+    VALUES (p_venue_name, p_venue_city, p_venue_state)
+    RETURNING id INTO v_venue_id;
+  END IF;
+  
+  -- Get or create show
+  SELECT id INTO v_show_id
+  FROM shows
+  WHERE artist_id = v_artist_id
+    AND venue_id = v_venue_id
+    AND DATE(date) = DATE(p_show_date);
+  
+  IF v_show_id IS NULL THEN
+    INSERT INTO shows (
+      artist_id, 
+      venue_id, 
+      date, 
+      name,
+      status
+    )
+    VALUES (
+      v_artist_id,
+      v_venue_id,
+      p_show_date,
+      p_artist_name || ' at ' || p_venue_name,
+      'upcoming'
+    )
+    RETURNING id INTO v_show_id;
+    
+    -- Create initial setlist
+    PERFORM create_initial_setlist(v_show_id, v_artist_id);
+  END IF;
+  
+  RETURN v_show_id;
+END;
+$$ LANGUAGE plpgsql;
+````
+
+### Frontend Implementation:
+
+````tsx
+'use client'
+
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { Search } from 'lucide-react'
+import { useDebouncedCallback } from 'use-debounce'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cn } from '@/lib/utils'
+
+interface UnifiedSearchProps {
+  placeholder?: string
+  className?: string
+  variant?: 'hero' | 'header' | 'mobile'
+}
+
+export function UnifiedSearch({ 
+  placeholder = "Search artists or enter ZIP code...",
+  className,
+  variant = 'hero'
+}: UnifiedSearchProps) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const supabase = createClientComponentClient()
+  
+  const handleSearch = useDebouncedCallback(async (searchQuery: string) => {
+    const trimmed = searchQuery.trim()
+    
+    if (trimmed.length < 2) {
+      setResults([])
+      return
+    }
+    
+    // Check if it's a ZIP code
+    const isZip = /^\d{5}$/.test(trimmed)
+    
+    if (isZip) {
+      // Navigate directly to nearby shows
+      router.push(`/nearby/${trimmed}`)
+      setQuery('')
+      setResults([])
+      return
+    }
+    
+    // Otherwise search artists
+    setIsLoading(true)
+    
+    try {
+      const { data, error } = await supabase
+        .from('artists')
+        .select('id, name, slug, image_url, genres')
+        .ilike('name', `%${trimmed}%`)
+        .order('popularity', { ascending: false })
+        .limit(5)
+      
+      if (!error && data) {
+        setResults(data)
+      }
+    } catch (err) {
+      console.error('Search error:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, 300)
+  
+  const inputStyles = {
+    hero: "w-full pl-12 pr-4 py-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-white/60 text-lg",
+    header: "w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm",
+    mobile: "w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-xl"
+  }
+  
+  return (
+    <div className={cn("relative w-full", className)}>
+      <div className="relative">
+        <Search className={cn(
+          "absolute top-1/2 -translate-y-1/2 text-gray-400",
+          variant === 'hero' ? "left-4 w-5 h-5" : "left-3 w-4 h-4"
+        )} />
+        
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            handleSearch(e.target.value)
+          }}
+          placeholder={placeholder}
+          className={cn(
+            inputStyles[variant],
+            "transition-all focus:outline-none focus:ring-2 focus:ring-teal-500"
+          )}
+        />
+        
+        {isLoading && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+      
+      {/* Results dropdown */}
+      {results.length > 0 && (
+        <div className={cn(
+          "absolute top-full mt-2 w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50",
+          variant === 'hero' && "backdrop-blur-md bg-white/95 dark:bg-gray-800/95"
+        )}>
+          {results.map((artist) => (
+            <button
+              key={artist.id}
+              onClick={() => {
+                router.push(`/artists/${artist.slug}`)
+                setQuery('')
+                setResults([])
+              }}
+              className="flex items-center gap-3 p-3 w-full hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+            >
+              <img
+                src={artist.image_url || '/placeholder-artist.jpg'}
+                alt={artist.name}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+              <div>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {artist.name}
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {artist.genres?.slice(0, 2).join(', ') || 'Artist'}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+````
+
+````tsx
+import { notFound } from 'next/navigation'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { MapPin, Calendar, Users, Music } from 'lucide-react'
+import Link from 'next/link'
+
+interface PageProps {
+  params: {
+    zip: string
+  }
+}
+
+export default async function NearbyShowsPage({ params }: PageProps) {
+  const supabase = createServerComponentClient({ cookies })
+  
+  // Validate ZIP
+  if (!/^\d{5}$/.test(params.zip)) {
+    notFound()
+  }
+  
+  // Get ZIP info
+  const { data: zipInfo } = await supabase
+    .from('zip_codes')
+    .select('city, state')
+    .eq('zip_code', params.zip)
+    .single()
+  
+  if (!zipInfo) {
+    notFound()
+  }
+  
+  // Get nearby shows
+  const { data: shows, error } = await supabase.rpc('get_nearby_shows', {
+    p_zip_code: params.zip,
+    p_radius_km: 160
+  })
+  
+  if (error) {
+    console.error('Error fetching nearby shows:', error)
+    return <div>Error loading shows</div>
+  }
+  
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-teal-600 via-cyan-600 to-blue-700 text-white">
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex items-center gap-3 mb-4">
+            <MapPin className="w-6 h-6" />
+            <h1 className="text-3xl font-bold">
+              Shows Near {zipInfo.city}, {zipInfo.state}
+            </h1>
+          </div>
+          <p className="text-lg opacity-90">
+            {shows?.length || 0} upcoming concerts within 100 miles of {params.zip}
+          </p>
+        </div>
+      </div>
+      
+      {/* Shows Grid */}
+      <div className="container mx-auto px-4 py-8">
+        {!shows || shows.length === 0 ? (
+          <div className="text-center py-16">
+            <Music className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              No upcoming shows found
+            </h2>
+            <p className="text-gray-500">
+              Try searching a different area or check back later
+            </p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {shows.map((show) => (
+              <Link
+                key={show.show_id}
+                href={`/shows/${show.show_id}`}
+                className="group bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1"
+              >
+                {/* Artist Image */}
+                <div className="aspect-video relative overflow-hidden bg-gray-100 dark:bg-gray-700">
+                  {show.artist_image ? (
+                    <img
+                      src={show.artist_image}
+                      alt={show.artist_name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Music className="w-16 h-16 text-gray-400" />
+                    </div>
+                  )}
+                  
+                  {/* Distance Badge */}
+                  <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-sm">
+                    {Math.round(show.distance_km * 0.621371)} mi
+                  </div>
+                </div>
+                
+                {/* Content */}
+                <div className="p-5">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1">
+                    {show.artist_name}
+                  </h3>
+                  
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+                    {show.venue_name}
+                  </p>
+                  
+                  <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      {new Date(show.show_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </div>
+                    
+                    {show.venue_capacity && (
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        {show.venue_capacity.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Vote Count */}
+                  {show.total_votes > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500">Community Votes</span>
+                        <span className="text-sm font-semibold text-teal-600">
+                          {show.total_votes}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const supabase = createServerComponentClient({ cookies })
+  
+  const { data: zipInfo } = await supabase
+    .from('zip_codes')
+    .select('city, state')
+    .eq('zip_code', params.zip)
+    .single()
+  
+  return {
+    title: `Shows Near ${zipInfo?.city || params.zip} | TheSet`,
+    description: `Find upcoming concerts and vote on setlists near ${zipInfo?.city}, ${zipInfo?.state}`
+  }
+}
+````
+
+### Updated Homepage with Better Data:
+
+````tsx
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { HeroSection } from '@/components/home/HeroSection'
+import { TrendingArtists } from '@/components/home/TrendingArtists'
+import { TopShows } from '@/components/home/TopShows'
+
+export default async function HomePage() {
+  const supabase = createServerComponentClient({ cookies })
+  
+  // Get cached homepage data
+  const [artistsResult, showsResult] = await Promise.all([
+    supabase
+      .from('homepage_cache')
+      .select('data')
+      .eq('cache_key', 'top_artists')
+      .gte('expires_at', new Date().toISOString())
+      .single(),
+    
+    supabase
+      .from('homepage_cache')
+      .select('data')
+      .eq('cache_key', 'top_shows')
+      .gte('expires_at', new Date().toISOString())
+      .single()
+  ])
+  
+  const artists = artistsResult.data?.data || []
+  const shows = showsResult.data?.data || []
+  
+  // If cache miss, fetch directly (but this should rarely happen)
+  if (artists.length === 0 || shows.length === 0) {
+    await supabase.rpc('refresh_homepage_cache')
+    // Reload the data...
+  }
+  
+  return (
+    <main className="min-h-screen">
+      <HeroSection />
+      <TrendingArtists artists={artists} />
+      <TopShows shows={shows} />
+    </main>
+  )
+}
+````
+
+This implementation:
+
+1. **Improves sync efficiency** by fetching 200 shows per page (max allowed) and processing up to 2000 shows per sync
+2. **Prevents duplicates** with proper checks before inserting
+3. **Uses PostGIS** for efficient location-based queries
+4. **Implements homepage caching** that refreshes every 10 minutes
+5. **Adds ZIP code search** that seamlessly integrates with the existing search
+6. **Creates shows/artists on-demand** when users click external shows
+
+The sync system now covers much more ground while the homepage loads instantly from cache, giving you the best of both worlds.
+
+2. **Implement Apple-Tier Design System**
+   ```css
+   /* Global design tokens */
+   :root {
+     --gradient-primary: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+     --gradient-secondary: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+     --blur-strength: 12px;
+     --card-radius: 20px;
+     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+   ```
+
+3. **Performance Optimizations**
+   - Implement React Query for data caching
+   - Add image optimization with next/image
+   - Lazy load sections with Intersection Observer
+   - Prefetch artist/show pages on hover
+
+### Phase 3: Search Unification (Day 4)
+1. **Replace All Search Instances**
+   - Remove fragmented search implementations
+   - Install unified search in all locations
+   - Add proper error states and loading indicators
+
+2. **Implement Search Analytics**
+   ```typescript
+   // Track search queries for improving results
+   async function trackSearch(query: string, resultCount: number) {
+     await supabase.from('search_analytics').insert({
+       query,
+       result_count: resultCount,
+       user_id: user?.id,
+       timestamp: new Date()
+     });
+   }
+   ```
+
+### Phase 4: Testing & Polish (Day 5)
+1. **Data Quality Checks**
+   - Verify no duplicate artists/shows
+   - Ensure all images load correctly
+   - Test sync job reliability
+
+2. **Performance Testing**
+   - Homepage load time < 2s
+   - Search results < 300ms
+   - Smooth 60fps animations
+
+3. **Cross-Device Testing**
+   - Mobile responsiveness
+   - Tablet layouts
+   - Desktop widescreen support
+
+---
+
+## Success Metrics
+
+### Homepage Performance
+- **Load Time**: < 2 seconds initial load
+- **TTI**: < 3 seconds to interactive
+- **Search Speed**: < 300ms for results
+- **Animation FPS**: Consistent 60fps
+
+### Data Quality
+- **Artist Coverage**: 100+ top US artists
+- **Show Freshness**: Updated hourly
+- **Image Success**: 95%+ images loading
+- **No Duplicates**: 0 duplicate entries
+
+### User Experience
+- **Bounce Rate**: < 30% on homepage
+- **Search Usage**: 50%+ visitors use search
+- **Click-Through**: 20%+ to artist/show pages
+- **Mobile Usage**: 60%+ on mobile devices
+
+---
+
+## Troubleshooting Guide
+
+### Common Issues & Solutions
+
+1. **Homepage Not Loading Data**
+   - Check if database views exist
+   - Verify Supabase connection
+   - Check browser console for errors
+   - Ensure proper RLS policies
+
+2. **Duplicate Artists/Shows**
+   - Run deduplication query
+   - Update sync jobs to check existing records
+   - Add unique constraints
+
+3. **Search Not Working**
+   - Verify pg_trgm extension enabled
+   - Check search indexes exist
+   - Test query directly in Supabase
+
+4. **Images Not Loading**
+   - Verify image URLs are HTTPS
+   - Check CORS settings
+   - Implement fallback images
+
+---
+
+## Next Steps After Implementation
+
+1. **Monitor & Iterate**
+   - Set up Vercel Analytics
+   - Track Core Web Vitals
+   - A/B test different layouts
+
+2. **Enhanced Features**
+   - Add personalized recommendations
+   - Implement "Near Me" shows
+   - Create artist following system
+
+3. **Scale Preparation**
+   - Implement CDN for images
+   - Add Redis caching layer
+   - Optimize database queries
+
+---
+
+This master plan provides the complete roadmap for fixing and enhancing TheSet platform. Focus on Phase 1-2 for immediate impact, then iterate based on user feedback.
+
+
+

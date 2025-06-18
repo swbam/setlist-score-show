@@ -28,11 +28,7 @@ pnpm-debug.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-# Local env files
-.env*.local
-!.env.example
-*.local
-.env
+
 
 # Vercel
 .vercel

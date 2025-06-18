@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { verifyAuth } from '../_shared/auth.ts';
 
 serve(async (req) => {
   const startTime = Date.now();
@@ -9,21 +10,11 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  try {
-    // Verify cron secret for scheduled runs or API key for manual runs
-    const authHeader = req.headers.get('Authorization');
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    
-    if (authHeader !== `Bearer ${cronSecret}` && 
-        !req.headers.get('apikey')?.includes(Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
-      console.error('Unauthorized fetch top artists request');
-      return new Response(
-        JSON.stringify({ success: false, message: 'Unauthorized' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+  const authResponse = verifyAuth(req);
+  if (authResponse) return authResponse;
 
-    console.log('🎯 Fetching top artists not in database...');
+  try {
+    console.log('🎤 Starting top artist fetch');
     
     const supabase = createServiceClient();
     const ticketmasterApiKey = Deno.env.get('TICKETMASTER_API_KEY');

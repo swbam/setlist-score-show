@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     // Trigger the Supabase Edge Function
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/sync-top-shows`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/sync-top-shows-enhanced`,
       {
         method: 'POST',
         headers: {

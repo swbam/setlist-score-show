@@ -17,11 +17,12 @@
     "sync:setlists": "pnpm --filter @setlist/api sync:setlists",
     "db:migrate:deploy": "supabase db push && pnpm --filter @setlist/database db:push",
     "refresh:trending": "supabase functions invoke refresh_trending_shows",
-    "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending"
+    "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending",
+    "sync": "bash ./scripts/full-sync.sh"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
     "@types/node": "^20.0.0",
+    "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
   "packageManager": "pnpm@10.2.0",
@@ -29,6 +30,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@tanstack/react-virtual": "^3.0.0"
+    "@tanstack/react-virtual": "^3.0.0",
+    "use-debounce": "^10.0.5"
   }
 }
