@@ -55,7 +55,7 @@ call() {
 }
 
 call "$SUPABASE_URL/functions/v1/sync-top-shows-enhanced"
-call "$SUPABASE_URL/functions/v1/sync-spotify"
+# call "$SUPABASE_URL/functions/v1/sync-spotify"
 # sync-setlists may fail if rate-limited, so ignore failure but show output
 call "$SUPABASE_URL/functions/v1/sync-setlists"
 call "$SUPABASE_URL/rest/v1/rpc/refresh_homepage_cache"

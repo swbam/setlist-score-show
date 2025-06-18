@@ -205,6 +205,12 @@ serve(async (req) => {
           artistMap.set(attraction.id, artistId);
         }
         
+        // Skip if we don't have both artist and venue
+        if (!artistId || !venueId) {
+          console.warn(`⚠️ Skipping event ${event.id}: missing artistId=${artistId} or venueId=${venueId}`);
+          continue;
+        }
+        
         // Check if show already exists
         const { data: existingShow } = await supabase
           .from('shows')
@@ -222,20 +228,19 @@ serve(async (req) => {
           ticketmaster_id: event.id,
           artist_id: artistId,
           venue_id: venueId,
-          title: event.name,
+          name: event.name,  // Fixed: use 'name' not 'title'
           date: event.dates.start.dateTime || `${event.dates.start.localDate}T20:00:00Z`,
           status: 'upcoming',
           tickets_url: event.url,
-          ticketmaster_url: event.url,
           min_price: event.priceRanges?.[0]?.min || null,
           max_price: event.priceRanges?.[0]?.max || null,
           popularity: event.score || 50,
           sales_status: event.dates.status?.code,
           presale_date: event.sales?.presales?.[0]?.startDateTime || null,
-          onsale_date: event.sales?.public?.startDateTime || null,
-          view_count: 0
+          onsale_date: event.sales?.public?.startDateTime || null
         };
         
+        console.log(`✅ Prepared show: ${showData.name} (Artist: ${artistId}, Venue: ${venueId})`);
         processedShows.push(showData);
         
       } catch (eventError) {
@@ -256,7 +261,8 @@ serve(async (req) => {
           .select('id, artist_id');
         
         if (insertError) {
-          console.error('Error inserting shows batch:', insertError);
+          console.error('❌ Error inserting shows batch:', insertError);
+          console.error('❌ Failed batch data:', JSON.stringify(batch, null, 2));
           continue;
         }
         
