@@ -11,7 +11,7 @@ export function getPrismaClient(): PrismaClient {
         : ['error'],
       datasources: {
         db: {
-          url: process.env.DATABASE_URL
+          url: process.env.DATABASE_URL + '?pgbouncer=true&connect_timeout=10&pool_timeout=10&schema_search_path=public'
         }
       }
     })

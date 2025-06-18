@@ -66,7 +66,7 @@ WITH show_stats AS (
     s.venue_id,
     COUNT(DISTINCT v.id) as total_votes,
     COUNT(DISTINCT v.user_id) as unique_voters,
-    EXTRACT(DAY FROM (s.date - CURRENT_DATE)) as days_until_show
+    (s.date - CURRENT_DATE) as days_until_show
   FROM shows s
   LEFT JOIN setlists sl ON sl.show_id = s.id
   LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id

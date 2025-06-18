@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS homepage_cache (
   expires_at TIMESTAMPTZ NOT NULL
 );
 
+-- Ensure price fields exist on shows before using them
+ALTER TABLE shows
+  ADD COLUMN IF NOT EXISTS min_price DECIMAL(10, 2),
+  ADD COLUMN IF NOT EXISTS max_price DECIMAL(10, 2);
+
 -- Create index for cache lookups
 CREATE INDEX idx_homepage_cache_key ON homepage_cache(cache_key);
 CREATE INDEX idx_homepage_cache_expires ON homepage_cache(expires_at);
@@ -20,7 +25,7 @@ BEGIN
   VALUES (
     'top_artists',
     (
-      SELECT jsonb_agg(artist_data)
+      SELECT COALESCE(jsonb_agg(artist_data), '[]'::jsonb)
       FROM (
         SELECT 
           a.id,
@@ -56,13 +61,13 @@ BEGIN
   VALUES (
     'top_shows',
     (
-      SELECT jsonb_agg(show_data)
+      SELECT COALESCE(jsonb_agg(show_data), '[]'::jsonb)
       FROM (
         SELECT 
           s.id,
           s.title,
           s.date,
-          s.tickets_url,
+          s.ticketmaster_url,
           s.min_price,
           s.max_price,
           jsonb_build_object(
@@ -106,7 +111,7 @@ BEGIN
   VALUES (
     'featured_tours',
     (
-      SELECT jsonb_agg(tour_data)
+      SELECT COALESCE(jsonb_agg(tour_data), '[]'::jsonb)
       FROM (
         SELECT 
           a.id,
@@ -116,7 +121,7 @@ BEGIN
           COUNT(DISTINCT s.id) as show_count,
           MIN(s.date) as tour_start,
           MAX(s.date) as tour_end,
-          array_agg(DISTINCT v.city || ', ' || v.state ORDER BY s.date) as tour_stops
+          array_agg(DISTINCT v.city || ', ' || v.state) as tour_stops
         FROM artists a
         JOIN shows s ON s.artist_id = a.id
         JOIN venues v ON v.id = s.venue_id
@@ -137,6 +142,9 @@ BEGIN
     expires_at = EXCLUDED.expires_at;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Enable pg_cron extension if not present
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Auto-refresh cache every 10 minutes via cron
 SELECT cron.schedule(

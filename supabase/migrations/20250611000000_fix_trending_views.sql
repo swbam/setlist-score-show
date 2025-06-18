@@ -1,7 +1,3 @@
--- Drop existing views if they exist
-DROP VIEW IF EXISTS trending_shows CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS trending_shows_view CASCADE;
-
 -- Create materialized view for trending shows with fixed date calculation
 CREATE MATERIALIZED VIEW IF NOT EXISTS trending_shows_view AS
 WITH show_stats AS (
@@ -15,7 +11,7 @@ WITH show_stats AS (
     s.venue_id,
     COUNT(DISTINCT v.id) as total_votes,
     COUNT(DISTINCT v.user_id) as unique_voters,
-    EXTRACT(EPOCH FROM (s.date - CURRENT_DATE))/86400 as days_until_show
+    (s.date - CURRENT_DATE) as days_until_show
   FROM shows s
   LEFT JOIN setlists sl ON sl.show_id = s.id
   LEFT JOIN setlist_songs ss ON ss.setlist_id = sl.id
@@ -58,14 +54,3 @@ GRANT SELECT ON trending_shows TO anon, authenticated;
 
 -- Create index on materialized view
 CREATE INDEX IF NOT EXISTS idx_trending_shows_score ON trending_shows_view(trending_score DESC);
-
--- Create function to refresh the materialized view
-CREATE OR REPLACE FUNCTION refresh_trending_shows()
-RETURNS void AS $$
-BEGIN
-  REFRESH MATERIALIZED VIEW CONCURRENTLY trending_shows_view;
-END;
-$$ LANGUAGE plpgsql;
-
--- Grant execute permission on refresh function
-GRANT EXECUTE ON FUNCTION refresh_trending_shows() TO authenticated, service_role;
