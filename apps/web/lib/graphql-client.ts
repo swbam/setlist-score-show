@@ -4,6 +4,13 @@ import { SupabaseAdapter } from './supabase-adapter'
 
 const adapter = new SupabaseAdapter()
 
+// Server-side GraphQL client for SSR/SSG usage
+export const graphqlClient = new GraphQLClient(
+  process.env.NEXT_PUBLIC_API_URL ? 
+    process.env.NEXT_PUBLIC_API_URL + '/graphql' : 
+    'http://localhost:4000/graphql'
+)
+
 export async function getGraphQLClient() {
   const { data: { session } } = await supabase.auth.getSession()
   
@@ -83,7 +90,13 @@ async function handleQueryWithAdapter(query: string, variables: any = {}) {
   }
   
   if (query.includes('GetTrendingShows')) {
-    return adapter.getTrendingShows(variables.limit)
+    const result = await adapter.getTrendingShows(variables.limit)
+    return { trendingShows: result }
+  }
+  
+  if (query.includes('GetFeaturedArtists')) {
+    const result = await adapter.getFeaturedArtists(variables.limit)
+    return result
   }
   
   if (query.includes('AddSongToSetlist')) {

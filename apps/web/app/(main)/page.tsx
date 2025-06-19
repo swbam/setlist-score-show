@@ -1,54 +1,21 @@
 import Link from 'next/link'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { ShowCard } from '@/components/shows/ShowCard'
 import { UnifiedSearch } from '@/components/search/UnifiedSearch'
 import { HeroSection } from '@/components/home/HeroSection'
 import { ArtistCard } from '@/components/home/ArtistCard'
 import { TrendingUp, Calendar, Users, ArrowRight, Music, MapPin } from 'lucide-react'
+import { graphqlClient } from '@/lib/graphql-client'
+import { GET_TRENDING_SHOWS, GET_FEATURED_ARTISTS } from '@/lib/graphql/queries'
 
 export default async function HomePage() {
-  const supabase = createServerComponentClient({ cookies })
-
-  // Try to read cached homepage content (materialized every 10 min)
-  const [artistsCache, showsCache] = await Promise.all([
-    supabase
-      .from('homepage_cache')
-      .select('data')
-      .eq('cache_key', 'top_artists')
-      .gte('expires_at', new Date().toISOString())
-      .single(),
-    supabase
-      .from('homepage_cache')
-      .select('data')
-      .eq('cache_key', 'top_shows')
-      .gte('expires_at', new Date().toISOString())
-      .single()
+  // Fetch data via GraphQL
+  const [showsResult, artistsResult] = await Promise.allSettled([
+    graphqlClient.request(GET_TRENDING_SHOWS, { limit: 8 }),
+    graphqlClient.request(GET_FEATURED_ARTISTS, { limit: 12 })
   ])
 
-  let topArtists = (artistsCache.data?.data as any[]) || []
-  let topShows = (showsCache.data?.data as any[]) || []
-
-  // Cache miss? Trigger refresh and try again (best-effort)
-  if (topArtists.length === 0 || topShows.length === 0) {
-    await supabase.rpc('refresh_homepage_cache')
-    const refreshed = await Promise.all([
-      supabase
-        .from('homepage_cache')
-        .select('data')
-        .eq('cache_key', 'top_artists')
-        .single(),
-      supabase
-        .from('homepage_cache')
-        .select('data')
-        .eq('cache_key', 'top_shows')
-        .single()
-    ])
-    topArtists = (refreshed[0].data?.data as any[]) || []
-    topShows = (refreshed[1].data?.data as any[]) || []
-  }
-
-  topArtists = topArtists.slice(0, 12)
+  const topShows = showsResult.status === 'fulfilled' ? showsResult.value.trendingShows : []
+  const topArtists = artistsResult.status === 'fulfilled' ? artistsResult.value.featuredArtists : []
 
   return (
     <div className="min-h-screen bg-background">
@@ -115,7 +82,7 @@ export default async function HomePage() {
                     id: show.artist?.id,
                     name: show.artist?.name || 'Unknown Artist',
                     slug: show.artist?.slug || '',
-                    imageUrl: show.artist?.image_url
+                    imageUrl: show.artist?.imageUrl
                   },
                   venue: {
                     id: show.venue?.id,
@@ -124,7 +91,7 @@ export default async function HomePage() {
                     state: show.venue?.state,
                     country: show.venue?.country || 'Unknown Country'
                   },
-                  _count: { votes: show.total_votes || 0 }
+                  _count: { votes: show.totalVotes || 0 }
                 }} 
               />
             ))}

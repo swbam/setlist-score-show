@@ -246,6 +246,27 @@ export const artistResolvers: IResolvers = {
 
       return trendingArtists
     },
+
+    featuredArtists: async (_parent, { limit = 12 }, { prisma }) => {
+      // Get featured artists based on followers, popularity, and recent shows
+      return await prisma.artist.findMany({
+        where: {
+          imageUrl: { not: null }, // Only artists with images
+          shows: {
+            some: {
+              status: 'upcoming',
+              date: { gte: new Date() }
+            }
+          }
+        },
+        orderBy: [
+          { followers: 'desc' },
+          { popularity: 'desc' },
+          { lastSyncedAt: 'desc' }
+        ],
+        take: limit,
+      })
+    },
   },
 
   Mutation: {

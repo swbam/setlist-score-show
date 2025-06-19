@@ -90,6 +90,11 @@ extend type Query {
   trendingArtists(
     limit: Int = 10
   ): [Artist!]!
+  
+  # Get featured artists for homepage
+  featuredArtists(
+    limit: Int = 12
+  ): [Artist!]!
 }
 
 # Mutations

@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Search, Loader2, Music, Calendar, MapPin, TrendingUp, X, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { useGraphQLClient } from '@/lib/graphql-client'
+import { SEARCH_ALL } from '@/lib/graphql/queries'
 
 interface SearchResult {
   type: 'artist' | 'show' | 'venue' | 'song'
@@ -47,7 +48,7 @@ export function UnifiedSearch({
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClientComponentClient()
+  const graphqlClient = useGraphQLClient()
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -91,35 +92,63 @@ export function UnifiedSearch({
     try {
       const searchTerm = searchQuery.trim()
 
-      // Use Postgres RPC that already returns unified rows
-      const { data, error } = await supabase.rpc('search_unified', {
-        p_query: searchTerm,
-        p_limit: 20
+      // Use GraphQL to fetch unified rows
+      const data: any = await graphqlClient.request(SEARCH_ALL, { query: searchTerm })
+
+      const mapped: SearchResult[] = []
+
+      // Map artists
+      ;(data?.search?.artists || []).forEach((artist: any) => {
+        mapped.push({
+          type: 'artist',
+          id: artist.id,
+          title: artist.name,
+          image: artist.imageUrl,
+          metadata: {
+            followers: artist.followers,
+            popularity: artist.popularity,
+            genres: artist.genres,
+          },
+          href: `/artists/${artist.slug}`
+        })
       })
 
-      if (error) {
-        console.error('Search RPC error:', error)
-        setResults([])
-        return
-      }
-
-      const mapped: SearchResult[] = (data || []).map((row: any) => {
-        return {
-          type: row.type,
-          id: row.id,
-          title: row.title,
-          subtitle: row.subtitle || undefined,
-          description: row.description || undefined,
-          image: row.image_url || undefined,
+      // Map shows
+      ;(data?.search?.shows || []).forEach((show: any) => {
+        mapped.push({
+          type: 'show',
+          id: show.id,
+          title: show.artist?.name || '',
+          subtitle: show.venue?.name,
           metadata: {
-            date: row.show_date || undefined,
-            location: row.location || undefined,
-            followers: row.followers || undefined,
-            votes: row.votes || undefined,
-            popularity: row.popularity || undefined
+            date: show.date,
+            location: `${show.venue?.city || ''}`,
+            votes: show.totalVotes,
           },
-          href: row.href
-        } as SearchResult
+          href: `/shows/${show.id}`
+        })
+      })
+
+      // Songs (if any)
+      ;(data?.search?.songs || []).forEach((song: any) => {
+        mapped.push({
+          type: 'song',
+          id: song.id,
+          title: song.title,
+          subtitle: song.artist?.name,
+          href: `/artists/${song.artist?.slug}`
+        })
+      })
+
+      // Venues
+      ;(data?.search?.venues || []).forEach((venue: any) => {
+        mapped.push({
+          type: 'venue',
+          id: venue.id,
+          title: venue.name,
+          subtitle: `${venue.city}, ${venue.state || venue.country}`,
+          href: `/explore?venue=${venue.id}`
+        })
       })
 
       setResults(mapped)

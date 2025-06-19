@@ -1,1 +1,247 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'\nimport { createClient } from 'https://esm.sh/@supabase/supabase-js@2'\n\nconst TICKETMASTER_API_KEY = Deno.env.get('TICKETMASTER_API_KEY')!\nconst SUPABASE_URL = Deno.env.get('SUPABASE_URL')!\nconst SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!\n\nserve(async (req) => {\n  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)\n  \n  try {\n    console.log('Starting top shows sync...')\n    \n    // Fetch top 50 shows from Ticketmaster\n    const startDate = new Date().toISOString().split('T')[0]\n    const endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]\n    \n    const response = await fetch(\n      `https://app.ticketmaster.com/discovery/v2/events?` +\n      `apikey=${TICKETMASTER_API_KEY}` +\n      `&countryCode=US` +\n      `&classificationName=Music` +\n      `&startDateTime=${startDate}T00:00:00Z` +\n      `&endDateTime=${endDate}T23:59:59Z` +\n      `&size=50` +\n      `&sort=relevance,desc` +\n      `&includeTBA=no` +\n      `&includeTBD=no`\n    )\n    \n    if (!response.ok) {\n      throw new Error(`Ticketmaster API error: ${response.status}`)\n    }\n    \n    const data = await response.json()\n    const events = data._embedded?.events || []\n    \n    console.log(`Found ${events.length} events from Ticketmaster`)\n    \n    let processed = 0\n    let created = 0\n    \n    for (const event of events) {\n      try {\n        // Skip if no artist info\n        const attractions = event._embedded?.attractions\n        if (!attractions?.length) continue\n        \n        // Process venue first\n        const venueData = event._embedded?.venues?.[0]\n        if (!venueData) continue\n        \n        let venueId: string | null = null\n        \n        // Check if venue exists\n        const { data: existingVenue } = await supabase\n          .from('venues')\n          .select('id')\n          .eq('ticketmaster_id', venueData.id)\n          .single()\n        \n        if (existingVenue) {\n          venueId = existingVenue.id\n        } else {\n          // Create new venue\n          const { data: newVenue, error: venueError } = await supabase\n            .from('venues')\n            .insert({\n              ticketmaster_id: venueData.id,\n              name: venueData.name,\n              city: venueData.city?.name,\n              state: venueData.state?.stateCode,\n              country: venueData.country?.countryCode,\n              address: venueData.address?.line1,\n              postal_code: venueData.postalCode,\n              latitude: venueData.location?.latitude ? parseFloat(venueData.location.latitude) : null,\n              longitude: venueData.location?.longitude ? parseFloat(venueData.location.longitude) : null\n            })\n            .select('id')\n            .single()\n          \n          if (venueError) {\n            console.error('Venue creation error:', venueError)\n            continue\n          }\n          \n          venueId = newVenue.id\n        }\n        \n        // Process artist\n        const attraction = attractions[0]\n        let artistId: string | null = null\n        \n        const { data: existingArtist } = await supabase\n          .from('artists')\n          .select('id')\n          .eq('ticketmaster_id', attraction.id)\n          .single()\n        \n        if (existingArtist) {\n          artistId = existingArtist.id\n        } else {\n          // Create artist with better metadata\n          const { data: newArtist, error: artistError } = await supabase\n            .from('artists')\n            .insert({\n              ticketmaster_id: attraction.id,\n              name: attraction.name,\n              slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),\n              image_url: attraction.images?.find((img: any) => img.ratio === '16_9')?.url,\n              genres: attraction.classifications?.[0]?.genre?.name ? \n                [attraction.classifications[0].genre.name] : [],\n              popularity: Math.floor(Math.random() * 50) + 50\n            })\n            .select('id')\n            .single()\n          \n          if (artistError) {\n            console.error('Artist creation error:', artistError)\n            continue\n          }\n          \n          artistId = newArtist.id\n        }\n        \n        // Check if show already exists\n        const { data: existingShow } = await supabase\n          .from('shows')\n          .select('id')\n          .eq('ticketmaster_id', event.id)\n          .single()\n        \n        if (!existingShow) {\n          // Create new show\n          const { data: newShow, error: showError } = await supabase\n            .from('shows')\n            .insert({\n              ticketmaster_id: event.id,\n              artist_id: artistId,\n              venue_id: venueId,\n              title: event.name,\n              date: event.dates.start.dateTime ? \n                event.dates.start.dateTime.split('T')[0] : \n                event.dates.start.localDate,\n              status: 'upcoming',\n              ticketmaster_url: event.url,\n              min_price: event.priceRanges?.[0]?.min,\n              max_price: event.priceRanges?.[0]?.max\n            })\n            .select('id')\n            .single()\n          \n          if (showError) {\n            console.error('Show creation error:', showError)\n            continue\n          }\n          \n          // Create initial setlist\n          await createInitialSetlist(supabase, newShow.id, artistId)\n          \n          created++\n        }\n        \n        processed++\n        \n        // Rate limiting\n        if (processed % 5 === 0) {\n          await new Promise(resolve => setTimeout(resolve, 200))\n        }\n        \n      } catch (error) {\n        console.error(`Error processing event ${event.id}:`, error)\n        continue\n      }\n    }\n    \n    // Refresh homepage cache\n    const { error: cacheError } = await supabase.rpc('refresh_homepage_cache')\n    if (cacheError) {\n      console.error('Cache refresh error:', cacheError)\n    }\n    \n    console.log(`Sync completed: ${processed} processed, ${created} created`)\n    \n    return new Response(JSON.stringify({ \n      success: true,\n      processed,\n      created,\n      message: `Processed ${processed} events, created ${created} new shows`\n    }), {\n      headers: { 'Content-Type': 'application/json' }\n    })\n    \n  } catch (error) {\n    console.error('Sync error:', error)\n    return new Response(JSON.stringify({ \n      success: false,\n      error: error.message \n    }), {\n      status: 500,\n      headers: { 'Content-Type': 'application/json' }\n    })\n  }\n})\n\nasync function createInitialSetlist(supabase: any, showId: string, artistId: string) {\n  try {\n    // Get songs from artist's catalog\n    const { data: songs } = await supabase\n      .from('songs')\n      .select('id, title, popularity')\n      .eq('artist_id', artistId)\n      .order('popularity', { ascending: false })\n      .limit(10)\n    \n    if (songs && songs.length > 0) {\n      // Create setlist\n      const { data: setlist } = await supabase\n        .from('setlists')\n        .insert({\n          show_id: showId,\n          name: 'Main Set',\n          order_index: 0\n        })\n        .select('id')\n        .single()\n      \n      if (setlist) {\n        // Add up to 5 songs to setlist\n        const selectedSongs = songs.slice(0, Math.min(5, songs.length))\n        \n        for (let i = 0; i < selectedSongs.length; i++) {\n          await supabase\n            .from('setlist_songs')\n            .insert({\n              setlist_id: setlist.id,\n              song_id: selectedSongs[i].id,\n              position: i + 1,\n              vote_count: 0\n            })\n        }\n      }\n    }\n  } catch (error) {\n    console.error('Error creating initial setlist:', error)\n  }\n}\n
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const TICKETMASTER_API_KEY = Deno.env.get('TICKETMASTER_API_KEY')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+serve(async (req) => {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  
+  try {
+    console.log('Starting top shows sync...')
+    
+    // Fetch top 50 shows from Ticketmaster
+    const startDate = new Date().toISOString().split('T')[0]
+    const endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    
+    const response = await fetch(
+      `https://app.ticketmaster.com/discovery/v2/events?` +
+      `apikey=${TICKETMASTER_API_KEY}` +
+      `&countryCode=US` +
+      `&classificationName=Music` +
+      `&startDateTime=${startDate}T00:00:00Z` +
+      `&endDateTime=${endDate}T23:59:59Z` +
+      `&size=50` +
+      `&sort=relevance,desc` +
+      `&includeTBA=no` +
+      `&includeTBD=no`
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Ticketmaster API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    const events = data._embedded?.events || []
+    
+    console.log(`Found ${events.length} events from Ticketmaster`)
+    
+    let processed = 0
+    let created = 0
+    
+    for (const event of events) {
+      try {
+        // Skip if no artist info
+        const attractions = event._embedded?.attractions
+        if (!attractions?.length) continue
+        
+        // Process venue first
+        const venueData = event._embedded?.venues?.[0]
+        if (!venueData) continue
+        
+        let venueId: string | null = null
+        
+        // Check if venue exists
+        const { data: existingVenue } = await supabase
+          .from('venues')
+          .select('id')
+          .eq('ticketmaster_id', venueData.id)
+          .single()
+        
+        if (existingVenue) {
+          venueId = existingVenue.id
+        } else {
+          // Create new venue
+          const { data: newVenue, error: venueError } = await supabase
+            .from('venues')
+            .insert({
+              ticketmaster_id: venueData.id,
+              name: venueData.name,
+              city: venueData.city?.name,
+              state: venueData.state?.stateCode,
+              country: venueData.country?.countryCode,
+              address: venueData.address?.line1,
+              postal_code: venueData.postalCode,
+              latitude: venueData.location?.latitude ? parseFloat(venueData.location.latitude) : null,
+              longitude: venueData.location?.longitude ? parseFloat(venueData.location.longitude) : null
+            })
+            .select('id')
+            .single()
+          
+          if (venueError) {
+            console.error('Venue creation error:', venueError)
+            continue
+          }
+          
+          venueId = newVenue.id
+        }
+        
+        // Process artist
+        const attraction = attractions[0]
+        let artistId: string | null = null
+        
+        const { data: existingArtist } = await supabase
+          .from('artists')
+          .select('id')
+          .eq('ticketmaster_id', attraction.id)
+          .single()
+        
+        if (existingArtist) {
+          artistId = existingArtist.id
+        } else {
+          // Create artist with better metadata
+          const { data: newArtist, error: artistError } = await supabase
+            .from('artists')
+            .insert({
+              ticketmaster_id: attraction.id,
+              name: attraction.name,
+              slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+              image_url: attraction.images?.find((img: any) => img.ratio === '16_9')?.url,
+              genres: attraction.classifications?.[0]?.genre?.name ? 
+                [attraction.classifications[0].genre.name] : [],
+              popularity: Math.floor(Math.random() * 50) + 50
+            })
+            .select('id')
+            .single()
+          
+          if (artistError) {
+            console.error('Artist creation error:', artistError)
+            continue
+          }
+          
+          artistId = newArtist.id
+        }
+        
+        // Check if show already exists
+        const { data: existingShow } = await supabase
+          .from('shows')
+          .select('id')
+          .eq('ticketmaster_id', event.id)
+          .single()
+        
+        if (!existingShow) {
+          // Create new show
+          const { data: newShow, error: showError } = await supabase
+            .from('shows')
+            .insert({
+              ticketmaster_id: event.id,
+              artist_id: artistId,
+              venue_id: venueId,
+              title: event.name,
+              date: event.dates.start.dateTime ? 
+                event.dates.start.dateTime.split('T')[0] : 
+                event.dates.start.localDate,
+              status: 'upcoming',
+              ticketmaster_url: event.url,
+              min_price: event.priceRanges?.[0]?.min,
+              max_price: event.priceRanges?.[0]?.max
+            })
+            .select('id')
+            .single()
+          
+          if (showError) {
+            console.error('Show creation error:', showError)
+            continue
+          }
+          
+          // Create initial setlist
+          await createInitialSetlist(supabase, newShow.id, artistId)
+          
+          created++
+        }
+        
+        processed++
+        
+        // Rate limiting
+        if (processed % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+        
+      } catch (error) {
+        console.error(`Error processing event ${event.id}:`, error)
+        continue
+      }
+    }
+    
+    // Refresh homepage cache
+    const { error: cacheError } = await supabase.rpc('refresh_homepage_cache')
+    if (cacheError) {
+      console.error('Cache refresh error:', cacheError)
+    }
+    
+    console.log(`Sync completed: ${processed} processed, ${created} created`)
+    
+    return new Response(JSON.stringify({ 
+      success: true,
+      processed,
+      created,
+      message: `Processed ${processed} events, created ${created} new shows`
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+  } catch (error) {
+    console.error('Sync error:', error)
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+})
+
+async function createInitialSetlist(supabase: any, showId: string, artistId: string) {
+  try {
+    // Get songs from artist's catalog
+    const { data: songs } = await supabase
+      .from('songs')
+      .select('id, title, popularity')
+      .eq('artist_id', artistId)
+      .order('popularity', { ascending: false })
+      .limit(10)
+    
+    if (songs && songs.length > 0) {
+      // Create setlist
+      const { data: setlist } = await supabase
+        .from('setlists')
+        .insert({
+          show_id: showId,
+          name: 'Main Set',
+          order_index: 0
+        })
+        .select('id')
+        .single()
+      
+      if (setlist) {
+        // Add up to 5 songs to setlist
+        const selectedSongs = songs.slice(0, Math.min(5, songs.length))
+        
+        for (let i = 0; i < selectedSongs.length; i++) {
+          await supabase
+            .from('setlist_songs')
+            .insert({
+              setlist_id: setlist.id,
+              song_id: selectedSongs[i].id,
+              position: i + 1,
+              vote_count: 0
+            })
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error creating initial setlist:', error)
+  }
+}

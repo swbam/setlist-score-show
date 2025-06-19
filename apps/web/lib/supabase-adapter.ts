@@ -439,124 +439,104 @@ export class SupabaseAdapter {
 
   async getTrendingShows(limit = 10) {
     try {
-      // Query directly from trending_shows_view materialized view
+      // For now, use Supabase direct query since GraphQL nested objects have issues
       const { data: trendingData, error } = await supabase
-        .from('trending_shows_view')
-        .select('*')
-        .eq('status', 'upcoming')
-        .gte('date', new Date().toISOString())
+        .from('trending_shows_distinct')
+        .select(`
+          id,
+          date,
+          title,
+          trending_score,
+          total_votes,
+          unique_voters,
+          artist_id,
+          venue_id
+        `)
         .order('trending_score', { ascending: false })
-        .limit(limit * 3) // Get more to allow for artist filtering
+        .limit(limit)
 
       if (error) {
-        console.log('Trending view query failed, using fallback:', error)
-        
-        // Fallback to regular shows
-        const { data: showsData, error: showsError } = await supabase
-          .from('shows')
-          .select(`
-            id,
-            date,
-            title,
-            view_count,
-            artist:artists(id, name, slug, image_url),
-            venue:venues(id, name, city)
-          `)
-          .eq('status', 'upcoming')
-          .gte('date', new Date().toISOString())
-          .order('view_count', { ascending: false })
-          .limit(limit)
-
-        if (showsError) throw showsError
-
-        return showsData?.map((show: any) => ({
-          id: show.id,
-          date: show.date,
-          title: show.title,
-          trendingScore: show.view_count || 0,
-          totalVotes: 0,
-          uniqueVoters: 0,
-          artist: {
-            id: show.artist?.id,
-            name: show.artist?.name,
-            slug: show.artist?.slug,
-            imageUrl: show.artist?.image_url
-          },
-          venue: {
-            id: show.venue?.id,
-            name: show.venue?.name,
-            city: show.venue?.city
-          }
-        })) || []
+        console.error('Error fetching trending shows:', error)
+        return []
       }
 
-      // Apply artist limiting (max 2 shows per artist)
-      const artistCounts = new Map<string, number>()
-      const limitedShows = []
-      
-      for (const show of trendingData || []) {
-        const artistId = show.artist_id
-        const currentCount = artistCounts.get(artistId) || 0
-        
-        if (currentCount < 2) {
-          limitedShows.push(show)
-          artistCounts.set(artistId, currentCount + 1)
-        }
-        
-        if (limitedShows.length >= limit) break
-      }
+      // Get artist and venue data separately
+      const artistIds = [...new Set(trendingData.map(show => show.artist_id))]
+      const venueIds = [...new Set(trendingData.map(show => show.venue_id))]
 
-      // Get unique artist and venue IDs to fetch details
-      const artistIds = [...new Set(limitedShows.map(show => show.artist_id))]
-      const venueIds = [...new Set(limitedShows.map(show => show.venue_id))]
-
-      // Fetch artist and venue details
-      const [artistsData, venuesData] = await Promise.all([
-        supabase
-          .from('artists')
-          .select('id, name, slug, image_url')
-          .in('id', artistIds),
-        supabase
-          .from('venues')
-          .select('id, name, city')
-          .in('id', venueIds)
+      const [{ data: artists }, { data: venues }] = await Promise.all([
+        supabase.from('artists').select('id, name, slug, image_url').in('id', artistIds),
+        supabase.from('venues').select('id, name, city, state, country').in('id', venueIds)
       ])
 
-      if (artistsData.error) throw artistsData.error
-      if (venuesData.error) throw venuesData.error
+      const artistMap = Object.fromEntries((artists || []).map(a => [a.id, a]))
+      const venueMap = Object.fromEntries((venues || []).map(v => [v.id, v]))
 
-      // Create maps for quick lookup
-      const artistsMap = new Map(artistsData.data?.map(a => [a.id, a]) || [])
-      const venuesMap = new Map(venuesData.data?.map(v => [v.id, v]) || [])
-
-      // Transform data to match expected format
-      return limitedShows.map((show: any) => {
-        const artist = artistsMap.get(show.artist_id)
-        const venue = venuesMap.get(show.venue_id)
-        
-        return {
-          id: show.id,
-          date: show.date,
-          title: show.title,
-          trendingScore: show.trending_score || 0,
-          totalVotes: show.total_votes || 0,
-          uniqueVoters: show.unique_voters || 0,
-          artist: {
-            id: show.artist_id,
-            name: artist?.name || 'Unknown Artist',
-            slug: artist?.slug,
-            imageUrl: artist?.image_url
-          },
-          venue: {
-            id: show.venue_id,
-            name: venue?.name || 'Unknown Venue',
-            city: venue?.city || 'Unknown City'
-          }
-        }
-      })
+      return trendingData.map(show => ({
+        id: show.id,
+        date: show.date,
+        title: show.title,
+        status: 'upcoming',
+        trendingScore: parseFloat(show.trending_score || '0'),
+        totalVotes: show.total_votes || 0,
+        uniqueVoters: show.unique_voters || 0,
+        artist: {
+          id: show.artist_id,
+          name: artistMap[show.artist_id]?.name || 'Unknown Artist',
+          slug: artistMap[show.artist_id]?.slug || 'unknown',
+          imageUrl: artistMap[show.artist_id]?.image_url,
+        },
+        venue: {
+          id: show.venue_id,
+          name: venueMap[show.venue_id]?.name || 'Unknown Venue',
+          city: venueMap[show.venue_id]?.city || 'Unknown City',
+          state: venueMap[show.venue_id]?.state,
+          country: venueMap[show.venue_id]?.country,
+        },
+      }))
     } catch (error) {
-      console.error('Error fetching trending shows:', error)
+      console.error('Error in getTrendingShows:', error)
       return []
+    }
+  }
+
+  async getFeaturedArtists(limit = 12) {
+    try {
+      const { data, error } = await supabase
+        .from('artists')
+        .select(`
+          id,
+          name,
+          slug,
+          image_url,
+          genres,
+          popularity,
+          followers,
+          shows!inner(status, date)
+        `)
+        .not('image_url', 'is', null)
+        .eq('shows.status', 'upcoming')
+        .gte('shows.date', new Date().toISOString())
+        .order('followers', { ascending: false })
+        .order('popularity', { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+
+      return {
+        featuredArtists: data?.map(artist => ({
+          id: artist.id,
+          name: artist.name,
+          slug: artist.slug,
+          imageUrl: artist.image_url,
+          genres: artist.genres,
+          popularity: artist.popularity,
+          followers: artist.followers
+        })) || []
+      }
+    } catch (error) {
+      console.error('Error fetching featured artists:', error)
+      return { featuredArtists: [] }
     }
   }
 

@@ -111,9 +111,7 @@ export const showResolvers: IResolvers = {
     },
 
     trendingShows: async (_parent, { limit = 24, timeframe = 'WEEK' }, { prisma }) => {
-      // Fast path: leverage the materialized-view that already de-duplicates by artist.
-      // The view is refreshed hourly by cron so this resolver becomes a lightweight read.
-
+      // Get trending shows with all needed data in a single query
       const trendingData = await prisma.$queryRaw`
         SELECT 
           tsd.id,
@@ -144,12 +142,16 @@ export const showResolvers: IResolvers = {
         id: row.id,
         date: row.date,
         title: row.title,
-        status: 'upcoming', // view doesn't store status but we only select upcoming shows
+        status: 'upcoming',
         ticketmasterUrl: null,
         viewCount: parseInt(row.view_count || '0', 10),
         totalVotes: parseInt(row.total_votes || '0', 10),
         uniqueVoters: parseInt(row.unique_voters || '0', 10),
         trendingScore: parseFloat(row.trending_score || '0'),
+        // Include IDs for field resolvers
+        artistId: row.artist_id,
+        venueId: row.venue_id,
+        // Also include the nested objects for performance
         artist: {
           id: row.artist_id,
           name: row.artist_name,
@@ -367,6 +369,11 @@ export const showResolvers: IResolvers = {
 
   Show: {
     artist: async (parent, _args, { prisma, loaders }) => {
+      // If artist data is already loaded (e.g., from trending shows), return it
+      if (parent.artist && typeof parent.artist === 'object') {
+        return parent.artist
+      }
+      
       if (loaders?.artist) {
         return loaders.artist.load(parent.artistId)
       }
@@ -376,6 +383,11 @@ export const showResolvers: IResolvers = {
     },
 
     venue: async (parent, _args, { prisma, loaders }) => {
+      // If venue data is already loaded (e.g., from trending shows), return it
+      if (parent.venue && typeof parent.venue === 'object') {
+        return parent.venue
+      }
+      
       if (loaders?.venue) {
         return loaders.venue.load(parent.venueId)
       }

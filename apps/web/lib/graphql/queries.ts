@@ -253,3 +253,18 @@ export const GET_TRENDING_SHOWS = gql`
     }
   }
 `
+
+// Featured artists query
+export const GET_FEATURED_ARTISTS = gql`
+  query GetFeaturedArtists($limit: Int!) {
+    featuredArtists(limit: $limit) {
+      id
+      name
+      slug
+      imageUrl
+      genres
+      popularity
+      followers
+    }
+  }
+`
