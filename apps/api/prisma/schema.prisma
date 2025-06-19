@@ -19,13 +19,15 @@ model Artist {
   genres          String[]
   popularity      Int      @default(0)
   followers       Int      @default(0)
+  needsSpotifySync Boolean @default(false) @map("needs_spotify_sync")
   lastSyncedAt    DateTime @default(now()) @map("last_synced_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  shows     Show[]
-  songs     Song[]
-  followers UserFollowsArtist[]
+  shows       Show[]
+  songs       Song[]
+  followers   UserFollowsArtist[]
+  userArtists UserArtist[]
 
   @@unique([spotifyId, ticketmasterId])
   @@map("artists")
@@ -66,6 +68,13 @@ model Show {
   tourName        String?  @map("tour_name")
   status          String   @default("upcoming")
   ticketmasterUrl String?  @map("ticketmaster_url")
+  ticketsUrl      String?  @map("tickets_url")
+  minPrice        Decimal? @map("min_price") @db.Decimal(10, 2)
+  maxPrice        Decimal? @map("max_price") @db.Decimal(10, 2)
+  popularity      Int      @default(50)
+  salesStatus     String?  @map("sales_status")
+  presaleDate     DateTime? @map("presale_date")
+  onsaleDate      DateTime? @map("onsale_date")
   viewCount       Int      @default(0) @map("view_count")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -148,6 +157,7 @@ model User {
   displayName String?  @map("display_name")
   avatarUrl   String?  @map("avatar_url")
   spotifyId   String?  @unique @map("spotify_id")
+  role        String   @default("user")
   preferences Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -155,6 +165,8 @@ model User {
   votes           Vote[]
   voteAnalytics   VoteAnalytics[]
   followedArtists UserFollowsArtist[]
+  userArtists     UserArtist[]
+  searchAnalytics SearchAnalytics[]
 
   @@map("users")
 }
@@ -223,4 +235,80 @@ model UserFollowsArtist {
   @@index([userId])
   @@index([artistId])
   @@map("user_follows_artist")
+}
+
+model UserArtist {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  artistId  String   @map("artist_id")
+  source    String   @default("manual")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, artistId])
+  @@index([userId])
+  @@index([artistId])
+  @@index([createdAt(sort: Desc)])
+  @@map("user_artists")
+}
+
+model SyncState {
+  id              String    @id @default(uuid())
+  jobName         String    @unique @map("job_name")
+  lastSyncDate    DateTime? @map("last_sync_date")
+  lastCursor      String?   @map("last_cursor")
+  recordsProcessed Int      @default(0) @map("records_processed")
+  recordsCreated   Int      @default(0) @map("records_created")
+  status          String    @default("idle")
+  errorMessage    String?   @map("error_message")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("sync_state")
+}
+
+model HomepageCache {
+  id        String   @id @default(uuid())
+  cacheKey  String   @unique @map("cache_key")
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@index([cacheKey])
+  @@index([expiresAt])
+  @@map("homepage_cache")
+}
+
+model ZipCode {
+  zipCode    String  @id @map("zip_code")
+  city       String
+  state      String  @db.Char(2)
+  latitude   Decimal @db.Decimal(10, 7)
+  longitude  Decimal @db.Decimal(10, 7)
+  timezone   String?
+  county     String?
+  population Int?
+
+  @@index([city, state])
+  @@index([state])
+  @@map("zip_codes")
+}
+
+model SearchAnalytics {
+  id          String    @id @default(uuid())
+  query       String
+  resultCount Int       @default(0) @map("result_count")
+  userId      String?   @map("user_id")
+  searchType  String    @default("general") @map("search_type")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([query])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("search_analytics")
 }
