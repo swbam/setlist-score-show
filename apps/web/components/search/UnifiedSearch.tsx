@@ -31,6 +31,7 @@ interface UnifiedSearchProps {
   className?: string
   placeholder?: string
   autoFocus?: boolean
+  variant?: 'hero' | 'header' | 'mobile' | 'page'
   onResultClick?: (result: SearchResult) => void
 }
 
@@ -38,6 +39,7 @@ export function UnifiedSearch({
   className, 
   placeholder = "Search artists, shows, venues, or songs...", 
   autoFocus = false,
+  variant = 'page',
   onResultClick
 }: UnifiedSearchProps) {
   const [query, setQuery] = useState('')
@@ -92,12 +94,12 @@ export function UnifiedSearch({
     try {
       const searchTerm = searchQuery.trim()
 
-      // Use GraphQL to fetch unified rows
+      // Use GraphQL to fetch unified results with artist import
       const data: any = await graphqlClient.request(SEARCH_ALL, { query: searchTerm })
 
       const mapped: SearchResult[] = []
 
-      // Map artists
+      // Map artists (including newly imported ones)
       ;(data?.search?.artists || []).forEach((artist: any) => {
         mapped.push({
           type: 'artist',
@@ -118,8 +120,8 @@ export function UnifiedSearch({
         mapped.push({
           type: 'show',
           id: show.id,
-          title: show.artist?.name || '',
-          subtitle: show.venue?.name,
+          title: show.artist?.name || 'Unknown Artist',
+          subtitle: show.venue?.name || 'Unknown Venue',
           metadata: {
             date: show.date,
             location: `${show.venue?.city || ''}`,
@@ -153,6 +155,9 @@ export function UnifiedSearch({
 
       setResults(mapped)
       setSelectedIndex(-1)
+    } catch (error) {
+      console.error('Search error:', error)
+      setResults([])
     } finally {
       setIsLoading(false)
     }
@@ -179,6 +184,8 @@ export function UnifiedSearch({
           handleResultClick(results[selectedIndex])
         } else if (query.trim()) {
           saveRecentSearch(query)
+          // Navigate to search page if no specific result selected
+          window.location.href = `/search?q=${encodeURIComponent(query.trim())}`
         }
         break
       case 'Escape':
@@ -193,7 +200,11 @@ export function UnifiedSearch({
     saveRecentSearch(query)
     setIsOpen(false)
     setQuery('')
-    onResultClick?.(result)
+    if (onResultClick) {
+      onResultClick(result)
+    } else {
+      window.location.href = result.href
+    }
   }
 
   const handleRecentSearchClick = (recentQuery: string) => {
@@ -237,11 +248,51 @@ export function UnifiedSearch({
     })
   }
 
+  // Variant-specific styles
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'hero':
+        return {
+          container: "relative w-full max-w-2xl mx-auto",
+          input: "w-full pl-12 pr-12 py-4 text-lg bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 transition-all",
+          icon: "absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60",
+          loadingIcon: "absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60 animate-spin",
+          clearIcon: "absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60 hover:text-white transition-colors"
+        }
+      case 'header':
+        return {
+          container: "relative w-full max-w-md",
+          input: "w-full pl-9 pr-9 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors",
+          icon: "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground",
+          loadingIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin",
+          clearIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground hover:text-foreground transition-colors"
+        }
+      case 'mobile':
+        return {
+          container: "relative w-full",
+          input: "w-full pl-10 pr-10 py-3 bg-background border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors",
+          icon: "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground",
+          loadingIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin",
+          clearIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors"
+        }
+      default: // 'page'
+        return {
+          container: "relative w-full max-w-2xl",
+          input: "w-full pl-10 pr-10 py-3 bg-background border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors",
+          icon: "absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground",
+          loadingIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin",
+          clearIcon: "absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors"
+        }
+    }
+  }
+
+  const styles = getVariantStyles()
+
   return (
-    <div ref={searchRef} className={cn("relative w-full max-w-2xl", className)}>
+    <div ref={searchRef} className={cn(styles.container, className)}>
       {/* Search Input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        <Search className={styles.icon} />
         <input
           ref={inputRef}
           type="text"
@@ -251,19 +302,19 @@ export function UnifiedSearch({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full pl-10 pr-10 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+          className={styles.input}
         />
-        {isLoading && (
-          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 animate-spin text-muted-foreground" />
-        )}
-        {query && !isLoading && (
+        {isLoading ? (
+          <Loader2 className={styles.loadingIcon} />
+        ) : query && (
           <button
             onClick={() => {
               setQuery('')
               setResults([])
+              setIsOpen(false)
               inputRef.current?.focus()
             }}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors"
+            className={styles.clearIcon}
           >
             <X className="w-4 h-4" />
           </button>
@@ -387,8 +438,11 @@ export function UnifiedSearch({
             <div className="text-center py-8">
               <Search className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
               <h3 className="font-medium mb-1">No results found</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-3">
                 Try searching for artists, shows, venues, or songs
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Press Enter to search our full database
               </p>
             </div>
           )}
@@ -397,7 +451,7 @@ export function UnifiedSearch({
           {isLoading && (
             <div className="text-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Searching...</p>
+              <p className="text-sm text-muted-foreground">Searching and importing artists...</p>
             </div>
           )}
         </Card>

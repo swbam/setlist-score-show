@@ -1,5 +1,6 @@
 -- Refresh materialized views
 SELECT refresh_trending_shows();
+SELECT refresh_trending_artists();
 
 -- Update show view counts from recent activity
 UPDATE "Show" s

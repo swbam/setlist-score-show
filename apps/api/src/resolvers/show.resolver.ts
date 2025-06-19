@@ -369,31 +369,59 @@ export const showResolvers: IResolvers = {
 
   Show: {
     artist: async (parent, _args, { prisma, loaders }) => {
-      // If artist data is already loaded (e.g., from trending shows), return it
-      if (parent.artist && typeof parent.artist === 'object') {
-        return parent.artist
+      try {
+        // If artist data is already loaded (e.g., from trending shows), return it
+        if (parent.artist && typeof parent.artist === 'object' && parent.artist.id) {
+          return parent.artist
+        }
+        
+        // Ensure artistId exists before querying
+        if (!parent.artistId) {
+          console.warn('Show missing artistId:', parent.id)
+          return null
+        }
+        
+        if (loaders?.artist) {
+          return loaders.artist.load(parent.artistId)
+        }
+        
+        const artist = await prisma.artist.findUnique({
+          where: { id: parent.artistId }
+        })
+        
+        return artist
+      } catch (error) {
+        console.error('Error in Show.artist resolver:', error)
+        return null
       }
-      
-      if (loaders?.artist) {
-        return loaders.artist.load(parent.artistId)
-      }
-      return prisma.artist.findUnique({
-        where: { id: parent.artistId }
-      })
     },
 
     venue: async (parent, _args, { prisma, loaders }) => {
-      // If venue data is already loaded (e.g., from trending shows), return it
-      if (parent.venue && typeof parent.venue === 'object') {
-        return parent.venue
+      try {
+        // If venue data is already loaded (e.g., from trending shows), return it
+        if (parent.venue && typeof parent.venue === 'object' && parent.venue.id) {
+          return parent.venue
+        }
+        
+        // Ensure venueId exists before querying
+        if (!parent.venueId) {
+          console.warn('Show missing venueId:', parent.id)
+          return null
+        }
+        
+        if (loaders?.venue) {
+          return loaders.venue.load(parent.venueId)
+        }
+        
+        const venue = await prisma.venue.findUnique({
+          where: { id: parent.venueId }
+        })
+        
+        return venue
+      } catch (error) {
+        console.error('Error in Show.venue resolver:', error)
+        return null
       }
-      
-      if (loaders?.venue) {
-        return loaders.venue.load(parent.venueId)
-      }
-      return prisma.venue.findUnique({
-        where: { id: parent.venueId }
-      })
     },
 
     setlists: async (parent, _args, { prisma }) => {
