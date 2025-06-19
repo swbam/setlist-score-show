@@ -132,33 +132,35 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8 lg:mb-10">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text">
-            Explore Shows
+      <div className="container mx-auto px-4 py-8">
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-headline font-bold mb-2 gradient-text">
+            Explore
           </h1>
-          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body mb-6">
-            Discover trending shows, top concerts, and your favorite artists
+          <p className="text-muted-foreground text-lg">
+            Discover trending shows and artists
           </p>
+        </div>
 
-          {/* Tab Control */}
+        {/* Tab Navigation */}
+        <div className="mb-8">
           <SegmentedControl
-            options={tabOptions}
             value={activeTab}
-            onChange={(value: TabType) => setActiveTab(value)}
-            className="mb-6"
+            onValueChange={(value) => setActiveTab(value as TabType)}
+            options={tabOptions}
+            className="max-w-md"
           />
         </div>
 
-        {/* Content */}
+        {/* Tab Content */}
         {activeTab === 'TRENDING' && (
           <div>
             {loadingTrending ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : (
+            ) : trendingShows.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {trendingShows.map((show: any) => (
                   <ShowCard
@@ -182,10 +184,19 @@ export default function ExplorePage() {
                         city: show.venue?.city || 'Unknown City',
                         state: show.venue?.state,
                         country: show.venue?.country || 'Unknown Country'
-                      }
+                      },
+                      totalVotes: show.totalVotes || 0
                     }}
                   />
                 ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <TrendingUp className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-semibold mb-2">No Trending Shows</h2>
+                <p className="text-muted-foreground">
+                  Check back later for trending concerts
+                </p>
               </div>
             )}
           </div>
@@ -193,43 +204,71 @@ export default function ExplorePage() {
 
         {activeTab === 'UPCOMING' && (
           <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {upcomingShows.map((show) => (
-                <ShowCard key={show.id} show={show} />
-              ))}
-            </div>
-            
-            {hasMoreUpcoming && (
-              <div className="flex justify-center mt-8">
-                <button
-                  onClick={loadMoreUpcoming}
-                  disabled={loadingUpcoming}
-                  className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loadingUpcoming ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Load More'
-                  )}
-                </button>
+            {upcomingShows.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                  {upcomingShows.map((show) => (
+                    <ShowCard key={show.id} show={show} />
+                  ))}
+                </div>
+                
+                {hasMoreUpcoming && (
+                  <div className="flex justify-center mt-8">
+                    <button
+                      onClick={loadMoreUpcoming}
+                      disabled={loadingUpcoming}
+                      className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {loadingUpcoming ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        'Load More'
+                      )}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-16">
+                <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-semibold mb-2">No Upcoming Shows</h2>
+                <p className="text-muted-foreground">
+                  Check back later for new concerts
+                </p>
               </div>
             )}
           </div>
         )}
 
         {activeTab === 'ARTISTS' && (
-          <div className="h-[calc(100vh-300px)]">
-            <InfiniteList
-              items={artists}
-              isLoading={loadingArtists}
-              hasMore={hasMoreArtists}
-              loadMore={loadMoreArtists}
-              itemHeight={80}
-              renderItem={renderArtistCard}
-            />
+          <div>
+            {loadingArtistsQuery ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : artists.length > 0 ? (
+              <div className="h-[calc(100vh-300px)]">
+                <InfiniteList
+                  items={artists}
+                  isLoading={loadingArtists}
+                  hasMore={hasMoreArtists}
+                  loadMore={loadMoreArtists}
+                  itemHeight={80}
+                  renderItem={renderArtistCard}
+                />
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <Users className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-semibold mb-2">No Artists Found</h2>
+                <p className="text-muted-foreground">
+                  Start by importing artists from the admin dashboard
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

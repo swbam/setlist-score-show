@@ -4,18 +4,33 @@ import { UnifiedSearch } from '@/components/search/UnifiedSearch'
 import { HeroSection } from '@/components/home/HeroSection'
 import { ArtistCard } from '@/components/home/ArtistCard'
 import { TrendingUp, Calendar, Users, ArrowRight, Music, MapPin } from 'lucide-react'
-import { graphqlClient } from '@/lib/graphql-client'
-import { GET_TRENDING_SHOWS, GET_FEATURED_ARTISTS } from '@/lib/graphql/queries'
+import { supabase } from '@/lib/supabase'
 
 export default async function HomePage() {
-  // Fetch data via GraphQL
-  const [showsResult, artistsResult] = await Promise.allSettled([
-    graphqlClient.request(GET_TRENDING_SHOWS, { limit: 8 }),
-    graphqlClient.request(GET_FEATURED_ARTISTS, { limit: 12 })
+  // Fetch directly from Supabase tables since cache might be empty
+  const [artistsResult, showsResult] = await Promise.allSettled([
+    supabase
+      .from('artists')
+      .select('*')
+      .gte('popularity', 50)
+      .order('popularity', { ascending: false })
+      .limit(12),
+    
+    supabase
+      .from('shows')
+      .select(`
+        *,
+        artist:artists(*),
+        venue:venues(*)
+      `)
+      .eq('status', 'upcoming')
+      .gte('date', new Date().toISOString().split('T')[0])
+      .order('date', { ascending: true })
+      .limit(8)
   ])
 
-  const topShows = showsResult.status === 'fulfilled' ? showsResult.value.trendingShows : []
-  const topArtists = artistsResult.status === 'fulfilled' ? artistsResult.value.featuredArtists : []
+  const topArtists = artistsResult.status === 'fulfilled' ? artistsResult.value.data || [] : []
+  const topShows = showsResult.status === 'fulfilled' ? showsResult.value.data || [] : []
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,96 +67,75 @@ export default async function HomePage() {
         )}
 
         {/* Top Shows Section */}
-        <section className="mb-12 lg:mb-16">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-6 h-6 text-primary" />
-              <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
-                Hot Shows This Week
-              </h2>
+        {topShows.length > 0 && (
+          <section className="mb-12 lg:mb-16">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-6 h-6 text-primary" />
+                <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
+                  Upcoming Shows
+                </h2>
+              </div>
+              <Link 
+                href="/shows"
+                className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
+              >
+                View All <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
-            <Link 
-              href="/shows"
-              className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
+            
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {topShows.map((show: any) => (
+                <ShowCard 
+                  key={show.id} 
+                  show={{
+                    ...show,
+                    totalVotes: 0 // We'll calculate this later
+                  }} 
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Empty State */}
+        {topArtists.length === 0 && topShows.length === 0 && (
+          <div className="text-center py-16">
+            <Music className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">No Data Available</h2>
+            <p className="text-muted-foreground mb-8">
+              Start by importing artists and shows to populate the platform.
+            </p>
+            <Link
+              href="/admin/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
-              View All <ArrowRight className="w-4 h-4" />
+              Go to Admin Dashboard
             </Link>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {topShows.slice(0, 8).map((show: any) => (
-              <ShowCard 
-                key={show.id} 
-                show={{
-                  id: show.id,
-                  date: show.date,
-                  title: show.title || `${show.artist?.name} at ${show.venue?.name}`,
-                  status: show.status || 'upcoming',
-                  viewCount: show.view_count || 0,
-                  artist: {
-                    id: show.artist?.id,
-                    name: show.artist?.name || 'Unknown Artist',
-                    slug: show.artist?.slug || '',
-                    imageUrl: show.artist?.imageUrl
-                  },
-                  venue: {
-                    id: show.venue?.id,
-                    name: show.venue?.name || 'Unknown Venue',
-                    city: show.venue?.city || 'Unknown City',
-                    state: show.venue?.state,
-                    country: show.venue?.country || 'Unknown Country'
-                  },
-                  _count: { votes: show.totalVotes || 0 }
-                }} 
-              />
-            ))}
+        )}
+
+        {/* Stats Section */}
+        <section className="mt-12 lg:mt-16 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
+            <TrendingUp className="w-8 h-8 mx-auto mb-2 text-primary" />
+            <div className="text-2xl font-bold">{topArtists.length}</div>
+            <div className="text-sm text-muted-foreground">Artists</div>
           </div>
-        </section>
-
-        {/* Quick Actions */}
-        <section>
-          <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text mb-6">
-            Explore More
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            <Link
-              href="/explore"
-              className="group p-6 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover:border-primary/40 transition-all duration-200 hover:shadow-lg"
-            >
-              <TrendingUp className="w-8 h-8 text-primary mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
-                Trending Shows
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Discover the hottest shows based on fan engagement
-              </p>
-            </Link>
-
-            <Link
-              href="/explore"
-              className="group p-6 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover:border-secondary/40 transition-all duration-200 hover:shadow-lg"
-            >
-              <Calendar className="w-8 h-8 text-secondary mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-secondary transition-colors">
-                Upcoming Concerts
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Browse all upcoming shows and start voting
-              </p>
-            </Link>
-
-            <div className="group p-6 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover:border-accent/40 transition-all duration-200 hover:shadow-lg">
-              <MapPin className="w-8 h-8 text-accent mb-3" />
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
-                Find Shows Near You
-              </h3>
-              <p className="text-muted-foreground text-sm mb-3">
-                Enter your ZIP code in the search bar above
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                Discover concerts within 100 miles
-              </p>
-            </div>
+          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
+            <Calendar className="w-8 h-8 mx-auto mb-2 text-primary" />
+            <div className="text-2xl font-bold">{topShows.length}</div>
+            <div className="text-sm text-muted-foreground">Upcoming Shows</div>
+          </div>
+          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
+            <MapPin className="w-8 h-8 mx-auto mb-2 text-primary" />
+            <div className="text-2xl font-bold">5</div>
+            <div className="text-sm text-muted-foreground">Cities</div>
+          </div>
+          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
+            <Users className="w-8 h-8 mx-auto mb-2 text-primary" />
+            <div className="text-2xl font-bold">0</div>
+            <div className="text-sm text-muted-foreground">Active Voters</div>
           </div>
         </section>
       </div>

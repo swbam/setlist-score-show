@@ -180,91 +180,51 @@ export const GET_MY_ARTISTS = gql`
 // Search query
 export const SEARCH_ALL = gql`
   query SearchAll($query: String!) {
-    search(input: { query: $query }) {
+    search(query: $query, input: { types: ["ARTIST", "SHOW", "SONG", "VENUE"] }) {
       artists {
         id
         name
         slug
         imageUrl
-        spotifyId
+        genres
+        popularity
+        followers
       }
       shows {
         id
-        date
         title
+        date
         artist {
+          id
           name
+          slug
         }
         venue {
+          id
           name
           city
+          state
         }
+        totalVotes
       }
       songs {
         id
         title
+        album
         artist {
-          name
-        }
-      }
-      totalResults
-    }
-  }
-`
-
-// Song queries
-export const GET_ARTIST_SONGS = gql`
-  query GetArtistSongs($artistId: ID!, $limit: Int = 1000, $offset: Int = 0) {
-    songs(filter: { artistId: $artistId }, limit: $limit, offset: $offset) {
-      edges {
-        node {
           id
-          title
-          album
-          albumImageUrl
-          durationMs
-          popularity
-          spotifyUrl
+          name
+          slug
         }
       }
-    }
-  }
-`
-
-// Trending query
-export const GET_TRENDING_SHOWS = gql`
-  query GetTrendingShows($limit: Int!) {
-    trendingShows(limit: $limit) {
-      id
-      date
-      title
-      trendingScore
-      totalVotes
-      uniqueVoters
-      artist {
-        name
-        slug
-        imageUrl
-      }
-      venue {
+      venues {
+        id
         name
         city
+        state
+        country
       }
-    }
-  }
-`
-
-// Featured artists query
-export const GET_FEATURED_ARTISTS = gql`
-  query GetFeaturedArtists($limit: Int!) {
-    featuredArtists(limit: $limit) {
-      id
-      name
-      slug
-      imageUrl
-      genres
-      popularity
-      followers
+      totalResults
     }
   }
 `

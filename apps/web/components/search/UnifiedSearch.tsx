@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Search, Loader2, Music, Calendar, MapPin, TrendingUp, X, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { useGraphQLClient } from '@/lib/graphql-client'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { SEARCH_ALL } from '@/lib/graphql/queries'
+import { useDebouncedCallback } from 'use-debounce'
 
 interface SearchResult {
   type: 'artist' | 'show' | 'venue' | 'song'
@@ -35,6 +37,15 @@ interface UnifiedSearchProps {
   onResultClick?: (result: SearchResult) => void
 }
 
+interface SpotifyArtist {
+  id: string
+  name: string
+  images: { url: string }[]
+  genres: string[]
+  followers: { total: number }
+  external_urls: { spotify: string }
+}
+
 export function UnifiedSearch({ 
   className, 
   placeholder = "Search artists, shows, venues, or songs...", 
@@ -48,9 +59,11 @@ export function UnifiedSearch({
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [searchMode, setSearchMode] = useState<'local' | 'spotify'>('local')
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const graphqlClient = useGraphQLClient()
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -75,135 +88,139 @@ export function UnifiedSearch({
   }
 
   // Handle search with debouncing
-  useEffect(() => {
-    if (query.length < 2) {
+  const handleSearch = useDebouncedCallback(async (searchQuery: string) => {
+    const trimmed = searchQuery.trim()
+    
+    if (trimmed.length < 2) {
       setResults([])
       setIsLoading(false)
+      setIsOpen(false)
       return
     }
-
-    const searchTimeout = setTimeout(async () => {
-      await performSearch(query)
-    }, 300)
-
-    return () => clearTimeout(searchTimeout)
-  }, [query])
-
-  const performSearch = async (searchQuery: string) => {
+    
+    // Check if it's a ZIP code
+    const isZip = /^\d{5}$/.test(trimmed)
+    
+    if (isZip) {
+      router.push(`/nearby/${trimmed}`)
+      setQuery('')
+      setResults([])
+      setIsOpen(false)
+      return
+    }
+    
     setIsLoading(true)
+    setIsOpen(true)
+    
     try {
-      const searchTerm = searchQuery.trim()
-
-      // Use GraphQL to fetch unified results with artist import
-      const data: any = await graphqlClient.request(SEARCH_ALL, { query: searchTerm })
-
-      const mapped: SearchResult[] = []
-
-      // Map artists (including newly imported ones)
-      ;(data?.search?.artists || []).forEach((artist: any) => {
-        mapped.push({
+      // First try local database
+      const { data: localResults } = await supabase
+        .from('artists')
+        .select('id, name, slug, image_url, genres, spotify_id')
+        .ilike('name', `%${trimmed}%`)
+        .order('popularity', { ascending: false })
+        .limit(3)
+      
+      // If we have local results, show them
+      if (localResults && localResults.length > 0) {
+        setResults(localResults.map(artist => ({
           type: 'artist',
           id: artist.id,
           title: artist.name,
-          image: artist.imageUrl,
+          image: artist.image_url,
           metadata: {
             followers: artist.followers,
             popularity: artist.popularity,
             genres: artist.genres,
           },
-          href: `/artists/${artist.slug}`
-        })
-      })
-
-      // Map shows
-      ;(data?.search?.shows || []).forEach((show: any) => {
-        mapped.push({
-          type: 'show',
-          id: show.id,
-          title: show.artist?.name || 'Unknown Artist',
-          subtitle: show.venue?.name || 'Unknown Venue',
+          href: `/artists/${artist.slug}`,
+          source: 'local'
+        })))
+        setSearchMode('local')
+      } else {
+        // Otherwise search Spotify
+        setSearchMode('spotify')
+        const spotifyResults = await searchSpotify(trimmed)
+        setResults(spotifyResults.map((artist: SpotifyArtist) => ({
+          type: 'artist',
+          id: artist.id,
+          title: artist.name,
+          image: artist.images[0]?.url,
           metadata: {
-            date: show.date,
-            location: `${show.venue?.city || ''}`,
-            votes: show.totalVotes,
+            followers: artist.followers.total,
+            popularity: artist.popularity,
+            genres: artist.genres,
           },
-          href: `/shows/${show.id}`
-        })
-      })
-
-      // Songs (if any)
-      ;(data?.search?.songs || []).forEach((song: any) => {
-        mapped.push({
-          type: 'song',
-          id: song.id,
-          title: song.title,
-          subtitle: song.artist?.name,
-          href: `/artists/${song.artist?.slug}`
-        })
-      })
-
-      // Venues
-      ;(data?.search?.venues || []).forEach((venue: any) => {
-        mapped.push({
-          type: 'venue',
-          id: venue.id,
-          title: venue.name,
-          subtitle: `${venue.city}, ${venue.state || venue.country}`,
-          href: `/explore?venue=${venue.id}`
-        })
-      })
-
-      setResults(mapped)
-      setSelectedIndex(-1)
-    } catch (error) {
-      console.error('Search error:', error)
+          href: artist.external_urls.spotify,
+          source: 'spotify'
+        })))
+      }
+    } catch (err) {
+      console.error('Search error:', err)
       setResults([])
     } finally {
       setIsLoading(false)
     }
-  }
+  }, 300)
 
-  // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen) return
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setSelectedIndex(prev => 
-          prev < results.length - 1 ? prev + 1 : prev
-        )
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : prev)
-        break
-      case 'Enter':
-        e.preventDefault()
-        if (selectedIndex >= 0 && results[selectedIndex]) {
-          handleResultClick(results[selectedIndex])
-        } else if (query.trim()) {
-          saveRecentSearch(query)
-          // Navigate to search page if no specific result selected
-          window.location.href = `/search?q=${encodeURIComponent(query.trim())}`
+  const searchSpotify = async (searchQuery: string) => {
+    try {
+      const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `grant_type=client_credentials&client_id=${process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID}&client_secret=${process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_SECRET}`
+      })
+      
+      const { access_token } = await tokenResponse.json()
+      
+      const searchResponse = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=artist&limit=5`,
+        {
+          headers: { 'Authorization': `Bearer ${access_token}` }
         }
-        break
-      case 'Escape':
-        setIsOpen(false)
-        setSelectedIndex(-1)
-        inputRef.current?.blur()
-        break
+      )
+      
+      const data = await searchResponse.json()
+      return data.artists?.items || []
+    } catch (error) {
+      console.error('Spotify search error:', error)
+      return []
     }
   }
 
-  const handleResultClick = (result: SearchResult) => {
+  const handleResultClick = async (result: SearchResult) => {
     saveRecentSearch(query)
     setIsOpen(false)
     setQuery('')
     if (onResultClick) {
       onResultClick(result)
     } else {
-      window.location.href = result.href
+      if (result.source === 'spotify') {
+        // Import from Spotify first
+        setIsLoading(true)
+        
+        try {
+          const response = await fetch('/api/sync-artist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spotifyId: result.id })
+          })
+          
+          if (response.ok) {
+            const { artist: importedArtist } = await response.json()
+            router.push(`/artists/${importedArtist.slug}`)
+          }
+        } catch (error) {
+          console.error('Import error:', error)
+        } finally {
+          setIsLoading(false)
+        }
+      } else {
+        // Local artist - navigate directly
+        router.push(`/artists/${result.href.split('/').pop() || ''}`)
+      }
     }
   }
 
@@ -297,9 +314,41 @@ export function UnifiedSearch({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            handleSearch(e.target.value)
+          }}
           onFocus={() => setIsOpen(true)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            if (!isOpen) return
+            switch (e.key) {
+              case 'ArrowDown':
+                e.preventDefault()
+                setSelectedIndex(prev => 
+                  prev < results.length - 1 ? prev + 1 : prev
+                )
+                break
+              case 'ArrowUp':
+                e.preventDefault()
+                setSelectedIndex(prev => prev > 0 ? prev - 1 : prev)
+                break
+              case 'Enter':
+                e.preventDefault()
+                if (selectedIndex >= 0 && results[selectedIndex]) {
+                  handleResultClick(results[selectedIndex])
+                } else if (query.trim()) {
+                  saveRecentSearch(query)
+                  // Navigate to search page if no specific result selected
+                  window.location.href = `/search?q=${encodeURIComponent(query.trim())}`
+                }
+                break
+              case 'Escape':
+                setIsOpen(false)
+                setSelectedIndex(-1)
+                inputRef.current?.blur()
+                break
+            }
+          }}
           placeholder={placeholder}
           autoFocus={autoFocus}
           className={styles.input}

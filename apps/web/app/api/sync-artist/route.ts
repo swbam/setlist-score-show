@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+async function getSpotifyToken() {
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')
+    },
+    body: 'grant_type=client_credentials'
+  })
+  
+  const data = await response.json()
+  return data.access_token
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -109,51 +132,65 @@ export async function POST(request: NextRequest) {
     // Sync songs from Spotify
     if (artist.spotify_id) {
       // Get Spotify access token
-      const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': 'Basic ' + Buffer.from(
-            `${process.env.SPOTIFY_CLIENT_ID || ''}:${process.env.SPOTIFY_CLIENT_SECRET || ''}`
-          ).toString('base64')
-        },
-        body: 'grant_type=client_credentials'
+      const token = await getSpotifyToken()
+      
+      // Fetch artist from Spotify
+      const artistResponse = await fetch(`https://api.spotify.com/v1/artists/${artist.spotify_id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       })
       
-      const { access_token } = await tokenResponse.json()
+      if (!artistResponse.ok) {
+        return NextResponse.json({ error: 'Artist not found on Spotify' }, { status: 404 })
+      }
       
-      // Get top tracks
-      const tracksResponse = await fetch(
-        `https://api.spotify.com/v1/artists/${artist.spotify_id}/top-tracks?market=US`,
-        {
-          headers: {
-            'Authorization': `Bearer ${access_token}`
-          }
-        }
-      )
+      const spotifyArtist = await artistResponse.json()
       
-      const tracksData = await tracksResponse.json()
+      // Import artist using the database function
+      const { data: importedArtist, error } = await supabase.rpc('import_spotify_artist', {
+        p_spotify_id: spotifyArtist.id,
+        p_name: spotifyArtist.name,
+        p_image_url: spotifyArtist.images[0]?.url || null,
+        p_genres: spotifyArtist.genres || [],
+        p_followers: spotifyArtist.followers?.total || 0
+      })
       
-      if (tracksData.tracks) {
-        for (const track of tracksData.tracks) {
-          const { data: existingSong } = await supabase
-            .from('songs')
-            .select('id')
-            .eq('spotify_id', track.id)
-            .single()
+      if (error) {
+        console.error('Error importing artist:', error)
+        return NextResponse.json({ error: 'Failed to import artist' }, { status: 500 })
+      }
+      
+      // If artist is imported successfully, link it to the user
+      if (importedArtist?.[0]) {
+        await supabase.from('user_artists').upsert({
+          user_id: artist.user_id,
+          artist_id: importedArtist[0].id,
+          source: 'spotify_import'
+        })
+      }
+      
+      // Import artist's top tracks
+      if (importedArtist?.[0]) {
+        const tracksResponse = await fetch(
+          `https://api.spotify.com/v1/artists/${artist.spotify_id}/top-tracks?market=US`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        )
+        
+        if (tracksResponse.ok) {
+          const { tracks } = await tracksResponse.json()
           
-          if (!existingSong) {
-            await supabase
-              .from('songs')
-              .insert({
-                artist_id: artistId,
-                title: track.name,
-                album: track.album.name,
-                duration_ms: track.duration_ms,
-                popularity: track.popularity,
-                spotify_id: track.id,
-                preview_url: track.preview_url
-              })
+          // Import songs
+          for (const track of tracks.slice(0, 20)) {
+            await supabase.from('songs').upsert({
+              artist_id: importedArtist[0].id,
+              spotify_id: track.id,
+              title: track.name,
+              album: track.album.name,
+              album_image_url: track.album.images[0]?.url,
+              duration_ms: track.duration_ms,
+              popularity: track.popularity,
+              preview_url: track.preview_url,
+              spotify_url: track.external_urls.spotify
+            })
           }
         }
       }
