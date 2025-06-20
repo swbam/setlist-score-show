@@ -3,24 +3,16 @@ import { createServiceClient } from '../_shared/supabase.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { verifyAuth } from '../_shared/auth.ts';
 
-interface SetlistFmApiShow {
+interface SetlistFmSetlist {
   id: string;
-  date: string;
+  eventDate: string;
   artist: {
-    mbid?: string;
     name: string;
   };
   venue: {
-    id: string;
     name: string;
     city: {
       name: string;
-      state?: string;
-      stateCode?: string;
-      country: {
-        code: string;
-        name: string;
-      };
     };
   };
   sets: {
@@ -32,9 +24,6 @@ interface SetlistFmApiShow {
   };
 }
 
-const BATCH_SIZE = 10;
-const RATE_LIMIT_MS = 1000;
-
 serve(async (req) => {
   const startTime = Date.now();
   
@@ -43,50 +32,93 @@ serve(async (req) => {
   const authResponse = verifyAuth(req);
   if (authResponse) return authResponse;
 
+  const supabase = createServiceClient();
+
   try {
-    console.log('📜 Starting setlist sync job');
+    console.log('📜 Starting MVP setlist sync job');
     
-    const supabase = createServiceClient();
+    // Log sync start
+    const { data: syncRecord } = await supabase
+      .from('sync_history')
+      .insert({
+        sync_type: 'setlistfm',
+        entity_type: 'setlists',
+        status: 'started'
+      })
+      .select('id')
+      .single()
+    
+    const syncId = syncRecord?.id
+    
     const setlistFmApiKey = Deno.env.get('SETLISTFM_API_KEY');
     
     if (!setlistFmApiKey) {
       throw new Error('SETLISTFM_API_KEY not configured');
     }
 
-    // Get artists to check for setlists
-    const { data: artists, error: artistsError } = await supabase
-      .from('artists')
-      .select('id, name')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    // Get recent shows that don't have official setlists yet (MVP: last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const { data: shows, error: showsError } = await supabase
+      .from('shows')
+      .select(`
+        id,
+        date,
+        artist:artists(id, name),
+        venue:venues(name, city)
+      `)
+      .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+      .lte('date', new Date().toISOString().split('T')[0])
+      .is('setlist_fm_id', null) // Only shows without setlist.fm data
+      .limit(10); // MVP: limit to 10 shows per run
 
-    if (artistsError) {
-      throw new Error(`Failed to fetch artists: ${artistsError.message}`);
+    if (showsError) {
+      throw new Error(`Failed to fetch shows: ${showsError.message}`);
     }
 
-    if (!artists || artists.length === 0) {
+    if (!shows || shows.length === 0) {
+      // Update sync history
+      if (syncId) {
+        await supabase
+          .from('sync_history')
+          .update({
+            status: 'completed',
+            items_processed: 0,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', syncId)
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'No artists to sync',
+          message: 'No recent shows need setlist sync',
           duration: Date.now() - startTime
         }), 
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log(`🎯 Found ${shows.length} shows to check for setlists`);
+
     let processed = 0;
     let imported = 0;
     const errors: string[] = [];
 
-    // Process each artist
-    for (const artist of artists) {
+    // Process each show
+    for (const show of shows) {
       try {
-        console.log(`🎤 Checking setlists for: ${artist.name}`);
+        if (!show.artist?.name) {
+          console.log(`⚠️ Skipping show ${show.id} - no artist name`);
+          continue;
+        }
+
+        console.log(`🎤 Checking setlist for: ${show.artist.name} on ${show.date}`);
         
-        // Search for recent setlists (last 7 days)
+        // Search setlist.fm for this specific show
         const response = await fetch(
-          `https://api.setlist.fm/rest/1.0/search/setlists?artistName=${encodeURIComponent(artist.name)}&p=1`,
+          `https://api.setlist.fm/rest/1.0/search/setlists?artistName=${encodeURIComponent(show.artist.name)}&date=${show.date}&p=1`,
           {
             headers: {
               'Accept': 'application/json',
@@ -101,197 +133,202 @@ serve(async (req) => {
             await new Promise(resolve => setTimeout(resolve, 5000));
             continue;
           }
+          if (response.status === 404) {
+            console.log(`No setlist found for ${show.artist.name} on ${show.date}`);
+            processed++;
+            continue;
+          }
           throw new Error(`Setlist.fm API error: ${response.status}`);
         }
 
         const data = await response.json();
         const setlists = data.setlist || [];
 
-        // Filter for recent shows (last 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        // Find matching setlist by date and venue
+        const matchingSetlist = setlists.find((setlist: SetlistFmSetlist) => 
+          setlist.eventDate === show.date &&
+          setlist.venue?.name?.toLowerCase().includes(show.venue?.name?.toLowerCase() || '')
+        );
 
-        for (const setlist of setlists) {
-          if (!setlist.date || new Date(setlist.date) < sevenDaysAgo) {
-            continue;
-          }
-
-          try {
-            // Check if show already exists
-            const { data: existingShow } = await supabase
-              .from('shows')
-              .select('id')
-              .eq('artist_id', artist.id)
-              .eq('date', setlist.date)
-              .single();
-
-            if (existingShow) {
-              console.log(`ℹ️ Show already exists for ${artist.name} on ${setlist.date}`);
-              continue;
-            }
-
-            // Create or get venue
-            let venueId: string;
-            const { data: existingVenue } = await supabase
-              .from('venues')
-              .select('id')
-              .eq('name', setlist.venue.name)
-              .eq('city', setlist.venue.city.name)
-              .single();
-
-            if (existingVenue) {
-              venueId = existingVenue.id;
-            } else {
-              const { data: newVenue, error: venueError } = await supabase
-                .from('venues')
-                .insert({
-                  name: setlist.venue.name,
-                  city: setlist.venue.city.name,
-                  state: setlist.venue.city.state || setlist.venue.city.stateCode,
-                  country: setlist.venue.city.country.name,
-                  latitude: 0,
-                  longitude: 0,
-                })
-                .select('id')
-                .single();
-
-              if (venueError) throw venueError;
-              venueId = newVenue.id;
-            }
-
-            // Create show
-            const { data: newShow, error: showError } = await supabase
-              .from('shows')
-              .insert({
-                artist_id: artist.id,
-                venue_id: venueId,
-                date: setlist.date,
-                name: `${artist.name} at ${setlist.venue.name}`,
-                setlist_fm_id: setlist.id,
-              })
-              .select('id')
-              .single();
-
-            if (showError) throw showError;
-
-            // Import setlist songs if available
-            const songs: string[] = [];
-            if (setlist.sets && setlist.sets.set) {
-              for (const set of setlist.sets.set) {
-                if (set.song) {
-                  for (const song of set.song) {
-                    if (song.name) {
-                      songs.push(song.name);
-                    }
+        if (matchingSetlist) {
+          console.log(`✅ Found matching setlist for ${show.artist.name}`);
+          
+          // Extract songs from setlist
+          const songs: string[] = [];
+          if (matchingSetlist.sets?.set) {
+            for (const set of matchingSetlist.sets.set) {
+              if (set.song) {
+                for (const song of set.song) {
+                  if (song.name) {
+                    songs.push(song.name);
                   }
                 }
               }
             }
+          }
 
-            if (songs.length > 0 && newShow) {
-              // Create official setlist row
-              const { data: newSetlist, error: setlistError } = await supabase
+          // Update show with setlist.fm ID
+          await supabase
+            .from('shows')
+            .update({ setlist_fm_id: matchingSetlist.id })
+            .eq('id', show.id);
+
+          if (songs.length > 0) {
+            // Create or update the official setlist
+            const { data: existingSetlist } = await supabase
+              .from('setlists')
+              .select('id')
+              .eq('show_id', show.id)
+              .eq('is_official', true)
+              .single();
+
+            let setlistId: string;
+            
+            if (existingSetlist) {
+              setlistId = existingSetlist.id;
+              // Clear existing songs
+              await supabase
+                .from('setlist_songs')
+                .delete()
+                .eq('setlist_id', setlistId);
+            } else {
+              // Create new official setlist
+              const { data: newSetlist } = await supabase
                 .from('setlists')
                 .insert({
-                  show_id: newShow.id,
-                  artist_id: artist.id,
-                  name: 'Official',
+                  show_id: show.id,
+                  name: 'Official Setlist',
                   is_official: true,
+                  order_index: 0
                 })
                 .select('id')
                 .single();
-
-              if (!setlistError && newSetlist) {
-                // Resolve song ids (create if missing)
-                const setlistSongRows = [] as any[];
-                for (let i = 0; i < songs.length; i++) {
-                  const songName = songs[i];
-                  // Look up song by name
-                  let songId: string | null = null;
-                  const { data: existingSong } = await supabase
-                    .from('songs')
-                    .select('id')
-                    .eq('artist_id', artist.id)
-                    .ilike('name', songName)
-                    .single();
-                  if (existingSong) {
-                    songId = existingSong.id;
-                  } else {
-                    const { data: newSong } = await supabase
-                      .from('songs')
-                      .insert({ artist_id: artist.id, name: songName })
-                      .select('id')
-                      .single();
-                    songId = newSong?.id || null;
-                  }
-                  if (songId) {
-                    setlistSongRows.push({
-                      setlist_id: newSetlist.id,
-                      song_id: songId,
-                      position: i + 1,
-                      vote_count: 0,
-                    });
-                  }
-                }
-
-                if (setlistSongRows.length) {
-                  await supabase.from('setlist_songs').insert(setlistSongRows);
-                }
-              }
+              
+              setlistId = newSetlist?.id;
             }
 
-            imported++;
-            console.log(`✅ Imported setlist for ${artist.name} on ${setlist.date}`);
+            if (setlistId) {
+              // Find or create songs in our database
+              const songRows = [];
+              for (let i = 0; i < songs.length; i++) {
+                const songName = songs[i];
+                
+                // Try to find existing song
+                const { data: existingSong } = await supabase
+                  .from('songs')
+                  .select('id')
+                  .eq('artist_id', show.artist.id)
+                  .eq('title', songName)
+                  .single();
 
-          } catch (error) {
-            console.error(`Error importing setlist: ${error}`);
-            errors.push(`${artist.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                let songId: string;
+                
+                if (existingSong) {
+                  songId = existingSong.id;
+                } else {
+                  // Create new song
+                  const { data: newSong } = await supabase
+                    .from('songs')
+                    .insert({
+                      artist_id: show.artist.id,
+                      title: songName,
+                      popularity: 50 // Default popularity
+                    })
+                    .select('id')
+                    .single();
+                  
+                  songId = newSong?.id;
+                }
+
+                if (songId) {
+                  songRows.push({
+                    setlist_id: setlistId,
+                    song_id: songId,
+                    position: i + 1,
+                    vote_count: 0
+                  });
+                }
+              }
+
+              // Insert all songs at once
+              if (songRows.length > 0) {
+                await supabase
+                  .from('setlist_songs')
+                  .insert(songRows);
+              }
+
+              console.log(`🎵 Imported ${songs.length} songs for ${show.artist.name}`);
+              imported++;
+            }
           }
+        } else {
+          console.log(`No matching setlist found for ${show.artist.name} on ${show.date}`);
         }
 
         processed++;
-        
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
+        console.error(`❌ Error processing show ${show.id}:`, error.message);
+        errors.push(`Show ${show.id}: ${error.message}`);
         processed++;
-        const errorMsg = `${artist.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        errors.push(errorMsg);
-        console.error(`💥 Error processing ${artist.name}:`, error);
+      }
+
+      // Rate limiting between requests
+      if (processed < shows.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    const duration = Date.now() - startTime;
-    const response = {
-      success: true,
-      message: `Processed ${processed} artists, imported ${imported} setlists`,
-      stats: {
-        processed,
-        imported,
-        failed: processed - imported,
-        errors: errors.slice(0, 3),
-      },
-      duration,
-    };
+    // Update sync history
+    if (syncId) {
+      await supabase
+        .from('sync_history')
+        .update({
+          status: 'completed',
+          items_processed: processed,
+          completed_at: new Date().toISOString(),
+          error_message: errors.length > 0 ? errors.join('; ') : null
+        })
+        .eq('id', syncId)
+    }
 
-    console.log(`🎉 Setlist sync completed: ${imported}/${processed} successful in ${duration}ms`);
+    const duration = Date.now() - startTime;
+    console.log(`📜 Setlist sync completed: ${imported}/${processed} shows imported, ${duration}ms`);
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify({
+        success: true,
+        processed,
+        imported,
+        errors: errors.length > 0 ? errors : undefined,
+        duration
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('💥 Critical error in setlist sync:', error);
+    console.error('❌ Setlist sync failed:', error);
     
+    // Log error to sync history
+    await supabase
+      .from('sync_history')
+      .insert({
+        sync_type: 'setlistfm',
+        entity_type: 'setlists',
+        status: 'failed',
+        error_message: error.message
+      })
+
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        duration: Date.now() - startTime,
+        error: error.message,
+        duration: Date.now() - startTime
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   }
 });

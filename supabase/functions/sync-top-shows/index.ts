@@ -9,25 +9,29 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   
   try {
-    console.log('Starting enhanced top shows sync...')
+    console.log('Starting MVP top shows sync...')
     
-    // Get sync cursor from last run
-    const { data: syncState } = await supabase
-      .from('sync_state')
-      .select('*')
-      .eq('job_name', 'ticketmaster_shows')
+    // Log sync start
+    const { data: syncRecord } = await supabase
+      .from('sync_history')
+      .insert({
+        sync_type: 'ticketmaster',
+        entity_type: 'shows',
+        status: 'started'
+      })
+      .select('id')
       .single()
     
-    const lastSyncDate = syncState?.last_sync_date || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const syncId = syncRecord?.id
     
-    // Fetch shows in sliding window (next 90 days)
+    // Fetch shows (MVP: max 3 pages = 600 shows)
     const startDate = new Date().toISOString().split('T')[0]
     const endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     
     let page = 0
     let hasMore = true
     const allShows = []
-    const maxPages = 10 // Max 10 pages = 2000 shows (200 per page)
+    const maxPages = 3 // MVP limit
     
     while (hasMore && page < maxPages) {
       console.log(`Fetching page ${page + 1}...`)
@@ -39,7 +43,7 @@ serve(async (req) => {
         `&classificationName=Music` +
         `&startDateTime=${startDate}T00:00:00Z` +
         `&endDateTime=${endDate}T23:59:59Z` +
-        `&size=200` + // Max page size
+        `&size=200` +
         `&page=${page}` +
         `&sort=relevance,desc` +
         `&includeTBA=no` +
@@ -56,152 +60,74 @@ serve(async (req) => {
         allShows.push(...data._embedded.events)
       }
       
-      // Check if there are more pages
       hasMore = data.page && data.page.number < data.page.totalPages - 1
       page++
       
       // Rate limiting between pages
-      if (hasMore) {
-        await new Promise(resolve => setTimeout(resolve, 500))
+      if (hasMore && page < maxPages) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     }
     
     console.log(`Found ${allShows.length} total events from Ticketmaster`)
     
-    // Process shows with proper deduplication
-    const processedShows = []
-    const venueMap = new Map()
-    const artistMap = new Map()
+    // Process shows with deduplication using INSERT ... ON CONFLICT
+    const venueRows = []
+    const artistRows = []
+    const showRows = []
     
     for (const event of allShows) {
       try {
-        // Skip if no artist info
         const attractions = event._embedded?.attractions
         if (!attractions?.length) continue
         
-        // Process venue first
         const venueData = event._embedded?.venues?.[0]
         if (!venueData) continue
         
-        let venueId = venueMap.get(venueData.id)
-        if (!venueId) {
-          // Check if venue exists by ticketmaster_id
-          const { data: existingVenue } = await supabase
-            .from('venues')
-            .select('id')
-            .eq('ticketmaster_id', venueData.id)
-            .single()
-          
-          if (existingVenue) {
-            venueId = existingVenue.id
-          } else {
-            // Create new venue with PostGIS point
-            const locationPoint = venueData.location 
-              ? `POINT(${venueData.location.longitude} ${venueData.location.latitude})`
-              : null
-            
-            const { data: newVenue, error: venueError } = await supabase
-              .from('venues')
-              .insert({
-                ticketmaster_id: venueData.id,
-                name: venueData.name,
-                city: venueData.city?.name,
-                state: venueData.state?.stateCode,
-                country: venueData.country?.countryCode,
-                address: venueData.address?.line1,
-                capacity: parseInt(venueData.generalInfo?.generalRule?.match(/\d+/)?.[0]) || null,
-                location: locationPoint,
-                postal_code: venueData.postalCode,
-                latitude: venueData.location?.latitude ? parseFloat(venueData.location.latitude) : null,
-                longitude: venueData.location?.longitude ? parseFloat(venueData.location.longitude) : null
-              })
-              .select('id')
-              .single()
-            
-            if (venueError) {
-              console.error('Venue creation error:', venueError)
-              continue
-            }
-            
-            venueId = newVenue.id
-          }
-          venueMap.set(venueData.id, venueId)
-        }
-        
-        // Process artist
         const attraction = attractions[0]
-        let artistId = artistMap.get(attraction.id)
         
-        if (!artistId) {
-          const { data: existingArtist } = await supabase
-            .from('artists')
-            .select('id')
-            .eq('ticketmaster_id', attraction.id)
-            .single()
-          
-          if (existingArtist) {
-            artistId = existingArtist.id
-          } else {
-            // Create artist with better metadata
-            const genres = []
-            if (attraction.classifications?.[0]?.genre?.name) {
-              genres.push(attraction.classifications[0].genre.name)
-            }
-            if (attraction.classifications?.[0]?.subGenre?.name) {
-              genres.push(attraction.classifications[0].subGenre.name)
-            }
-            
-            const { data: newArtist, error: artistError } = await supabase
-              .from('artists')
-              .insert({
-                ticketmaster_id: attraction.id,
-                name: attraction.name,
-                slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-                image_url: attraction.images?.find((img: any) => img.ratio === '16_9')?.url,
-                genres: genres,
-                popularity: Math.floor(Math.random() * 50) + 50, // Temporary until Spotify sync
-                needs_spotify_sync: true
-              })
-              .select('id')
-              .single()
-            
-            if (artistError) {
-              console.error('Artist creation error:', artistError)
-              continue
-            }
-            
-            artistId = newArtist.id
-          }
-          artistMap.set(attraction.id, artistId)
+        // Prepare venue row
+        venueRows.push({
+          ticketmaster_id: venueData.id,
+          name: venueData.name,
+          city: venueData.city?.name,
+          state: venueData.state?.stateCode,
+          country: venueData.country?.countryCode || 'US',
+          address: venueData.address?.line1,
+          postal_code: venueData.postalCode,
+          latitude: venueData.location?.latitude ? parseFloat(venueData.location.latitude) : null,
+          longitude: venueData.location?.longitude ? parseFloat(venueData.location.longitude) : null,
+        })
+        
+        // Prepare artist row
+        const genres = []
+        if (attraction.classifications?.[0]?.genre?.name) {
+          genres.push(attraction.classifications[0].genre.name)
         }
         
-        // Check if show already exists
-        const { data: existingShow } = await supabase
-          .from('shows')
-          .select('id')
-          .eq('ticketmaster_id', event.id)
-          .single()
+        artistRows.push({
+          ticketmaster_id: attraction.id,
+          name: attraction.name,
+          slug: attraction.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          image_url: attraction.images?.find((img: any) => img.ratio === '16_9')?.url,
+          genres: genres,
+          popularity: Math.floor(Math.random() * 50) + 50,
+          needs_spotify_sync: true
+        })
         
-        if (!existingShow) {
-          const showDate = event.dates.start.dateTime || `${event.dates.start.localDate}T20:00:00Z`
-          
-          processedShows.push({
-            ticketmaster_id: event.id,
-            artist_id: artistId,
-            venue_id: venueId,
-            title: event.name,
-            date: showDate.split('T')[0],
-            status: 'upcoming',
-            ticketmaster_url: event.url,
-            tickets_url: event.url,
-            min_price: event.priceRanges?.[0]?.min,
-            max_price: event.priceRanges?.[0]?.max,
-            popularity: event.score || 50,
-            sales_status: event.dates?.status?.code,
-            presale_date: event.sales?.presales?.[0]?.startDateTime,
-            onsale_date: event.sales?.public?.startDateTime
-          })
-        }
+        // Prepare show row
+        const showDate = event.dates.start.dateTime || `${event.dates.start.localDate}T20:00:00Z`
+        showRows.push({
+          ticketmaster_id: event.id,
+          title: event.name,
+          date: showDate.split('T')[0],
+          status: 'upcoming',
+          ticketmaster_url: event.url,
+          popularity: event.score || 50,
+          // We'll need to resolve artist_id and venue_id after upserts
+          _venue_tm_id: venueData.id,
+          _artist_tm_id: attraction.id
+        })
         
       } catch (error) {
         console.error(`Error processing event ${event.id}:`, error)
@@ -209,70 +135,74 @@ serve(async (req) => {
       }
     }
     
-    console.log(`Prepared ${processedShows.length} new shows for insertion`)
+    console.log(`Prepared ${venueRows.length} venues, ${artistRows.length} artists, ${showRows.length} shows`)
     
-    // Bulk insert new shows in batches
-    const batchSize = 50
-    let totalCreated = 0
+    // Bulk upsert venues
+    const { data: upsertedVenues } = await supabase
+      .from('venues')
+      .upsert(venueRows, { onConflict: 'ticketmaster_id' })
+      .select('id, ticketmaster_id')
     
-    for (let i = 0; i < processedShows.length; i += batchSize) {
-      const batch = processedShows.slice(i, i + batchSize)
-      
-      const { data: insertedShows, error: insertError } = await supabase
-        .from('shows')
-        .insert(batch)
-        .select('id, artist_id')
-      
-      if (insertError) {
-        console.error('Batch insert error:', insertError)
-        continue
-      }
-      
-      if (insertedShows) {
-        totalCreated += insertedShows.length
-        
-        // Create initial setlists for new shows
-        for (const show of insertedShows) {
-          await createInitialSetlist(supabase, show.id, show.artist_id)
-        }
-      }
-      
-      // Rate limiting between batches
-      if (i + batchSize < processedShows.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
+    // Bulk upsert artists
+    const { data: upsertedArtists } = await supabase
+      .from('artists')
+      .upsert(artistRows, { onConflict: 'ticketmaster_id' })
+      .select('id, ticketmaster_id')
+    
+    // Create lookup maps
+    const venueMap = new Map(upsertedVenues?.map(v => [v.ticketmaster_id, v.id]) || [])
+    const artistMap = new Map(upsertedArtists?.map(a => [a.ticketmaster_id, a.id]) || [])
+    
+    // Resolve foreign keys in show rows
+    const finalShowRows = showRows
+      .map(show => ({
+        ticketmaster_id: show.ticketmaster_id,
+        artist_id: artistMap.get(show._artist_tm_id),
+        venue_id: venueMap.get(show._venue_tm_id),
+        title: show.title,
+        date: show.date,
+        status: show.status,
+        ticketmaster_url: show.ticketmaster_url,
+        popularity: show.popularity
+      }))
+      .filter(show => show.artist_id && show.venue_id) // Only keep shows with valid FKs
+    
+    // Bulk upsert shows
+    const { data: insertedShows } = await supabase
+      .from('shows')
+      .upsert(finalShowRows, { onConflict: 'ticketmaster_id' })
+      .select('id, artist_id, created_at')
+    
+    // Create initial setlists for newly created shows (those created in last hour)
+    const newShows = insertedShows?.filter(s => 
+      new Date(s.created_at) > new Date(Date.now() - 60 * 60 * 1000)
+    ) || []
+    
+    console.log(`Creating setlists for ${newShows.length} new shows`)
+    
+    for (const show of newShows) {
+      await createInitialSetlist(supabase, show.id, show.artist_id)
     }
     
-    // Update sync state
-    const { error: syncStateError } = await supabase
-      .from('sync_state')
-      .upsert({
-        job_name: 'ticketmaster_shows',
-        last_sync_date: new Date().toISOString(),
-        records_processed: allShows.length,
-        records_created: totalCreated,
-        status: 'completed',
-        updated_at: new Date().toISOString()
-      })
-    
-    if (syncStateError) {
-      console.error('Sync state update error:', syncStateError)
+    // Update sync history
+    if (syncId) {
+      await supabase
+        .from('sync_history')
+        .update({
+          status: 'completed',
+          items_processed: allShows.length,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', syncId)
     }
     
-    // Trigger homepage cache refresh
-    const { error: cacheError } = await supabase.rpc('refresh_homepage_cache')
-    if (cacheError) {
-      console.error('Cache refresh error:', cacheError)
-    }
-    
-    console.log(`Sync completed: ${allShows.length} processed, ${totalCreated} created`)
+    console.log(`Sync completed: ${allShows.length} processed, ${newShows.length} new shows`)
     
     return new Response(JSON.stringify({ 
       success: true,
       processed: allShows.length,
-      created: totalCreated,
-      pages_fetched: page,
-      message: `Processed ${allShows.length} events, created ${totalCreated} new shows`
+      new_shows: newShows.length,
+      pages_fetched: page
     }), {
       headers: { 'Content-Type': 'application/json' }
     })
@@ -280,14 +210,14 @@ serve(async (req) => {
   } catch (error) {
     console.error('Sync error:', error)
     
-    // Update sync state with error
+    // Log error to sync history
     await supabase
-      .from('sync_state')
-      .upsert({
-        job_name: 'ticketmaster_shows',
-        status: 'error',
-        error_message: error.message,
-        updated_at: new Date().toISOString()
+      .from('sync_history')
+      .insert({
+        sync_type: 'ticketmaster',
+        entity_type: 'shows',
+        status: 'failed',
+        error_message: error.message
       })
     
     return new Response(JSON.stringify({ 
@@ -302,18 +232,16 @@ serve(async (req) => {
 
 async function createInitialSetlist(supabase: any, showId: string, artistId: string) {
   try {
-    // First check if setlist already exists
+    // Check if setlist already exists
     const { data: existingSetlist } = await supabase
       .from('setlists')
       .select('id')
       .eq('show_id', showId)
       .single()
     
-    if (existingSetlist) {
-      return // Setlist already exists
-    }
+    if (existingSetlist) return
     
-    // Get songs from artist's catalog
+    // Get songs from artist's catalog (fallback to empty if none)
     const { data: songs } = await supabase
       .from('songs')
       .select('id, title, popularity')
@@ -321,44 +249,32 @@ async function createInitialSetlist(supabase: any, showId: string, artistId: str
       .order('popularity', { ascending: false })
       .limit(10)
     
-    if (songs && songs.length > 0) {
-      // Create setlist
-      const { data: setlist, error: setlistError } = await supabase
-        .from('setlists')
-        .insert({
-          show_id: showId,
-          name: 'Main Set',
-          order_index: 0
-        })
-        .select('id')
-        .single()
+    // Create setlist regardless of whether we have songs
+    const { data: setlist } = await supabase
+      .from('setlists')
+      .insert({
+        show_id: showId,
+        name: 'Main Set',
+        order_index: 0
+      })
+      .select('id')
+      .single()
+    
+    if (setlist && songs?.length > 0) {
+      // Add up to 5 songs to setlist
+      const selectedSongs = songs.slice(0, Math.min(5, songs.length))
+      const setlistSongs = selectedSongs.map((song, index) => ({
+        setlist_id: setlist.id,
+        song_id: song.id,
+        position: index + 1,
+        vote_count: 0
+      }))
       
-      if (setlistError) {
-        console.error('Setlist creation error:', setlistError)
-        return
-      }
-      
-      if (setlist) {
-        // Add up to 5 songs to setlist
-        const selectedSongs = songs.slice(0, Math.min(5, songs.length))
-        const setlistSongs = selectedSongs.map((song, index) => ({
-          setlist_id: setlist.id,
-          song_id: song.id,
-          position: index + 1,
-          vote_count: 0
-        }))
-        
-        const { error: songsError } = await supabase
-          .from('setlist_songs')
-          .insert(setlistSongs)
-        
-        if (songsError) {
-          console.error('Setlist songs creation error:', songsError)
-        }
-      }
-    } else {
-      console.log(`No songs found for artist ${artistId}, skipping setlist creation`)
+      await supabase
+        .from('setlist_songs')
+        .insert(setlistSongs)
     }
+    
   } catch (error) {
     console.error('Error creating initial setlist:', error)
   }

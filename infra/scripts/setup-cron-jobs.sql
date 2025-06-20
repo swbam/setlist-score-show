@@ -82,5 +82,10 @@ SELECT cron.schedule(
   $$
 );
 
+-- MVP sync cron schedules
+SELECT cron.schedule('tm-sync',  '*/60 * * * *', $$select edge.sync_top_shows()$$);
+SELECT cron.schedule('spotify-sync',  '0 */6 * * *', $$select edge.sync_spotify()$$);
+SELECT cron.schedule('setlists-sync', '0 4 * * *', $$select edge.sync_setlists()$$);
+
 -- View all scheduled jobs
 SELECT * FROM cron.job; 

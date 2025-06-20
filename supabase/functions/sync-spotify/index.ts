@@ -26,10 +26,24 @@ serve(async (req) => {
   const authResponse = verifyAuth(req);
   if (authResponse) return authResponse;
 
+  const supabase = createServiceClient();
+  
   try {
-    console.log('🎵 Starting Spotify catalog sync job');
+    console.log('🎵 Starting MVP Spotify catalog sync job');
     
-    const supabase = createServiceClient();
+    // Log sync start
+    const { data: syncRecord } = await supabase
+      .from('sync_history')
+      .insert({
+        sync_type: 'spotify',
+        entity_type: 'songs',
+        status: 'started'
+      })
+      .select('id')
+      .single()
+    
+    const syncId = syncRecord?.id
+    
     const spotifyClientId = Deno.env.get('SPOTIFY_CLIENT_ID');
     const spotifyClientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
     
@@ -54,18 +68,30 @@ serve(async (req) => {
     const tokenData: SpotifyToken = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
-    // Get artists needing catalog sync (not synced in 7 days or never synced)
+    // Get artists needing catalog sync (MVP: limit to 5 artists per run)
     const { data: artists, error: artistsError } = await supabase
       .from('artists')
       .select('id, name, spotify_id, last_synced_at')
       .or('last_synced_at.is.null,last_synced_at.lt.now() - interval \'7 days\'')
-      .limit(15);
+      .limit(5); // MVP: reduced from 15 to 5
 
     if (artistsError) {
       throw new Error(`Failed to fetch artists: ${artistsError.message}`);
     }
 
     if (!artists || artists.length === 0) {
+      // Update sync history
+      if (syncId) {
+        await supabase
+          .from('sync_history')
+          .update({
+            status: 'completed',
+            items_processed: 0,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', syncId)
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -80,6 +106,7 @@ serve(async (req) => {
 
     let processed = 0;
     let successful = 0;
+    let totalSongs = 0;
     const errors: string[] = [];
 
     for (const artist of artists) {
@@ -105,45 +132,58 @@ serve(async (req) => {
 
           const searchData = await searchResponse.json();
           if (searchData.artists?.items?.length > 0) {
-            spotifyArtistId = searchData.artists.items[0].id;
+            const spotifyArtist = searchData.artists.items[0];
+            spotifyArtistId = spotifyArtist.id;
             
-            // Update artist with Spotify ID
+            // Update artist with Spotify data
             await supabase
               .from('artists')
-              .update({ spotify_id: spotifyArtistId })
+              .update({ 
+                spotify_id: spotifyArtistId,
+                image_url: spotifyArtist.images?.[0]?.url || null,
+                popularity: spotifyArtist.popularity || 50,
+                followers: spotifyArtist.followers?.total || 0,
+                genres: spotifyArtist.genres || []
+              })
               .eq('id', artist.id);
           } else {
             throw new Error('Artist not found on Spotify');
           }
         }
 
-        // Get all albums for the artist
-        let allTracks: SpotifyTrack[] = [];
-        let albumsUrl = `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album,single&market=US&limit=50`;
-        
-        while (albumsUrl) {
-          const albumsResponse = await fetch(albumsUrl, {
+        // Get top tracks only for MVP (faster than full catalog)
+        const topTracksResponse = await fetch(
+          `https://api.spotify.com/v1/artists/${spotifyArtistId}/top-tracks?market=US`,
+          {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
             },
-          });
-
-          if (!albumsResponse.ok) {
-            if (albumsResponse.status === 429) {
-              const retryAfter = albumsResponse.headers.get('Retry-After') || '5';
-              console.warn(`Rate limit hit, waiting ${retryAfter}s...`);
-              await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000));
-              continue;
-            }
-            throw new Error(`Failed to fetch albums: ${albumsResponse.status}`);
           }
+        );
 
+        if (!topTracksResponse.ok) {
+          throw new Error(`Failed to fetch top tracks: ${topTracksResponse.status}`);
+        }
+
+        const topTracksData = await topTracksResponse.json();
+        const tracks = topTracksData.tracks || [];
+
+        // Also get some albums for more variety (MVP: just 2 albums)
+        const albumsResponse = await fetch(
+          `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album&market=US&limit=2`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        if (albumsResponse.ok) {
           const albumsData = await albumsResponse.json();
           
-          // Get tracks for each album
           for (const album of albumsData.items || []) {
             const tracksResponse = await fetch(
-              `https://api.spotify.com/v1/albums/${album.id}/tracks?limit=50`,
+              `https://api.spotify.com/v1/albums/${album.id}/tracks?limit=20`, // MVP: limit to 20 per album
               {
                 headers: {
                   'Authorization': `Bearer ${accessToken}`,
@@ -153,45 +193,45 @@ serve(async (req) => {
 
             if (tracksResponse.ok) {
               const tracksData = await tracksResponse.json();
-              allTracks = allTracks.concat(tracksData.items || []);
+              tracks.push(...(tracksData.items || []));
             }
 
             // Rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
-
-          albumsUrl = albumsData.next;
         }
 
         // Remove duplicates by track name
         const uniqueTracks = Array.from(
-          new Map(allTracks.map(track => [track.name.toLowerCase(), track])).values()
+          new Map(tracks.map((track: any) => [track.name.toLowerCase(), track])).values()
         );
 
         console.log(`📀 Found ${uniqueTracks.length} unique tracks for ${artist.name}`);
 
-        // Batch insert songs
+        // Batch insert songs (MVP: smaller batches)
         if (uniqueTracks.length > 0) {
-          const songsToInsert = uniqueTracks.map(track => ({
+          const songsToInsert = uniqueTracks.map((track: any) => ({
             artist_id: artist.id,
-            name: track.name,
+            title: track.name,
             spotify_id: track.id,
             popularity: track.popularity || 0,
             duration_ms: track.duration_ms || 0,
             preview_url: track.preview_url,
           }));
 
-          // Insert in batches of 100
-          for (let i = 0; i < songsToInsert.length; i += 100) {
-            const batch = songsToInsert.slice(i, i + 100);
+          // Insert in smaller batches for MVP
+          for (let i = 0; i < songsToInsert.length; i += 25) {
+            const batch = songsToInsert.slice(i, i + 25);
             const { error: insertError } = await supabase
               .from('songs')
               .upsert(batch, {
-                onConflict: 'artist_id,name'
+                onConflict: 'artist_id,title'
               });
 
             if (insertError) {
               console.error(`Error inserting songs batch: ${insertError.message}`);
+            } else {
+              totalSongs += batch.length;
             }
           }
         }
@@ -199,55 +239,79 @@ serve(async (req) => {
         // Update artist's last_synced_at
         await supabase
           .from('artists')
-          .update({ last_synced_at: new Date().toISOString() })
+          .update({ 
+            last_synced_at: new Date().toISOString(),
+            needs_spotify_sync: false
+          })
           .eq('id', artist.id);
 
         successful++;
-        console.log(`✅ Successfully synced ${artist.name}: ${uniqueTracks.length} tracks`);
-
-        processed++;
-        
-        // Rate limiting between artists
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`✅ Successfully synced ${artist.name} (${uniqueTracks.length} songs)`);
 
       } catch (error) {
-        processed++;
-        const errorMsg = `${artist.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        errors.push(errorMsg);
-        console.error(`💥 Error syncing ${artist.name}:`, error);
+        console.error(`❌ Error syncing ${artist.name}:`, error.message);
+        errors.push(`${artist.name}: ${error.message}`);
+      }
+
+      processed++;
+      
+      // Rate limiting between artists
+      if (processed < artists.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    const duration = Date.now() - startTime;
-    const response = {
-      success: true,
-      message: `Processed ${processed} artists, ${successful} successful`,
-      stats: {
-        processed,
-        successful,
-        failed: processed - successful,
-        errors: errors.slice(0, 5),
-      },
-      duration,
-    };
+    // Update sync history
+    if (syncId) {
+      await supabase
+        .from('sync_history')
+        .update({
+          status: 'completed',
+          items_processed: processed,
+          completed_at: new Date().toISOString(),
+          error_message: errors.length > 0 ? errors.join('; ') : null
+        })
+        .eq('id', syncId)
+    }
 
-    console.log(`🎉 Spotify sync completed: ${successful}/${processed} successful in ${duration}ms`);
+    const duration = Date.now() - startTime;
+    console.log(`🎵 Spotify sync completed: ${successful}/${processed} artists, ${totalSongs} songs, ${duration}ms`);
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify({
+        success: true,
+        processed,
+        successful,
+        total_songs: totalSongs,
+        errors: errors.length > 0 ? errors : undefined,
+        duration
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('💥 Critical error in Spotify sync:', error);
+    console.error('❌ Spotify sync failed:', error);
     
+    // Log error to sync history
+    await supabase
+      .from('sync_history')
+      .insert({
+        sync_type: 'spotify',
+        entity_type: 'songs',
+        status: 'failed',
+        error_message: error.message
+      })
+
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        duration: Date.now() - startTime,
+        error: error.message,
+        duration: Date.now() - startTime
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   }
 });
