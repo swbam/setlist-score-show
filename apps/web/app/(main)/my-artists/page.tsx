@@ -199,37 +199,7 @@ export default function MyArtistsPage() {
     }
   }
   
-  async function fetchAllFollowedArtists(token: string): Promise<SpotifyArtist[]> {
-    const artists: SpotifyArtist[] = []
-    let url = 'https://api.spotify.com/v1/me/following?type=artist&limit=50'
-    
-    while (url) {
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Spotify API error: ${response.status} ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      artists.push(...data.artists.items)
-      url = data.artists.next
-    }
-    
-    return artists
-  }
-  
-  // Check if we're returning from Spotify auth
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('import') === 'true') {
-      importFromSpotify()
-      router.replace('/my-artists')
-    }
-  }, [])
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -430,7 +400,7 @@ export default function MyArtistsPage() {
             <Button 
               onClick={importFromSpotify} 
               disabled={isImporting}
-              className="bg-gradient-to-r from-[#1DB954] to-[#1aa34a] hover:from-[#1aa34a] hover:to-[#159043] text-white font-semibold px-8 py-4 rounded-xl flex items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              className="bg-gray-800 hover:bg-gray-700 text-white font-semibold px-8 py-4 rounded-xl flex items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               {isImporting ? (
                 <>

@@ -9,23 +9,13 @@ export default async function HomePage() {
   const supabase = createServerComponentClient({ cookies })
 
   try {
-    // Query main tables directly - no cache needed
+    // Use RPC functions for better performance and data structure
     const [artistsResult, showsResult, statsResult] = await Promise.all([
-      // Get top artists by popularity
-      supabase
-        .from('artists')
-        .select('id, name, slug, image_url, genres, popularity')
-        .order('popularity', { ascending: false })
-        .limit(9),
+      // Get trending artists with show counts using RPC function
+      supabase.rpc('get_trending_artists', { p_limit: 12 }),
 
-      // Get upcoming shows - use separate queries to avoid join issues
-      supabase
-        .from('shows')
-        .select('id, title, date, status, ticketmaster_url, min_price, max_price, artist_id, venue_id')
-        .eq('status', 'upcoming')
-        .gte('date', new Date().toISOString())
-        .order('date', { ascending: true })
-        .limit(12),
+      // Get top shows with engagement data using RPC function
+      supabase.rpc('get_top_shows', { p_limit: 12 }),
 
       // Get basic stats for the dashboard
       Promise.all([
@@ -36,33 +26,39 @@ export default async function HomePage() {
       ])
     ])
 
+    // If no data from RPC functions, populate sample data (for development)
+    if ((!artistsResult.data || artistsResult.data.length === 0) && 
+        (!showsResult.data || showsResult.data.length === 0)) {
+      try {
+        const populateResult = await supabase.rpc('populate_sample_data')
+        console.log('Sample data populated:', populateResult.data)
+        
+        // Retry getting data after population
+        const [retryArtists, retryShows] = await Promise.all([
+          supabase.rpc('get_trending_artists', { p_limit: 12 }),
+          supabase.rpc('get_top_shows', { p_limit: 12 })
+        ])
+        
+        artistsResult.data = retryArtists.data
+        showsResult.data = retryShows.data
+      } catch (populateError) {
+        console.log('Could not populate sample data:', populateError)
+      }
+    }
+
     const topArtists = artistsResult.data || []
-    const rawShows = showsResult.data || []
-
-    // Get artist and venue data for shows separately
-    const artistIds = [...new Set(rawShows.map(show => show.artist_id))]
-    const venueIds = [...new Set(rawShows.map(show => show.venue_id))]
-
-    const [artistsForShows, venuesForShows] = await Promise.all([
-      artistIds.length > 0 ? supabase
-        .from('artists')
-        .select('id, name, slug, image_url')
-        .in('id', artistIds) : { data: [] },
-      venueIds.length > 0 ? supabase
-        .from('venues')
-        .select('id, name, city, state, capacity')
-        .in('id', venueIds) : { data: [] }
-    ])
-
-    // Create lookup maps
-    const artistMap = new Map((artistsForShows.data || []).map(a => [a.id, a]))
-    const venueMap = new Map((venuesForShows.data || []).map(v => [v.id, v]))
-
-    // Transform shows data to match ShowCard interface
-    const topShows = rawShows.map(show => ({
-      ...show,
-      artist: artistMap.get(show.artist_id) || { id: show.artist_id, name: 'Unknown Artist', slug: 'unknown', image_url: null },
-      venue: venueMap.get(show.venue_id) || { id: show.venue_id, name: 'Unknown Venue', city: 'Unknown', state: '', capacity: null }
+    const topShows = (showsResult.data || []).map(show => ({
+      id: show.id,
+      title: show.title,
+      date: show.date,
+      status: 'upcoming',
+      ticketmaster_url: show.ticketmaster_url,
+      tickets_url: show.tickets_url,
+      min_price: show.min_price,
+      max_price: show.max_price,
+      artist: show.artist,
+      venue: show.venue,
+      totalVotes: show.total_votes || 0
     }))
 
     const [artistCount, showCount, venueCount, voteCount] = statsResult
@@ -74,7 +70,7 @@ export default async function HomePage() {
     }
 
     return (
-      <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <main className="min-h-screen bg-gray-900">
         <HeroSection />
         
         {/* Stats Section */}
@@ -102,10 +98,10 @@ export default async function HomePage() {
         </section>
 
         {/* Trending Artists Section */}
-        <section className="py-16">
+        <section className="py-16 bg-gray-900">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Trending Artists</h2>
+              <h2 className="text-3xl font-bold text-white">Trending Artists</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
               {topArtists.map((artist) => (
@@ -116,14 +112,14 @@ export default async function HomePage() {
         </section>
 
         {/* Upcoming Shows Section */}
-        <section className="py-16 bg-gray-50 dark:bg-gray-900/50">
+        <section className="py-16 bg-black border-t border-gray-800">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Upcoming Shows</h2>
+              <h2 className="text-3xl font-bold text-white">Upcoming Shows</h2>
             </div>
             {topShows.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600 dark:text-gray-400">No upcoming shows found. Check back soon!</p>
+                <p className="text-gray-400">No upcoming shows found. Check back soon!</p>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -139,15 +135,15 @@ export default async function HomePage() {
   } catch (error) {
     console.error('Homepage error:', error)
     return (
-      <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <main className="min-h-screen bg-gray-900">
         <HeroSection />
         <section className="py-16">
           <div className="container mx-auto px-4">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 className="text-2xl font-bold text-white mb-4">
                 Welcome to TheSet
               </h2>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-400">
                 The platform is being populated with fresh data. Check back soon!
               </p>
             </div>

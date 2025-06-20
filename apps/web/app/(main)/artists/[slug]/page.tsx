@@ -22,34 +22,42 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
       notFound()
     }
 
-    // Get shows for this artist with separate venue query
+    // Get shows for this artist with venue data included
     const { data: showsData } = await supabase
       .from('shows')
-      .select('id, title, date, status, ticketmaster_url, min_price, max_price, venue_id')
+      .select(`
+        id, 
+        title, 
+        date, 
+        status, 
+        ticketmaster_url, 
+        tickets_url,
+        min_price, 
+        max_price,
+        venue:venues(id, name, city, state, country, capacity)
+      `)
       .eq('artist_id', artistData.id)
       .order('date', { ascending: true })
-
-    // Get venue data for shows
-    const venueIds = [...new Set(showsData?.map(s => s.venue_id) || [])]
-    const { data: venuesData } = venueIds.length > 0 
-      ? await supabase
-          .from('venues')
-          .select('id, name, city, state, country, capacity')
-          .in('id', venueIds)
-      : { data: [] }
-    
-    const venueMap = new Map(venuesData?.map(v => [v.id, v]) || [])
 
     const shows = showsData || []
     const now = new Date()
     const upcomingShows = shows.filter(show => new Date(show.date) > now)
     const pastShows = shows.filter(show => new Date(show.date) <= now).slice(0, 10)
 
+    // If no shows found, ensure artist has some songs for potential setlist creation
+    if (shows.length === 0) {
+      try {
+        await supabase.rpc('ensure_artist_has_songs', { p_artist_id: artistData.id })
+      } catch (error) {
+        console.log('Could not ensure artist has songs:', error)
+      }
+    }
+
     return (
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
         <div className="relative bg-black text-white overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-t from-black to-gray-900" />
+          <div className="absolute inset-0 bg-black" />
           
           <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
             <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
@@ -154,38 +162,35 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
             <TabsContent value="upcoming" className="space-y-4">
               {upcomingShows.length > 0 ? (
                 <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {upcomingShows.map((show: any) => {
-                    const venue = venueMap.get(show.venue_id)
-                    
-                    return (
-                      <ShowCard 
-                        key={show.id} 
-                        show={{
-                          id: show.id,
-                          date: show.date,
-                          title: show.title || `${artistData.name} at ${venue?.name || 'Unknown Venue'}`,
-                          status: show.status || 'upcoming',
-                          ticketmaster_url: show.ticketmaster_url,
-                          min_price: show.min_price,
-                          max_price: show.max_price,
-                          artist: {
-                            id: artistData.id,
-                            name: artistData.name,
-                            slug: artistData.slug,
-                            image_url: artistData.image_url
-                          },
-                          venue: {
-                            id: venue?.id || show.venue_id,
-                            name: venue?.name || 'Unknown Venue',
-                            city: venue?.city || 'Unknown City',
-                            state: venue?.state || '',
-                            capacity: venue?.capacity
-                          },
-                          totalVotes: 0
-                        }} 
-                      />
-                    )
-                  })}
+                  {upcomingShows.map((show: any) => (
+                    <ShowCard 
+                      key={show.id} 
+                      show={{
+                        id: show.id,
+                        date: show.date,
+                        title: show.title || `${artistData.name} at ${show.venue?.name || 'Unknown Venue'}`,
+                        status: show.status || 'upcoming',
+                        ticketmaster_url: show.ticketmaster_url,
+                        tickets_url: show.tickets_url,
+                        min_price: show.min_price,
+                        max_price: show.max_price,
+                        artist: {
+                          id: artistData.id,
+                          name: artistData.name,
+                          slug: artistData.slug,
+                          image_url: artistData.image_url
+                        },
+                        venue: {
+                          id: show.venue?.id || 'unknown',
+                          name: show.venue?.name || 'Unknown Venue',
+                          city: show.venue?.city || 'Unknown City',
+                          state: show.venue?.state || '',
+                          capacity: show.venue?.capacity
+                        },
+                        totalVotes: 0
+                      }} 
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-12">
@@ -201,38 +206,35 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
             <TabsContent value="past" className="space-y-4">
               {pastShows.length > 0 ? (
                 <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {pastShows.map((show: any) => {
-                    const venue = venueMap.get(show.venue_id)
-                    
-                    return (
-                      <ShowCard 
-                        key={show.id} 
-                        show={{
-                          id: show.id,
-                          date: show.date,
-                          title: show.title || `${artistData.name} at ${venue?.name || 'Unknown Venue'}`,
-                          status: show.status || 'completed',
-                          ticketmaster_url: show.ticketmaster_url,
-                          min_price: show.min_price,
-                          max_price: show.max_price,
-                          artist: {
-                            id: artistData.id,
-                            name: artistData.name,
-                            slug: artistData.slug,
-                            image_url: artistData.image_url
-                          },
-                          venue: {
-                            id: venue?.id || show.venue_id,
-                            name: venue?.name || 'Unknown Venue',
-                            city: venue?.city || 'Unknown City',
-                            state: venue?.state || '',
-                            capacity: venue?.capacity
-                          },
-                          totalVotes: 0
-                        }} 
-                      />
-                    )
-                  })}
+                  {pastShows.map((show: any) => (
+                    <ShowCard 
+                      key={show.id} 
+                      show={{
+                        id: show.id,
+                        date: show.date,
+                        title: show.title || `${artistData.name} at ${show.venue?.name || 'Unknown Venue'}`,
+                        status: show.status || 'completed',
+                        ticketmaster_url: show.ticketmaster_url,
+                        tickets_url: show.tickets_url,
+                        min_price: show.min_price,
+                        max_price: show.max_price,
+                        artist: {
+                          id: artistData.id,
+                          name: artistData.name,
+                          slug: artistData.slug,
+                          image_url: artistData.image_url
+                        },
+                        venue: {
+                          id: show.venue?.id || 'unknown',
+                          name: show.venue?.name || 'Unknown Venue',
+                          city: show.venue?.city || 'Unknown City',
+                          state: show.venue?.state || '',
+                          capacity: show.venue?.capacity
+                        },
+                        totalVotes: 0
+                      }} 
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-12">

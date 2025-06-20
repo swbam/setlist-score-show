@@ -236,62 +236,32 @@ export default function AdminDashboard() {
     { 
       name: 'Total Users', 
       value: stats.userCount, 
-      icon: Users, 
-      color: 'text-blue-600',
-      bgColor: 'from-blue-500/10 to-blue-600/10',
-      borderColor: 'border-blue-200/50 dark:border-blue-800/30',
-      trend: '+12%',
-      trendUp: true
+      icon: Users
     },
     { 
       name: 'Artists', 
       value: stats.artistCount, 
-      icon: Music, 
-      color: 'text-purple-600',
-      bgColor: 'from-purple-500/10 to-purple-600/10',
-      borderColor: 'border-purple-200/50 dark:border-purple-800/30',
-      trend: '+8%',
-      trendUp: true
+      icon: Music
     },
     { 
       name: 'Shows', 
       value: stats.showCount, 
-      icon: Calendar, 
-      color: 'text-green-600',
-      bgColor: 'from-green-500/10 to-green-600/10',
-      borderColor: 'border-green-200/50 dark:border-green-800/30',
-      trend: '+25%',
-      trendUp: true
+      icon: Calendar
     },
     { 
       name: 'Total Votes', 
       value: stats.voteCount, 
-      icon: TrendingUp, 
-      color: 'text-orange-600',
-      bgColor: 'from-orange-500/10 to-orange-600/10',
-      borderColor: 'border-orange-200/50 dark:border-orange-800/30',
-      trend: '+45%',
-      trendUp: true
+      icon: TrendingUp
     },
     { 
       name: 'Songs', 
       value: stats.songCount, 
-      icon: Music, 
-      color: 'text-pink-600',
-      bgColor: 'from-pink-500/10 to-pink-600/10',
-      borderColor: 'border-pink-200/50 dark:border-pink-800/30',
-      trend: '+18%',
-      trendUp: true
+      icon: Music
     },
     { 
       name: 'Venues', 
       value: stats.venueCount, 
-      icon: Database, 
-      color: 'text-indigo-600',
-      bgColor: 'from-indigo-500/10 to-indigo-600/10',
-      borderColor: 'border-indigo-200/50 dark:border-indigo-800/30',
-      trend: '+5%',
-      trendUp: true
+      icon: Database
     }
   ]
   
@@ -305,13 +275,13 @@ export default function AdminDashboard() {
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-2">
           <div className="relative">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-black" />
             </div>
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full border-2 border-black animate-pulse" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-purple-600 to-pink-600 dark:from-white dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold text-white">
               Dashboard
             </h1>
             <p className="text-gray-600 dark:text-gray-400">Platform overview and management</p>
@@ -321,7 +291,7 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Clock className="w-4 h-4" />
           <span>Last updated: {new Date().toLocaleTimeString()}</span>
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse ml-2" />
+          <div className="w-2 h-2 bg-white rounded-full animate-pulse ml-2" />
           <span>Live</span>
         </div>
       </div>
@@ -336,32 +306,16 @@ export default function AdminDashboard() {
             transition={{ duration: 0.5, delay: index * 0.1 }}
             whileHover={{ y: -4, scale: 1.02 }}
           >
-            <Card className={cn(
-              "p-6 bg-gradient-to-br",
-              stat.bgColor,
-              stat.borderColor,
-              "hover:shadow-lg transition-all duration-300 border"
-            )}>
+            <Card className="p-6 bg-gray-800 hover:bg-gray-700 transition-all duration-300 border border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <div className={cn(
-                  "p-3 rounded-xl bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm",
-                  stat.color
-                )}>
-                  <stat.icon className="w-6 h-6" />
-                </div>
-                <div className={cn(
-                  "text-xs font-medium px-2 py-1 rounded-full",
-                  stat.trendUp 
-                    ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" 
-                    : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                )}>
-                  {stat.trend}
+                <div className="p-3 rounded-xl bg-white">
+                  <stat.icon className="w-6 h-6 text-black" />
                 </div>
               </div>
-              <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              <h3 className="text-3xl font-bold text-white mb-1">
                 {stat.value.toLocaleString()}
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 font-medium">{stat.name}</p>
+              <p className="text-gray-400 font-medium">{stat.name}</p>
             </Card>
           </motion.div>
         ))}
@@ -374,14 +328,14 @@ export default function AdminDashboard() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.7 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-blue-900/10 dark:via-gray-800 dark:to-purple-900/10 border border-blue-200/50 dark:border-blue-800/30">
+          <Card className="p-6 bg-gray-800 border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
-                <Download className="w-5 h-5 text-white" />
+              <div className="p-2 bg-white rounded-xl">
+                <Download className="w-5 h-5 text-black" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Data Import</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Import and sync external data</p>
+                <h2 className="text-xl font-semibold text-white">Data Import</h2>
+                <p className="text-sm text-gray-400">Import and sync external data</p>
               </div>
             </div>
             
@@ -389,7 +343,7 @@ export default function AdminDashboard() {
               <Button
                 onClick={importTopArtists}
                 disabled={syncing.import_artists}
-                className="w-full justify-start h-12 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 border-0"
+                className="w-full justify-start h-12 bg-white hover:bg-gray-200 text-black border-0"
               >
                 {syncing.import_artists ? (
                   <Loader2 className="w-4 h-4 mr-3 animate-spin" />
@@ -405,7 +359,7 @@ export default function AdminDashboard() {
               <Button
                 onClick={() => triggerSync('sync_top_shows')}
                 disabled={syncing.sync_top_shows}
-                className="w-full justify-start h-12 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 border-0"
+                className="w-full justify-start h-12 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600"
               >
                 {syncing.sync_top_shows ? (
                   <Loader2 className="w-4 h-4 mr-3 animate-spin" />
@@ -421,7 +375,7 @@ export default function AdminDashboard() {
               <Button
                 onClick={refreshHomepageCache}
                 disabled={syncing.homepage_cache}
-                className="w-full justify-start h-12 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-0"
+                className="w-full justify-start h-12 bg-black hover:bg-gray-900 text-white border border-gray-800"
               >
                 {syncing.homepage_cache ? (
                   <Loader2 className="w-4 h-4 mr-3 animate-spin" />

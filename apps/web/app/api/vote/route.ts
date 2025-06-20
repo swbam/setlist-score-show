@@ -26,80 +26,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check vote limits - only for authenticated users
-    let existingVotes: any[] = []
+    // No need for manual validation - the enhanced RPC function handles all validation
+
+    // For authenticated users, use the enhanced voting function
     if (userId) {
-      const { data: votes, error: voteLimitError } = await supabase
-        .from('votes')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('show_id', showId)
-
-      if (voteLimitError) {
-        console.error('Vote limit check error:', voteLimitError)
-        return NextResponse.json(
-          { error: 'Failed to check vote limits' },
-          { status: 500 }
-        )
-      }
-
-      existingVotes = votes || []
-
-      if (existingVotes.length >= 10) {
-        return NextResponse.json(
-          { error: 'Vote limit reached for this show' },
-          { status: 400 }
-        )
-      }
-
-      // Check if already voted for this song
-      const { data: existingVote } = await supabase
-        .from('votes')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('setlist_song_id', setlistSongId)
-        .single()
-
-      if (existingVote) {
-        return NextResponse.json(
-          { error: 'Already voted for this song' },
-          { status: 400 }
-        )
-      }
-    }
-
-    // Create vote - for anonymous users, we don't store in votes table, just update count
-    let vote = null
-    if (userId) {
-      const { data: voteData, error: voteError } = await supabase
-        .from('votes')
-        .insert({
-          user_id: userId,
-          setlist_song_id: setlistSongId,
-          show_id: showId,
-          vote_type: 'up',
-        })
-        .select()
-        .single()
+      const { data: voteResult, error: voteError } = await supabase.rpc('increment_vote_count', {
+        p_user_id: userId,
+        p_setlist_song_id: setlistSongId,
+        p_show_id: showId
+      })
 
       if (voteError) {
-        console.error('Vote creation error:', voteError)
+        console.error('Enhanced vote function error:', voteError)
         return NextResponse.json(
-          { error: 'Failed to create vote' },
+          { error: 'Failed to process vote' },
           { status: 500 }
         )
       }
-      vote = voteData
-    }
 
-    // Update vote count using RPC function
-    const { error: updateError } = await supabase.rpc('increment_vote_count', {
-      setlist_song_id: setlistSongId
-    })
+      const result = voteResult?.[0]
+      if (!result?.success) {
+        return NextResponse.json(
+          { error: result?.message || 'Vote failed' },
+          { status: 400 }
+        )
+      }
 
-    if (updateError) {
-      console.error('RPC error, using manual update:', updateError)
-      // Fallback to manual update
+      // Get remaining votes for user
+      const { data: voteStatus } = await supabase.rpc('can_user_vote_on_show', {
+        p_user_id: userId,
+        p_show_id: showId
+      })
+
+      const status = voteStatus?.[0]
+      
+      return NextResponse.json({
+        success: true,
+        newVoteCount: result.new_vote_count,
+        votesRemaining: {
+          show: status?.votes_remaining || 0,
+          daily: 50 // This would need a separate calculation
+        }
+      })
+    } else {
+      // For anonymous users, just increment the count
       const { data: currentSong } = await supabase
         .from('setlist_songs')
         .select('vote_count')
@@ -108,19 +78,15 @@ export async function POST(request: NextRequest) {
 
       const newCount = (currentSong?.vote_count || 0) + 1
       
-      const { data: updatedSong, error: manualUpdateError } = await supabase
+      const { data: updatedSong, error: updateError } = await supabase
         .from('setlist_songs')
         .update({ vote_count: newCount })
         .eq('id', setlistSongId)
         .select()
         .single()
 
-      if (manualUpdateError) {
-        console.error('Manual vote count update error:', manualUpdateError)
-        // Try to rollback the vote for authenticated users
-        if (vote?.id) {
-          await supabase.from('votes').delete().eq('id', vote.id)
-        }
+      if (updateError) {
+        console.error('Anonymous vote update error:', updateError)
         return NextResponse.json(
           { error: 'Failed to update vote count' },
           { status: 500 }
@@ -129,54 +95,13 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        voteId: vote?.id || null,
         newVoteCount: updatedSong.vote_count,
-        votesRemaining: userId ? {
-          show: 10 - (existingVotes?.length || 0) - 1,
-          daily: 50
-        } : {
-          show: 3,
+        votesRemaining: {
+          show: 3, // Anonymous limit
           daily: 3
         }
       })
     }
-
-    // Get updated vote count
-    const { data: updatedSong, error: fetchError } = await supabase
-      .from('setlist_songs')
-      .select('vote_count')
-      .eq('id', setlistSongId)
-      .single()
-
-    if (fetchError) {
-      console.error('Fetch vote count error:', fetchError)
-      // Default to assuming count was incremented
-      return NextResponse.json({
-        success: true,
-        voteId: vote?.id || null,
-        newVoteCount: 1,
-        votesRemaining: userId ? {
-          show: 10 - (existingVotes?.length || 0) - 1,
-          daily: 50
-        } : {
-          show: 3,
-          daily: 3
-        }
-      })
-    }
-
-    return NextResponse.json({
-      success: true,
-      voteId: vote?.id || null,
-      newVoteCount: updatedSong.vote_count,
-      votesRemaining: userId ? {
-        show: 10 - (existingVotes?.length || 0) - 1,
-        daily: 50 // This would need proper calculation
-      } : {
-        show: 3,
-        daily: 3
-      }
-    })
   } catch (error) {
     console.error('Vote API error:', error)
     return NextResponse.json(

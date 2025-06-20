@@ -1,25 +1,20 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, MapPin, Music, Loader2 } from 'lucide-react'
+import { Search, MapPin, Music, Loader2, ExternalLink, Plus } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-interface SearchResult {
+interface LocalSearchResult {
   artists: Array<{
     id: string
     name: string
     slug: string
     imageUrl: string | null
     popularity: number
-  }>
-  venues: Array<{
-    id: string
-    name: string
-    city: string
-    state: string | null
-    country: string
+    source: 'local'
   }>
   nearbyShows?: Array<{
     show_id: string
@@ -40,13 +35,46 @@ interface SearchResult {
   } | null
 }
 
+interface ExternalSearchResult {
+  artists: Array<{
+    id: string
+    name: string
+    popularity: number
+    followers: number
+    genres: string[]
+    image_url: string | null
+    spotify_url: string
+    source: 'spotify'
+    can_import: boolean
+  }>
+  shows: Array<{
+    id: string
+    name: string
+    artist_name: string
+    artist_image: string | null
+    venue_name: string
+    venue_city: string
+    venue_state: string
+    date: string
+    status: string
+    ticket_url: string
+    min_price?: number
+    max_price?: number
+    source: 'ticketmaster'
+    can_import: boolean
+  }>
+}
+
 export function UnifiedSearch() {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [results, setResults] = useState<SearchResult>({ artists: [], venues: [], nearbyShows: [], zipInfo: null })
+  const [localResults, setLocalResults] = useState<LocalSearchResult>({ artists: [], nearbyShows: [], zipInfo: null })
+  const [externalResults, setExternalResults] = useState<ExternalSearchResult>({ artists: [], shows: [] })
   const [isLoading, setIsLoading] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [isImporting, setIsImporting] = useState<string | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   // Debounce search query
   useEffect(() => {
@@ -70,7 +98,8 @@ export function UnifiedSearch() {
   // Search function
   useEffect(() => {
     if (!debouncedQuery.trim()) {
-      setResults({ artists: [], venues: [], nearbyShows: [], zipInfo: null })
+      setLocalResults({ artists: [], nearbyShows: [], zipInfo: null })
+      setExternalResults({ artists: [], shows: [] })
       return
     }
 
@@ -94,38 +123,58 @@ export function UnifiedSearch() {
               .single()
           ])
 
-          setResults({
+          setLocalResults({
             artists: [],
-            venues: [],
             nearbyShows: nearbyShows.data || [],
             zipInfo: zipInfo.data || null
           })
+          setExternalResults({ artists: [], shows: [] })
         } else {
-          // Search artists by name
-          const { data: artistData } = await supabase
-            .from('artists')
-            .select('id, name, slug, image_url, popularity')
-            .ilike('name', `%${debouncedQuery}%`)
-            .gte('popularity', 20)
-            .order('popularity', { ascending: false })
-            .limit(8)
+          // Search both local database and external APIs in parallel
+          const [localSearch, externalSearch] = await Promise.all([
+            // Local search
+            supabase
+              .from('artists')
+              .select('id, name, slug, image_url, popularity')
+              .ilike('name', `%${debouncedQuery}%`)
+              .gte('popularity', 20)
+              .order('popularity', { ascending: false })
+              .limit(5),
+            
+            // External search
+            fetch(`/api/search/external?q=${encodeURIComponent(debouncedQuery)}`)
+              .then(res => res.ok ? res.json() : null)
+              .catch(() => null)
+          ])
 
-          setResults({
-            artists: artistData?.map(artist => ({
+          // Set local results
+          setLocalResults({
+            artists: localSearch.data?.map(artist => ({
               id: artist.id,
               name: artist.name,
               slug: artist.slug,
               imageUrl: artist.image_url,
-              popularity: artist.popularity
+              popularity: artist.popularity,
+              source: 'local' as const
             })) || [],
-            venues: [],
             nearbyShows: [],
             zipInfo: null
           })
+
+          // Set external results
+          if (externalSearch?.results) {
+            setExternalResults({
+              artists: externalSearch.results.artists || [],
+              shows: externalSearch.results.shows || []
+            })
+          } else {
+            setExternalResults({ artists: [], shows: [] })
+          }
         }
       } catch (error) {
         console.error('Search error:', error)
-        setResults({ artists: [], venues: [], nearbyShows: [], zipInfo: null })
+        setLocalResults({ artists: [], nearbyShows: [], zipInfo: null })
+        setExternalResults({ artists: [], shows: [] })
       } finally {
         setIsLoading(false)
       }
@@ -142,7 +191,38 @@ export function UnifiedSearch() {
   const clearSearch = () => {
     setQuery('')
     setShowResults(false)
-    setResults({ artists: [], venues: [], nearbyShows: [], zipInfo: null })
+    setLocalResults({ artists: [], nearbyShows: [], zipInfo: null })
+    setExternalResults({ artists: [], shows: [] })
+  }
+
+  const handleImport = async (type: 'artist' | 'show', data: any) => {
+    setIsImporting(data.id)
+    try {
+      const response = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, ...data })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        if (type === 'artist') {
+          // Navigate to artist page
+          router.push(`/artists/${result.slug}`)
+        } else if (type === 'show') {
+          // Navigate to show page
+          router.push(`/shows/${result.show_id}`)
+        }
+        clearSearch()
+      } else {
+        console.error('Import failed:', result.error)
+      }
+    } catch (error) {
+      console.error('Import error:', error)
+    } finally {
+      setIsImporting(null)
+    }
   }
 
   return (
@@ -156,7 +236,7 @@ export function UnifiedSearch() {
           value={query}
           onChange={handleInputChange}
           onFocus={() => setShowResults(true)}
-          className="w-full pl-12 pr-4 py-4 text-lg bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+          className="w-full pl-12 pr-4 py-4 text-lg bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/30 transition-all"
         />
         {isLoading && (
           <Loader2 className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60 animate-spin" />
@@ -165,22 +245,22 @@ export function UnifiedSearch() {
 
       {/* Search Results Dropdown */}
       {showResults && debouncedQuery && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-2xl z-50 max-h-[500px] overflow-y-auto">
           {isLoading ? (
             <div className="p-4 text-center text-white/60">
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-              Searching...
+              Searching local database and external APIs...
             </div>
           ) : (
             <div className="p-2">
-              {/* Artists Results */}
-              {results.artists.length > 0 && (
+              {/* Local Artists */}
+              {localResults.artists.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
                     <Music className="w-4 h-4" />
-                    Artists
+                    Artists in Database
                   </h3>
-                  {results.artists.map((artist) => (
+                  {localResults.artists.map((artist) => (
                     <Link
                       key={artist.id}
                       href={`/artists/${artist.slug}`}
@@ -196,7 +276,7 @@ export function UnifiedSearch() {
                           className="rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
                           <Music className="w-5 h-5 text-white" />
                         </div>
                       )}
@@ -211,15 +291,120 @@ export function UnifiedSearch() {
                 </div>
               )}
 
+              {/* External Artists from Spotify */}
+              {externalResults.artists.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4" />
+                    Artists from Spotify
+                  </h3>
+                  {externalResults.artists.map((artist) => (
+                    <div
+                      key={artist.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      {artist.image_url ? (
+                        <Image
+                          src={artist.image_url}
+                          alt={artist.name}
+                          width={40}
+                          height={40}
+                          className="rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center">
+                          <Music className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white truncate">{artist.name}</div>
+                        <div className="text-sm text-white/60">
+                          {artist.followers?.toLocaleString()} followers • {artist.genres.slice(0, 2).join(', ')}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleImport('artist', artist)}
+                        disabled={isImporting === artist.id}
+                        className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition-colors disabled:opacity-50"
+                      >
+                        {isImporting === artist.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4" />
+                        )}
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* External Shows from Ticketmaster */}
+              {externalResults.shows.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4" />
+                    Shows from Ticketmaster
+                  </h3>
+                  {externalResults.shows.slice(0, 6).map((show) => (
+                    <div
+                      key={show.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      {show.artist_image ? (
+                        <Image
+                          src={show.artist_image}
+                          alt={show.artist_name}
+                          width={40}
+                          height={40}
+                          className="rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                          <Music className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white truncate">{show.artist_name}</div>
+                        <div className="text-sm text-white/60 truncate">
+                          {show.venue_name}, {show.venue_city}
+                        </div>
+                        <div className="text-xs text-white/50 flex items-center gap-2 mt-1">
+                          <span>{new Date(show.date).toLocaleDateString()}</span>
+                          {show.min_price && (
+                            <>
+                              <span>•</span>
+                              <span>From ${show.min_price}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleImport('show', show)}
+                        disabled={isImporting === show.id}
+                        className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition-colors disabled:opacity-50"
+                      >
+                        {isImporting === show.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4" />
+                        )}
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Nearby Shows Results (for ZIP code searches) */}
-              {results.nearbyShows && results.nearbyShows.length > 0 && (
+              {localResults.nearbyShows && localResults.nearbyShows.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
-                    Shows Near {results.zipInfo?.city}, {results.zipInfo?.state}
+                    Shows Near {localResults.zipInfo?.city}, {localResults.zipInfo?.state}
                   </h3>
                   <div className="max-h-80 overflow-y-auto">
-                    {results.nearbyShows.slice(0, 8).map((show) => (
+                    {localResults.nearbyShows.slice(0, 8).map((show) => (
                       <Link
                         key={show.show_id}
                         href={`/shows/${show.show_id}`}
@@ -233,12 +418,12 @@ export function UnifiedSearch() {
                             className="w-10 h-10 rounded-lg object-cover group-hover:scale-105 transition-transform"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
                             <Music className="w-5 h-5 text-white" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-white truncate group-hover:text-purple-200 transition-colors">
+                          <div className="font-medium text-white truncate">
                             {show.artist_name}
                           </div>
                           <div className="text-sm text-white/60 truncate">
@@ -259,13 +444,13 @@ export function UnifiedSearch() {
                       </Link>
                     ))}
                     
-                    {results.nearbyShows.length > 8 && (
+                    {localResults.nearbyShows.length > 8 && (
                       <Link
                         href={`/nearby/${debouncedQuery}`}
                         onClick={clearSearch}
                         className="block p-3 text-center text-white/80 hover:text-white hover:bg-white/5 transition-colors rounded-lg border border-white/10 mx-3 mt-2"
                       >
-                        View all {results.nearbyShows.length} shows →
+                        View all {localResults.nearbyShows.length} shows →
                       </Link>
                     )}
                   </div>
@@ -273,12 +458,12 @@ export function UnifiedSearch() {
               )}
               
               {/* ZIP code with no shows */}
-              {results.zipInfo && (!results.nearbyShows || results.nearbyShows.length === 0) && (
+              {localResults.zipInfo && (!localResults.nearbyShows || localResults.nearbyShows.length === 0) && (
                 <div className="p-4 text-center text-white/60">
                   <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <div className="mb-2">No upcoming shows found near</div>
                   <div className="text-white/80 font-medium">
-                    {results.zipInfo.city}, {results.zipInfo.state}
+                    {localResults.zipInfo.city}, {localResults.zipInfo.state}
                   </div>
                   <div className="text-sm text-white/40 mt-2">
                     Try searching for artists or a different area
@@ -287,10 +472,11 @@ export function UnifiedSearch() {
               )}
 
               {/* No Results */}
-              {results.artists.length === 0 && 
-               results.venues.length === 0 && 
-               (!results.nearbyShows || results.nearbyShows.length === 0) && 
-               !results.zipInfo && 
+              {localResults.artists.length === 0 && 
+               externalResults.artists.length === 0 &&
+               externalResults.shows.length === 0 &&
+               (!localResults.nearbyShows || localResults.nearbyShows.length === 0) && 
+               !localResults.zipInfo && 
                !isLoading && (
                 <div className="p-4 text-center text-white/60">
                   <div className="mb-2">No results found</div>

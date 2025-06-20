@@ -164,10 +164,10 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
       <div className="relative">
         <Link
           href={`/shows/${show.id}`}
-          className="block bg-white dark:bg-gray-800 rounded-2xl shadow-lg group-hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200/50 dark:border-gray-700/50"
+          className="block bg-black rounded-2xl shadow-lg group-hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-700/50"
         >
           {/* Enhanced header with artist image */}
-          <div className="relative h-48 bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 dark:from-purple-900/20 dark:via-blue-900/20 dark:to-pink-900/20 overflow-hidden">
+          <div className="relative h-48 bg-gray-900 overflow-hidden">
             {artistImage ? (
               <>
                 <img
@@ -176,8 +176,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 via-transparent to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute inset-0 bg-black/50" />
               </>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -192,7 +191,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                   initial={{ scale: 0, rotate: -10 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.3 + index * 0.05 }}
-                  className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-white/20 flex items-center gap-1"
+                  className="bg-white text-black text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-gray-300 flex items-center gap-1"
                 >
                   🔥 <span>HOT</span>
                 </motion.div>
@@ -203,7 +202,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                   initial={{ scale: 0, rotate: 10 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.4 + index * 0.05 }}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-white/20 flex items-center gap-1"
+                  className="bg-gray-800 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-gray-600 flex items-center gap-1"
                 >
                   <TrendingUp className="w-3 h-3" /> <span>POPULAR</span>
                 </motion.div>
@@ -219,7 +218,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             
             {/* Price badge */}
             {formatPrice(show.min_price, show.max_price) && (
-              <div className="absolute bottom-4 left-4 bg-green-500/90 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1">
+              <div className="absolute bottom-4 left-4 bg-white text-black text-xs font-bold px-2.5 py-1 rounded-full border border-gray-300 flex items-center gap-1">
                 <DollarSign className="w-3 h-3" />
                 {formatPrice(show.min_price, show.max_price)}
               </div>
@@ -229,26 +228,26 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
           {/* Enhanced content */}
           <div className="p-6">
             <div className="mb-4">
-              <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+              <h3 className="font-bold text-xl text-white mb-2 line-clamp-2 group-hover:text-gray-300 transition-colors">
                 {show.artist.name}
               </h3>
               
-              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="space-y-2 text-sm text-gray-400">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-purple-500" />
+                  <MapPin className="w-4 h-4 text-gray-400" />
                   <span className="font-medium truncate">
                     {show.venue.name}
                   </span>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="font-medium">
                     {formatDate(show.date)}
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500">
+                <div className="flex items-center gap-2 text-gray-500">
                   <div className="w-4 h-4 flex items-center justify-center">
                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
                   </div>
@@ -261,23 +260,23 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             
             {/* Enhanced engagement stats */}
             {showEngagement && (
-              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                    <div className="text-lg font-bold text-white">
                       {show.totalVotes || 0}
                     </div>
-                    <div className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                    <div className="text-xs text-gray-400 flex items-center justify-center gap-1">
                       <Vote className="w-3 h-3" />
                       Votes
                     </div>
                   </div>
                   
                   <div>
-                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    <div className="text-lg font-bold text-white">
                       {show.songsVoted || 0}
                     </div>
-                    <div className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                    <div className="text-xs text-gray-400 flex items-center justify-center gap-1">
                       <Music className="w-3 h-3" />
                       Songs
                     </div>
@@ -287,8 +286,8 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             )}
             
             {/* Enhanced footer */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+            <div className="flex items-center justify-between pt-4 border-t border-gray-700">
+              <div className="flex items-center gap-4 text-sm text-gray-400">
                 {show.venue.capacity && (
                   <div className="flex items-center gap-1">
                     <Users className="w-3.5 h-3.5" />
@@ -304,7 +303,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                 )}
               </div>
               
-              <div className="text-sm font-semibold text-purple-600 dark:text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors flex items-center gap-1">
+              <div className="text-sm font-semibold text-white group-hover:text-gray-300 transition-colors flex items-center gap-1">
                 Vote Now
                 <motion.div
                   animate={{ x: [0, 4, 0] }}

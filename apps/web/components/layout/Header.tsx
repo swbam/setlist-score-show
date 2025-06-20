@@ -31,8 +31,8 @@ export function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="w-8 h-8 text-primary" />
-            <span className="text-xl font-headline font-bold gradient-text">TheSet</span>
+            <Music2 className="w-8 h-8 text-white" />
+            <span className="text-xl font-headline font-bold text-white">TheSet</span>
           </Link>
 
           {/* Desktop Navigation */}
