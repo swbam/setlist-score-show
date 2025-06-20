@@ -18,12 +18,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Supabase auth exchange error:', error)
+      // Redirect to error page or login
+      return NextResponse.redirect(new URL('/login?error=auth_failed', requestUrl.origin))
     }
     
     // If there's a specific redirect path, use it
     if (redirect) {
       const redirectUrl = new URL(redirect, requestUrl.origin)
-      // Add action parameter if present
+      // Add action parameter if present (for triggering import)
       if (action) {
         redirectUrl.searchParams.set('action', action)
       }

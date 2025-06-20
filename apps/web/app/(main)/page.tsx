@@ -1,144 +1,159 @@
-import Link from 'next/link'
-import { ShowCard } from '@/components/shows/ShowCard'
-import { UnifiedSearch } from '@/components/search/UnifiedSearch'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import { HeroSection } from '@/components/home/HeroSection'
 import { ArtistCard } from '@/components/home/ArtistCard'
-import { TrendingUp, Calendar, Users, ArrowRight, Music, MapPin } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { ShowCard } from '@/components/shows/ShowCard'
+import { Card } from '@/components/ui/card'
 
 export default async function HomePage() {
-  // Fetch directly from Supabase tables since cache might be empty
-  const [artistsResult, showsResult] = await Promise.allSettled([
-    supabase
-      .from('artists')
-      .select('*')
-      .gte('popularity', 50)
-      .order('popularity', { ascending: false })
-      .limit(12),
-    
-    supabase
-      .from('shows')
-      .select(`
-        *,
-        artist:artists(*),
-        venue:venues(*)
-      `)
-      .eq('status', 'upcoming')
-      .gte('date', new Date().toISOString().split('T')[0])
-      .order('date', { ascending: true })
-      .limit(8)
-  ])
+  const supabase = createServerComponentClient({ cookies })
 
-  const topArtists = artistsResult.status === 'fulfilled' ? artistsResult.value.data || [] : []
-  const topShows = showsResult.status === 'fulfilled' ? showsResult.value.data || [] : []
+  try {
+    // Query main tables directly - no cache needed
+    const [artistsResult, showsResult, statsResult] = await Promise.all([
+      // Get top artists by popularity
+      supabase
+        .from('artists')
+        .select('id, name, slug, image_url, genres, popularity')
+        .order('popularity', { ascending: false })
+        .limit(9),
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Section with Search */}
-      <HeroSection />
+      // Get upcoming shows - use separate queries to avoid join issues
+      supabase
+        .from('shows')
+        .select('id, title, date, status, ticketmaster_url, min_price, max_price, artist_id, venue_id')
+        .eq('status', 'upcoming')
+        .gte('date', new Date().toISOString())
+        .order('date', { ascending: true })
+        .limit(12),
 
-      {/* Main Content */}
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-8 sm:py-12 lg:py-16">
+      // Get basic stats for the dashboard
+      Promise.all([
+        supabase.from('artists').select('*', { count: 'exact', head: true }),
+        supabase.from('shows').select('*', { count: 'exact', head: true }).eq('status', 'upcoming').gte('date', new Date().toISOString()),
+        supabase.from('venues').select('*', { count: 'exact', head: true }),
+        supabase.from('votes').select('*', { count: 'exact', head: true })
+      ])
+    ])
+
+    const topArtists = artistsResult.data || []
+    const rawShows = showsResult.data || []
+
+    // Get artist and venue data for shows separately
+    const artistIds = [...new Set(rawShows.map(show => show.artist_id))]
+    const venueIds = [...new Set(rawShows.map(show => show.venue_id))]
+
+    const [artistsForShows, venuesForShows] = await Promise.all([
+      artistIds.length > 0 ? supabase
+        .from('artists')
+        .select('id, name, slug, image_url')
+        .in('id', artistIds) : { data: [] },
+      venueIds.length > 0 ? supabase
+        .from('venues')
+        .select('id, name, city, state, capacity')
+        .in('id', venueIds) : { data: [] }
+    ])
+
+    // Create lookup maps
+    const artistMap = new Map((artistsForShows.data || []).map(a => [a.id, a]))
+    const venueMap = new Map((venuesForShows.data || []).map(v => [v.id, v]))
+
+    // Transform shows data to match ShowCard interface
+    const topShows = rawShows.map(show => ({
+      ...show,
+      artist: artistMap.get(show.artist_id) || { id: show.artist_id, name: 'Unknown Artist', slug: 'unknown', image_url: null },
+      venue: venueMap.get(show.venue_id) || { id: show.venue_id, name: 'Unknown Venue', city: 'Unknown', state: '', capacity: null }
+    }))
+
+    const [artistCount, showCount, venueCount, voteCount] = statsResult
+    const stats = {
+      artists: artistCount.count || 0,
+      shows: showCount.count || 0,
+      venues: venueCount.count || 0,
+      votes: voteCount.count || 0
+    }
+
+    return (
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <HeroSection />
         
-        {/* Top Artists Section */}
-        {topArtists.length > 0 && (
-          <section className="mb-12 lg:mb-16">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Users className="w-6 h-6 text-primary" />
-                <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
-                  Trending Artists
-                </h2>
-              </div>
-              <Link 
-                href="/artists"
-                className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
-              >
-                View All <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {topArtists.slice(0, 12).map((artist: any, index: number) => (
-                <ArtistCard key={artist.id} artist={artist} index={index} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Top Shows Section */}
-        {topShows.length > 0 && (
-          <section className="mb-12 lg:mb-16">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-6 h-6 text-primary" />
-                <h2 className="text-2xl sm:text-3xl font-headline font-bold gradient-text">
-                  Upcoming Shows
-                </h2>
-              </div>
-              <Link 
-                href="/shows"
-                className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
-              >
-                View All <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-            
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {topShows.map((show: any) => (
-                <ShowCard 
-                  key={show.id} 
-                  show={{
-                    ...show,
-                    totalVotes: 0 // We'll calculate this later
-                  }} 
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Empty State */}
-        {topArtists.length === 0 && topShows.length === 0 && (
-          <div className="text-center py-16">
-            <Music className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">No Data Available</h2>
-            <p className="text-muted-foreground mb-8">
-              Start by importing artists and shows to populate the platform.
-            </p>
-            <Link
-              href="/admin/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Go to Admin Dashboard
-            </Link>
-          </div>
-        )}
-
         {/* Stats Section */}
-        <section className="mt-12 lg:mt-16 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
-            <TrendingUp className="w-8 h-8 mx-auto mb-2 text-primary" />
-            <div className="text-2xl font-bold">{topArtists.length}</div>
-            <div className="text-sm text-muted-foreground">Artists</div>
-          </div>
-          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
-            <Calendar className="w-8 h-8 mx-auto mb-2 text-primary" />
-            <div className="text-2xl font-bold">{topShows.length}</div>
-            <div className="text-sm text-muted-foreground">Upcoming Shows</div>
-          </div>
-          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
-            <MapPin className="w-8 h-8 mx-auto mb-2 text-primary" />
-            <div className="text-2xl font-bold">5</div>
-            <div className="text-sm text-muted-foreground">Cities</div>
-          </div>
-          <div className="bg-muted/30 backdrop-blur-sm rounded-lg p-6 text-center">
-            <Users className="w-8 h-8 mx-auto mb-2 text-primary" />
-            <div className="text-2xl font-bold">0</div>
-            <div className="text-sm text-muted-foreground">Active Voters</div>
+        <section className="py-8 bg-gray-900 border-b border-gray-700">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="p-4 text-center bg-gray-800 border-gray-700">
+                <div className="text-2xl font-bold text-white">{stats.artists}</div>
+                <div className="text-sm text-gray-400">Artists</div>
+              </Card>
+              <Card className="p-4 text-center bg-gray-800 border-gray-700">
+                <div className="text-2xl font-bold text-white">{stats.shows}</div>
+                <div className="text-sm text-gray-400">Upcoming Shows</div>
+              </Card>
+              <Card className="p-4 text-center bg-gray-800 border-gray-700">
+                <div className="text-2xl font-bold text-white">{stats.venues}</div>
+                <div className="text-sm text-gray-400">Venues</div>
+              </Card>
+              <Card className="p-4 text-center bg-gray-800 border-gray-700">
+                <div className="text-2xl font-bold text-white">{stats.votes}</div>
+                <div className="text-sm text-gray-400">Total Votes</div>
+              </Card>
+            </div>
           </div>
         </section>
-      </div>
-    </div>
-  )
+
+        {/* Trending Artists Section */}
+        <section className="py-16">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Trending Artists</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              {topArtists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Upcoming Shows Section */}
+        <section className="py-16 bg-gray-50 dark:bg-gray-900/50">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Upcoming Shows</h2>
+            </div>
+            {topShows.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-600 dark:text-gray-400">No upcoming shows found. Check back soon!</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {topShows.map((show) => (
+                  <ShowCard key={show.id} show={show} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+    )
+  } catch (error) {
+    console.error('Homepage error:', error)
+    return (
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <HeroSection />
+        <section className="py-16">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                Welcome to TheSet
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                The platform is being populated with fresh data. Check back soon!
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    )
+  }
 }

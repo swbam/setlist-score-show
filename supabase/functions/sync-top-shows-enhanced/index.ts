@@ -50,14 +50,14 @@ serve(async (req) => {
     
     console.log(`🔥 Fetching shows from ${startDate} to ${endDate}`);
     
-    while (hasMore && page < 1) {
+    while (hasMore && page < 10) { // Max 10 pages = 2000 shows
       const topShowsUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
       topShowsUrl.searchParams.append('apikey', ticketmasterApiKey);
       topShowsUrl.searchParams.append('countryCode', 'US');
       topShowsUrl.searchParams.append('classificationName', 'Music');
       topShowsUrl.searchParams.append('startDateTime', `${startDate}T00:00:00Z`);
       topShowsUrl.searchParams.append('endDateTime', `${endDate}T23:59:59Z`);
-      topShowsUrl.searchParams.append('size', '100');
+      topShowsUrl.searchParams.append('size', '200'); // Max page size
       topShowsUrl.searchParams.append('page', page.toString());
       topShowsUrl.searchParams.append('sort', 'relevance,desc');
       topShowsUrl.searchParams.append('includeTBA', 'no');
@@ -77,7 +77,7 @@ serve(async (req) => {
         console.log(`📄 Page ${page}: Found ${data._embedded.events.length} events (Total: ${allShows.length})`);
       }
       
-      hasMore = false;
+      hasMore = data.page && data.page.number < data.page.totalPages - 1;
       page++;
       
       // Rate limiting between pages
@@ -145,9 +145,9 @@ serve(async (req) => {
               // Update PostGIS location if coordinates exist
               if (venueData.location?.latitude && venueData.location?.longitude) {
                 await supabase.rpc('update_venue_location', {
-                  venue_id: venueId,
-                  lat: parseFloat(venueData.location.latitude),
-                  lng: parseFloat(venueData.location.longitude)
+                  p_venue_id: venueId,
+                  p_latitude: parseFloat(venueData.location.latitude),
+                  p_longitude: parseFloat(venueData.location.longitude)
                 });
               }
             }
@@ -228,7 +228,7 @@ serve(async (req) => {
           ticketmaster_id: event.id,
           artist_id: artistId,
           venue_id: venueId,
-          name: event.name,  // Fixed: use 'name' not 'title'
+          title: event.name,
           date: event.dates.start.dateTime || `${event.dates.start.localDate}T20:00:00Z`,
           status: 'upcoming',
           tickets_url: event.url,
@@ -240,7 +240,7 @@ serve(async (req) => {
           onsale_date: event.sales?.public?.startDateTime || null
         };
         
-        console.log(`✅ Prepared show: ${showData.name} (Artist: ${artistId}, Venue: ${venueId})`);
+        console.log(`✅ Prepared show: ${showData.title} (Artist: ${artistId}, Venue: ${venueId})`);
         processedShows.push(showData);
         
       } catch (eventError) {
@@ -352,25 +352,7 @@ async function enqueueSpotifySync(supabase: any, artistId: string): Promise<void
       .update({ needs_spotify_sync: true })
       .eq('id', artistId);
       
-    // Check if already queued
-    const { data: existing } = await supabase
-      .from('artist_sync_queue')
-      .select('id')
-      .eq('artist_id', artistId)
-      .eq('sync_type', 'spotify')
-      .eq('status', 'pending')
-      .single();
-
-    if (!existing) {
-      await supabase
-        .from('artist_sync_queue')
-        .insert({
-          artist_id: artistId,
-          sync_type: 'spotify',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        });
-    }
+    console.log(`🎵 Queued artist ${artistId} for Spotify sync`);
   } catch (error) {
     console.warn(`Failed to queue Spotify sync for artist ${artistId}:`, error);
   }

@@ -61,20 +61,34 @@ export default function MyArtistsPage() {
   useEffect(() => {
     checkUser()
     loadMyArtists()
+    
+    // Check if we should trigger import after Spotify OAuth
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('action') === 'import') {
+      // Clean URL and trigger import
+      const cleanUrl = window.location.pathname
+      window.history.replaceState({}, '', cleanUrl)
+      
+      // Trigger import after a short delay to ensure session is loaded
+      setTimeout(() => {
+        importFromSpotify()
+      }, 1000)
+    }
   }, [])
   
   async function checkUser() {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
-    if (!user) {
-      router.push('/login')
-    }
+    // Don't redirect - let users see the page content and login from here
   }
   
   async function loadMyArtists() {
     setIsLoadingArtists(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setIsLoadingArtists(false)
+      return
+    }
     
     try {
       // Get user's followed artists with upcoming shows
@@ -159,117 +173,23 @@ export default function MyArtistsPage() {
     setError(null)
     
     try {
-      // Stage 1: Connect to Spotify
+      // Always start with Spotify OAuth for a fresh login
       setProgress({
         stage: 'connecting',
         current: 0,
         total: 1,
         message: 'Connecting to Spotify...'
       })
-
-      const { data: { session } } = await supabase.auth.getSession()
       
-      if (!session?.provider_token) {
-        // Re-authenticate with Spotify
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'spotify',
-          options: {
-            scopes: 'user-follow-read user-top-read user-library-read',
-            redirectTo: `${window.location.origin}/my-artists?import=true`
-          }
-        })
-        if (error) throw error
-        return
-      }
-      
-      // Stage 2: Fetch followed artists from Spotify
-      setProgress({
-        stage: 'fetching',
-        current: 0,
-        total: 0,
-        message: 'Fetching your Spotify artists...'
-      })
-      
-      const followedArtists = await fetchAllFollowedArtists(session.provider_token)
-      
-      if (followedArtists.length === 0) {
-        throw new Error('No followed artists found on Spotify')
-      }
-
-      setProgress({
-        stage: 'artists',
-        current: 0,
-        total: followedArtists.length,
-        message: `Processing ${followedArtists.length} artists...`
-      })
-      
-      // Stage 3: Import artists
-      const importedArtists = []
-      
-      for (let i = 0; i < followedArtists.length; i++) {
-        const spotifyArtist = followedArtists[i]
-        
-        setProgress({
-          stage: 'artists',
-          current: i + 1,
-          total: followedArtists.length,
-          message: `Importing ${spotifyArtist.name}...`
-        })
-        
-        // Create or update artist
-        const { data: artist, error: artistError } = await supabase
-          .from('artists')
-          .upsert({
-            spotify_id: spotifyArtist.id,
-            name: spotifyArtist.name,
-            slug: spotifyArtist.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
-            image_url: spotifyArtist.images[0]?.url,
-            genres: spotifyArtist.genres,
-            followers: spotifyArtist.followers.total,
-            popularity: Math.min(100, Math.max(0, Math.floor(spotifyArtist.followers.total / 100000))),
-            last_synced_at: new Date().toISOString(),
-          }, {
-            onConflict: 'spotify_id'
-          })
-          .select()
-          .single()
-        
-        if (artist && !artistError) {
-          // Link to user (insert or ignore if exists)
-          const { error: linkError } = await supabase
-            .from('user_artists')
-            .upsert({
-              user_id: user.id,
-              artist_id: artist.id,
-              created_at: new Date().toISOString()
-            }, {
-              onConflict: 'user_id,artist_id',
-              ignoreDuplicates: true
-            })
-          
-          if (!linkError) {
-            importedArtists.push(artist)
-          }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'spotify',
+        options: {
+          scopes: 'user-follow-read user-top-read user-library-read',
+          redirectTo: `${window.location.origin}/auth/callback?redirect=/my-artists&action=import`
         }
-
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-      
-      setProgress({
-        stage: 'complete',
-        current: importedArtists.length,
-        total: importedArtists.length,
-        message: `Import complete! Added ${importedArtists.length} artists to your collection.`
       })
-      
-      // Reload the page data
-      await loadMyArtists()
-      
-      setTimeout(() => {
-        setIsImporting(false)
-        setProgress(null)
-      }, 3000)
+      if (error) throw error
+      return
       
     } catch (err: any) {
       console.error('Import error:', err)
@@ -434,6 +354,42 @@ export default function MyArtistsPage() {
           </div>
         </Card>
 
+        {/* Import Progress */}
+        {isImporting && progress && (
+          <Card className="p-6 mb-8 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-green-600" />
+                <h3 className="font-semibold text-green-800 dark:text-green-200">
+                  {progress.stage === 'connecting' && 'Connecting to Spotify'}
+                  {progress.stage === 'fetching' && 'Finding Your Artists'}
+                  {progress.stage === 'artists' && 'Importing Artists'}
+                  {progress.stage === 'shows' && 'Loading Show Data'}
+                  {progress.stage === 'complete' && 'Import Complete! ✨'}
+                </h3>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-green-700 dark:text-green-300">
+                  <span>{progress.message}</span>
+                  {progress.total > 0 && (
+                    <span>{progress.current}/{progress.total}</span>
+                  )}
+                </div>
+                
+                {progress.total > 0 && (
+                  <div className="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Error Message */}
         {error && (
           <Card className="p-6 mb-8 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
@@ -471,9 +427,22 @@ export default function MyArtistsPage() {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Import your favorite artists from Spotify to track their upcoming shows and participate in setlist voting.
             </p>
-            <Button onClick={importFromSpotify} className="flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              Import from Spotify
+            <Button 
+              onClick={importFromSpotify} 
+              disabled={isImporting}
+              className="bg-gradient-to-r from-[#1DB954] to-[#1aa34a] hover:from-[#1aa34a] hover:to-[#159043] text-white font-semibold px-8 py-4 rounded-xl flex items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {progress?.message || 'Importing...'}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  Find My Artists on Tour
+                </>
+              )}
             </Button>
           </div>
         )}
