@@ -1,175 +1,149 @@
-'use client'
-
-import { useQuery } from '@tanstack/react-query'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Music, Users, TrendingUp, Search } from 'lucide-react'
 import Link from 'next/link'
 import { ArtistCard } from '@/components/artists/ArtistCard'
-import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+import { ArtistsPageClient } from '@/components/artists/ArtistsPageClient'
 
-export default function ArtistsPage() {
-  const supabase = createClientComponentClient()
-  const [searchTerm, setSearchTerm] = useState('')
+// This page uses dynamic data and should not be statically generated
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-  const { data: artists = [], isLoading } = useQuery({
-    queryKey: ['artists', 'all'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('artists')
-        .select(`
-          id, name, slug, image_url, genres, followers, popularity,
-          shows!inner(id, date, status)
-        `)
-        .order('popularity', { ascending: false })
-        .limit(100)
+export default async function ArtistsPage() {
+  // Use createClient for public data access
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
-      if (error) throw error
+  try {
+    // Get artists data first (avoiding complex joins)
+    const { data: artistsData, error: artistsError } = await supabase
+      .from('artists')
+      .select(`
+        id,
+        name,
+        slug,
+        image_url,
+        genres,
+        followers,
+        popularity
+      `)
+      .order('popularity', { ascending: false })
+      .limit(100)
 
-      return (data || []).map((artist: any) => ({
+    if (artistsError) {
+      console.error('Error fetching artists:', artistsError)
+    }
+
+    // Get show counts for each artist separately
+    let artistsWithCounts: any[] = []
+    if (artistsData && artistsData.length > 0) {
+      const artistIds = artistsData.map(artist => artist.id)
+      
+      // Get show counts per artist
+      const { data: showCounts, error: showCountsError } = await supabase
+        .from('shows')
+        .select('artist_id, status, date')
+        .in('artist_id', artistIds)
+
+      if (showCountsError) {
+        console.error('Error fetching show counts:', showCountsError)
+      }
+
+      // Process show counts
+      const showCountMap = new Map<string, { total: number; upcoming: number }>()
+      showCounts?.forEach(show => {
+        if (!showCountMap.has(show.artist_id)) {
+          showCountMap.set(show.artist_id, { total: 0, upcoming: 0 })
+        }
+        const counts = showCountMap.get(show.artist_id)!
+        counts.total++
+        if (show.status === 'upcoming' && new Date(show.date) > new Date()) {
+          counts.upcoming++
+        }
+      })
+
+      // Combine artist data with show counts
+      artistsWithCounts = artistsData.map(artist => ({
         id: artist.id,
         name: artist.name,
         slug: artist.slug,
         imageUrl: artist.image_url,
         genres: artist.genres || [],
-        followers: artist.followers,
-        popularity: artist.popularity,
-        showCount: artist.shows?.length || 0,
-        upcomingShows: artist.shows?.filter((show: any) => 
-          show.status === 'upcoming' && new Date(show.date) > new Date()
-        ).length || 0
+        followers: artist.followers || 0,
+        popularity: artist.popularity || 0,
+        showCount: showCountMap.get(artist.id)?.total || 0,
+        upcomingShows: showCountMap.get(artist.id)?.upcoming || 0
       }))
     }
-  })
 
-  const filteredArtists = artists.filter(artist =>
-    artist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    artist.genres.some((genre: string) => 
-      genre.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  )
+    // Calculate stats
+    const stats = {
+      totalArtists: artistsWithCounts.length,
+      artistsWithUpcomingShows: artistsWithCounts.filter(a => a.upcomingShows > 0).length,
+      totalShows: artistsWithCounts.reduce((sum, artist) => sum + artist.showCount, 0)
+    }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8 lg:mb-10">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-            <Users className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8" />
-            <span>All Artists</span>
-          </h1>
-          <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body">
-            Discover artists and vote on their upcoming setlists
-          </p>
-        </div>
+    // Calculate top genres
+    const genreCount: Record<string, number> = {}
+    artistsWithCounts.forEach(artist => {
+      artist.genres?.forEach((genre: string) => {
+        genreCount[genre] = (genreCount[genre] || 0) + 1
+      })
+    })
 
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            {/* Search */}
-            <div className="mb-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search artists by name or genre..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-              </div>
-            </div>
+    const topGenres = Object.entries(genreCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 8)
+      .map(([genre, count]) => ({ genre, count }))
 
-            {/* Artists Grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="bg-muted rounded-lg h-64"></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                {filteredArtists.map((artist: any) => (
-                  <ArtistCard key={artist.id} artist={artist} />
-                ))}
-              </div>
-            )}
-
-            {/* No Results */}
-            {!isLoading && filteredArtists.length === 0 && (
-              <div className="text-center py-12">
-                <Music className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No artists found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm ? 'Try adjusting your search terms' : 'No artists available yet'}
-                </p>
-              </div>
-            )}
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-12">
+          {/* Header */}
+          <div className="mb-6 sm:mb-8 lg:mb-10">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-bold mb-3 sm:mb-4 gradient-text flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8" />
+              <span>All Artists</span>
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-body">
+              Discover artists and vote on their upcoming setlists
+            </p>
           </div>
 
-          {/* Sidebar */}
-          <div className="w-full lg:w-80 space-y-4 sm:space-y-6 order-first lg:order-last">
-            <ArtistsSidebar />
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
+            {/* Main Content - Pass data to client component for interactivity */}
+            <div className="flex-1 min-w-0">
+              <ArtistsPageClient artists={artistsWithCounts} />
+            </div>
+
+            {/* Sidebar */}
+            <div className="w-full lg:w-80 space-y-4 sm:space-y-6 order-first lg:order-last">
+              <ArtistsSidebar stats={stats} topGenres={topGenres} />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
+    )
+
+  } catch (error) {
+    console.error('Error in artists page:', error)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Error Loading Artists</h2>
+          <p className="text-muted-foreground">Please try again later</p>
+        </div>
+      </div>
+    )
+  }
 }
 
-// Artists Sidebar Component
-function ArtistsSidebar() {
-  const supabase = createClientComponentClient()
-
-  const { data: stats } = useQuery({
-    queryKey: ['artists', 'stats'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('artists')
-        .select('id, shows!inner(id, status, date)')
-
-      if (error) throw error
-
-      const totalArtists = data?.length || 0
-      const artistsWithUpcomingShows = data?.filter(artist => 
-        artist.shows.some((show: any) => 
-          show.status === 'upcoming' && new Date(show.date) > new Date()
-        )
-      ).length || 0
-
-      return {
-        totalArtists,
-        artistsWithUpcomingShows,
-        totalShows: data?.reduce((sum, artist) => sum + artist.shows.length, 0) || 0
-      }
-    }
-  })
-
-  const { data: topGenres } = useQuery({
-    queryKey: ['artists', 'genres'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('artists')
-        .select('genres')
-        .not('genres', 'is', null)
-
-      if (error) throw error
-
-      const genreCount: Record<string, number> = {}
-      data?.forEach(artist => {
-        artist.genres?.forEach((genre: string) => {
-          genreCount[genre] = (genreCount[genre] || 0) + 1
-        })
-      })
-
-      return Object.entries(genreCount)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 8)
-        .map(([genre, count]) => ({ genre, count }))
-    }
-  })
-
+// Artists Sidebar Component (Server Component)
+function ArtistsSidebar({ stats, topGenres }: { 
+  stats: { totalArtists: number; artistsWithUpcomingShows: number; totalShows: number }
+  topGenres: { genre: string; count: number }[]
+}) {
   return (
     <>
       {/* Quick Stats */}
@@ -182,19 +156,19 @@ function ArtistsSidebar() {
         <div className="grid grid-cols-1 gap-4">
           <div className="text-center">
             <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">
-              {stats?.totalArtists || 0}
+              {stats.totalArtists}
             </div>
             <div className="text-xs text-muted-foreground">Total Artists</div>
           </div>
           <div className="text-center">
             <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">
-              {stats?.artistsWithUpcomingShows || 0}
+              {stats.artistsWithUpcomingShows}
             </div>
             <div className="text-xs text-muted-foreground">With Upcoming Shows</div>
           </div>
           <div className="text-center">
             <div className="text-lg sm:text-xl lg:text-2xl font-headline font-bold text-foreground">
-              {stats?.totalShows || 0}
+              {stats.totalShows}
             </div>
             <div className="text-xs text-muted-foreground">Total Shows</div>
           </div>
@@ -202,35 +176,26 @@ function ArtistsSidebar() {
       </div>
 
       {/* Top Genres */}
-      {topGenres && topGenres.length > 0 && (
-        <div className="card-base p-4 sm:p-6">
-          <h3 className="text-lg font-headline font-bold mb-4 text-foreground flex items-center gap-2">
-            <Music className="w-5 h-5 text-primary" />
-            Popular Genres
-          </h3>
-          
-          <div className="space-y-2">
-            {topGenres.map(({ genre, count }) => (
-              <div key={genre} className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground truncate">
-                  {genre}
-                </span>
-                <span className="text-xs bg-muted/40 text-muted-foreground px-2 py-1 rounded-full">
-                  {count}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div className="card-base p-4 sm:p-6">
+        <h3 className="text-lg font-headline font-bold mb-4 text-foreground">Popular Genres</h3>
+        <div className="space-y-2">
+          {topGenres.map(({ genre, count }) => (
+            <div key={genre} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+              <span className="text-sm font-medium capitalize">{genre}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                {count} artists
+              </span>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Quick Actions */}
       <div className="card-base p-4 sm:p-6">
         <h3 className="text-lg font-headline font-bold mb-4 text-foreground">Quick Actions</h3>
-        
         <div className="space-y-2 sm:space-y-3">
           <Link 
-            href="/shows" 
+            href="/shows"
             className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
             <Music className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
@@ -238,14 +203,11 @@ function ArtistsSidebar() {
               <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
                 Browse Shows
               </div>
-              <div className="text-xs text-muted-foreground hidden sm:block">
-                Find upcoming concerts
-              </div>
+              <div className="text-xs text-muted-foreground hidden sm:block">Find upcoming concerts</div>
             </div>
           </Link>
-          
           <Link 
-            href="/trending" 
+            href="/trending"
             className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors group"
           >
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
@@ -253,9 +215,7 @@ function ArtistsSidebar() {
               <div className="text-xs sm:text-sm font-medium text-foreground group-hover:gradient-text transition-all">
                 View Trending
               </div>
-              <div className="text-xs text-muted-foreground hidden sm:block">
-                Hottest shows right now
-              </div>
+              <div className="text-xs text-muted-foreground hidden sm:block">Hottest shows right now</div>
             </div>
           </Link>
         </div>

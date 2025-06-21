@@ -1,258 +1,311 @@
-import { Calendar, MapPin, Users, Music, ExternalLink, Heart, TrendingUp } from 'lucide-react'
-import Link from 'next/link'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { notFound } from 'next/navigation'
+import { Calendar, MapPin, ExternalLink, Music, Users, Star } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
 import { ShowCard } from '@/components/shows/ShowCard'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
-export default async function ArtistPage({ params }: { params: { slug: string } }) {
-  const supabase = createServerComponentClient({ cookies })
+// This page uses dynamic data and should not be statically generated
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+interface ArtistPageProps {
+  params: {
+    slug: string
+  }
+}
+
+export default async function ArtistPage({ params }: ArtistPageProps) {
+  // Use createClient for public data access - no authentication needed
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   try {
     // Get artist data
-    const { data: artistData, error: artistError } = await supabase
+    const { data: artist, error: artistError } = await supabase
       .from('artists')
       .select('*')
       .eq('slug', params.slug)
       .single()
 
-    if (artistError || !artistData) {
+    if (artistError || !artist) {
       console.error('Error fetching artist:', artistError)
       notFound()
     }
 
-    // Get shows for this artist with venue data included
-    const { data: showsData } = await supabase
+    // Get artist's upcoming shows
+    const { data: upcomingShows, error: upcomingError } = await supabase
       .from('shows')
       .select(`
-        id, 
-        title, 
-        date, 
-        status, 
-        ticketmaster_url, 
-        tickets_url,
-        min_price, 
-        max_price,
-        venue:venues(id, name, city, state, country, capacity)
+        id,
+        title,
+        date,
+        start_time,
+        status,
+        ticketmaster_url,
+        venue_id
       `)
-      .eq('artist_id', artistData.id)
+      .eq('artist_id', artist.id)
+      .eq('status', 'upcoming')
+      .gte('date', new Date().toISOString().split('T')[0])
       .order('date', { ascending: true })
 
-    const shows = showsData || []
-    const now = new Date()
-    const upcomingShows = shows.filter(show => new Date(show.date) > now)
-    const pastShows = shows.filter(show => new Date(show.date) <= now).slice(0, 10)
-
-    // If no shows found, ensure artist has some songs for potential setlist creation
-    if (shows.length === 0) {
-      try {
-        await supabase.rpc('ensure_artist_has_songs', { p_artist_id: artistData.id })
-      } catch (error) {
-        console.log('Could not ensure artist has songs:', error)
-      }
+    if (upcomingError) {
+      console.error('Error fetching upcoming shows:', upcomingError)
     }
 
+    // Get venues for upcoming shows
+    let upcomingVenues: any[] = []
+    if (upcomingShows && upcomingShows.length > 0) {
+      const venueIds = upcomingShows.map(show => show.venue_id)
+      const { data: venues } = await supabase
+        .from('venues')
+        .select('id, name, city, state, capacity')
+        .in('id', venueIds)
+      upcomingVenues = venues || []
+    }
+
+    // Get artist's recent/past shows for the "Recent Shows" tab
+    const { data: recentShows, error: recentError } = await supabase
+      .from('shows')
+      .select(`
+        id,
+        title,
+        date,
+        start_time,
+        status,
+        venue_id
+      `)
+      .eq('artist_id', artist.id)
+      .lt('date', new Date().toISOString().split('T')[0])
+      .order('date', { ascending: false })
+      .limit(10)
+
+    if (recentError) {
+      console.error('Error fetching recent shows:', recentError)
+    }
+
+    // Get venues for recent shows
+    let recentVenues: any[] = []
+    if (recentShows && recentShows.length > 0) {
+      const venueIds = recentShows.map(show => show.venue_id)
+      const { data: venues } = await supabase
+        .from('venues')
+        .select('id, name, city, state, capacity')
+        .in('id', venueIds)
+      recentVenues = venues || []
+    }
+
+    // Process shows data with venue lookup
+    const upcomingShowsData = (upcomingShows || []).map(show => {
+      const venue = upcomingVenues.find(v => v.id === show.venue_id)
+      return {
+        id: show.id,
+        title: show.title,
+        date: show.date,
+        startTime: show.start_time,
+        status: show.status,
+        ticketmaster_url: show.ticketmaster_url,
+        artist: {
+          id: artist.id,
+          name: artist.name,
+          slug: artist.slug,
+          image_url: artist.image_url
+        },
+        venue: venue || { id: show.venue_id, name: 'Unknown Venue', city: '', state: '', capacity: null },
+        totalVotes: 0
+      }
+    })
+
+    const recentShowsData = (recentShows || []).map(show => {
+      const venue = recentVenues.find(v => v.id === show.venue_id)
+      return {
+        id: show.id,
+        title: show.title,
+        date: show.date,
+        startTime: show.start_time,
+        status: show.status,
+        artist: {
+          id: artist.id,
+          name: artist.name,
+          slug: artist.slug,
+          image_url: artist.image_url
+        },
+        venue: venue || { id: show.venue_id, name: 'Unknown Venue', city: '', state: '', capacity: null },
+        totalVotes: 0
+      }
+    })
+
     return (
-      <div className="min-h-screen bg-background">
+      <main className="min-h-screen bg-background">
         {/* Hero Section */}
-        <div className="relative bg-background text-foreground overflow-hidden">
-          <div className="absolute inset-0 bg-background" />
-          
-          <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
-            <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
-              {/* Artist Image */}
-              <div className="flex-shrink-0">
-                {artistData.image_url ? (
-                  <img
-                    src={artistData.image_url}
-                    alt={artistData.name}
-                    className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full object-cover shadow-2xl border-4 border-border"
-                  />
-                ) : (
-                  <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-muted flex items-center justify-center shadow-2xl border-4 border-border">
-                    <Music className="w-20 h-20 text-muted-foreground" />
-                  </div>
-                )}
+        <section className="relative">
+          {/* Background Image */}
+          <div className="absolute inset-0 z-0">
+            {artist.image_url ? (
+              <div 
+                className="w-full h-full bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: `url(${artist.image_url})` }}
+              >
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
               </div>
-              
-              {/* Artist Info */}
-              <div className="flex-1 text-center lg:text-left">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-headline font-bold mb-4 gradient-text">
-                  {artistData.name}
-                </h1>
-                
-                {/* Genres */}
-                {artistData.genres?.length > 0 && (
-                  <div className="flex flex-wrap gap-2 justify-center lg:justify-start mb-6">
-                    {artistData.genres.slice(0, 4).map((genre: string) => (
-                      <span 
-                        key={genre}
-                        className="px-3 py-1 bg-muted backdrop-blur-sm rounded-full text-sm font-medium border border-border text-foreground"
-                      >
-                        {genre}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                {/* Stats */}
-                <div className="flex flex-wrap gap-6 justify-center lg:justify-start mb-8 text-muted-foreground">
-                  {artistData.followers && (
-                    <div className="flex items-center gap-2">
-                      <Users className="w-5 h-5" />
-                      <span className="font-medium">
-                        {artistData.followers.toLocaleString()} followers
-                      </span>
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 pt-24 pb-16">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl">
+                {/* Artist Info */}
+                <div className="mb-8">
+                  <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
+                    {artist.name}
+                  </h1>
+                  {artist.genres && artist.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {artist.genres.slice(0, 3).map((genre, index) => (
+                        <Badge key={index} variant="secondary">
+                          {genre}
+                        </Badge>
+                      ))}
                     </div>
                   )}
-                  {artistData.popularity && (
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5" />
-                      <span className="font-medium">
-                        {artistData.popularity}% popularity
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    <span className="font-medium">
-                      {upcomingShows.length} upcoming shows
-                    </span>
-                  </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
-                  {artistData.spotify_id && (
-                    <Link
-                      href={`https://open.spotify.com/artist/${artistData.spotify_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-[#1DB954] hover:bg-[#1aa34a] text-white rounded-lg font-semibold transition-colors"
-                    >
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                      </svg>
-                      Listen on Spotify
-                    </Link>
+                {/* Stats */}
+                <div className="grid md:grid-cols-3 gap-6 mb-8">
+                  <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Users className="w-5 h-5 text-white" />
+                        <span className="text-white font-medium">Followers</span>
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        {artist.followers?.toLocaleString() || 'N/A'}
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Star className="w-5 h-5 text-white" />
+                        <span className="text-white font-medium">Popularity</span>
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        {artist.popularity}%
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Calendar className="w-5 h-5 text-white" />
+                        <span className="text-white font-medium">Upcoming Shows</span>
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        {upcomingShowsData.length}
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-4">
+                  {artist.spotify_id && (
+                    <Button asChild size="lg" variant="secondary">
+                      <a 
+                        href={`https://open.spotify.com/artist/${artist.spotify_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2"
+                      >
+                        <span>🎵</span>
+                        Listen on Spotify
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </Button>
                   )}
-                  <button className="inline-flex items-center gap-2 px-6 py-3 bg-muted hover:bg-secondary backdrop-blur-sm text-foreground rounded-lg font-semibold transition-colors border border-border">
-                    <Heart className="w-5 h-5" />
-                    Follow Artist
-                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Shows Tabs */}
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <Tabs defaultValue="upcoming" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 sm:mb-8">
-              <TabsTrigger value="upcoming" className="text-sm sm:text-base">
-                Upcoming Shows ({upcomingShows.length})
-              </TabsTrigger>
-              <TabsTrigger value="past" className="text-sm sm:text-base">
-                Recent Shows ({pastShows.length})
-              </TabsTrigger>
-            </TabsList>
+        {/* Shows Section */}
+        <section className="py-16 bg-background">
+          <div className="container mx-auto px-4">
+            <div className="max-w-6xl mx-auto">
+              
+              {/* Upcoming Shows */}
+              <div className="mb-16">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-3xl font-headline font-bold gradient-text">
+                    Upcoming Shows ({upcomingShowsData.length})
+                  </h2>
+                </div>
 
-            <TabsContent value="upcoming" className="space-y-4">
-              {upcomingShows.length > 0 ? (
-                <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {upcomingShows.map((show: any) => (
-                    <ShowCard 
-                      key={show.id} 
-                      show={{
-                        id: show.id,
-                        date: show.date,
-                        title: show.title || `${artistData.name} at ${show.venue?.name || 'Unknown Venue'}`,
-                        status: show.status || 'upcoming',
-                        ticketmaster_url: show.ticketmaster_url,
-                        tickets_url: show.tickets_url,
-                        min_price: show.min_price,
-                        max_price: show.max_price,
-                        artist: {
-                          id: artistData.id,
-                          name: artistData.name,
-                          slug: artistData.slug,
-                          image_url: artistData.image_url
-                        },
-                        venue: {
-                          id: show.venue?.id || 'unknown',
-                          name: show.venue?.name || 'Unknown Venue',
-                          city: show.venue?.city || 'Unknown City',
-                          state: show.venue?.state || '',
-                          capacity: show.venue?.capacity
-                        },
-                        totalVotes: 0
-                      }} 
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No upcoming shows</h3>
-                  <p className="text-muted-foreground">
-                    Check back later for new tour dates!
-                  </p>
-                </div>
-              )}
-            </TabsContent>
+                {upcomingShowsData.length > 0 ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {upcomingShowsData.map((show) => (
+                      <ShowCard key={show.id} show={show} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-muted/50 rounded-xl">
+                    <Calendar className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No Upcoming Shows</h3>
+                    <p className="text-muted-foreground">
+                      Check back later for new tour announcements
+                    </p>
+                  </div>
+                )}
+              </div>
 
-            <TabsContent value="past" className="space-y-4">
-              {pastShows.length > 0 ? (
-                <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {pastShows.map((show: any) => (
-                    <ShowCard 
-                      key={show.id} 
-                      show={{
-                        id: show.id,
-                        date: show.date,
-                        title: show.title || `${artistData.name} at ${show.venue?.name || 'Unknown Venue'}`,
-                        status: show.status || 'completed',
-                        ticketmaster_url: show.ticketmaster_url,
-                        tickets_url: show.tickets_url,
-                        min_price: show.min_price,
-                        max_price: show.max_price,
-                        artist: {
-                          id: artistData.id,
-                          name: artistData.name,
-                          slug: artistData.slug,
-                          image_url: artistData.image_url
-                        },
-                        venue: {
-                          id: show.venue?.id || 'unknown',
-                          name: show.venue?.name || 'Unknown Venue',
-                          city: show.venue?.city || 'Unknown City',
-                          state: show.venue?.state || '',
-                          capacity: show.venue?.capacity
-                        },
-                        totalVotes: 0
-                      }} 
-                    />
-                  ))}
+              {/* Recent Shows */}
+              <div>
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-3xl font-headline font-bold gradient-text">
+                    Recent Shows ({recentShowsData.length})
+                  </h2>
                 </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Music className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No recent shows</h3>
-                  <p className="text-muted-foreground">
-                    This artist hasn't performed recently.
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+
+                {recentShowsData.length > 0 ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {recentShowsData.map((show) => (
+                      <ShowCard key={show.id} show={show} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-muted/50 rounded-xl">
+                    <Music className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No Recent Shows</h3>
+                    <p className="text-muted-foreground">
+                      No past shows found in our database
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
     )
-
   } catch (error) {
-    console.error('Error in artist page:', error)
-    notFound()
+    console.error('Artist page error:', error)
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Artist Not Found</h1>
+          <p className="text-muted-foreground">Unable to load this artist. Please try again later.</p>
+        </div>
+      </main>
+    )
   }
 }

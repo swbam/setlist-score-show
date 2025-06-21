@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('🔄 Triggering enhanced sync for top shows...')
+
     // Trigger the enhanced sync function
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const functionUrl = `${supabaseUrl}/functions/v1/sync-top-shows-enhanced`
@@ -28,6 +30,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Sync failed: ${result.error || 'Unknown error'}`)
     }
 
+    console.log('✅ Sync completed successfully:', result)
+
     return NextResponse.json({
       success: true,
       message: 'Sync triggered successfully',
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Sync trigger error:', error)
+    console.error('❌ Sync trigger error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

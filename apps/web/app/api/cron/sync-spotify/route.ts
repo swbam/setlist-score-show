@@ -10,11 +10,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('🎸 Triggering setlist sync from cron...')
+    console.log('🎵 Triggering Spotify sync from cron...')
 
-    // Trigger the setlist sync function
+    // Trigger the Spotify enhanced sync function
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const functionUrl = `${supabaseUrl}/functions/v1/sync-setlists`
+    const functionUrl = `${supabaseUrl}/functions/v1/sync-spotify-enhanced`
     
     const response = await fetch(functionUrl, {
       method: 'POST',
@@ -27,19 +27,19 @@ export async function POST(request: NextRequest) {
     const result = await response.json()
 
     if (!response.ok) {
-      throw new Error(`Setlist sync failed: ${result.error || response.statusText}`)
+      throw new Error(`Spotify sync failed: ${result.error || response.statusText}`)
     }
 
-    console.log('✅ Setlist sync completed:', result)
+    console.log('✅ Spotify sync completed:', result)
 
     return NextResponse.json({
       success: true,
-      message: 'Setlist sync triggered successfully',
+      message: 'Spotify sync triggered successfully',
       result
     })
 
   } catch (error) {
-    console.error('❌ Setlist sync cron error:', error)
+    console.error('❌ Spotify sync cron error:', error)
     
     return NextResponse.json({
       success: false,
@@ -51,6 +51,6 @@ export async function POST(request: NextRequest) {
 // Allow GET for testing
 export async function GET() {
   return NextResponse.json({ 
-    message: 'Setlist sync cron endpoint is active. Use POST to trigger sync.' 
+    message: 'Spotify sync cron endpoint is active. Use POST to trigger sync.' 
   })
-}
+} 

@@ -46,7 +46,7 @@ interface VotingSectionProps {
   songs: SetlistSong[];
   showData: any;
   userVotes: any[];
-  onVote: (songId: string, setlistSongId: string) => Promise<void>;
+  onVote?: (songId: string, setlistSongId: string) => Promise<void>;
 }
 
 type SortOption = 'votes' | 'position' | 'name' | 'popularity';

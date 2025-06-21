@@ -1,0 +1,31 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-top-shows",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-spotify", 
+      "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/cron/calculate-trending",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-setlists",
+      "schedule": "0 2 * * *"
+    }
+  ],
+  "functions": {
+    "apps/web/app/api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+} 
