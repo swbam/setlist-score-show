@@ -164,10 +164,10 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
       <div className="relative">
         <Link
           href={`/shows/${show.id}`}
-          className="block bg-black rounded-2xl shadow-lg group-hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-700/50"
+          className="block bg-card rounded-2xl shadow-lg group-hover:shadow-2xl transition-all duration-500 overflow-hidden border border-border"
         >
           {/* Enhanced header with artist image */}
-          <div className="relative h-48 bg-gray-900 overflow-hidden">
+          <div className="relative h-48 bg-muted overflow-hidden">
             {artistImage ? (
               <>
                 <img
@@ -180,7 +180,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
               </>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Music className="w-16 h-16 text-gray-400 dark:text-gray-500" />
+                <Music className="w-16 h-16 text-muted-foreground" />
               </div>
             )}
             
@@ -191,7 +191,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                   initial={{ scale: 0, rotate: -10 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.3 + index * 0.05 }}
-                  className="bg-white text-black text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-gray-300 flex items-center gap-1"
+                  className="bg-primary text-primary-foreground text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-border flex items-center gap-1"
                 >
                   🔥 <span>HOT</span>
                 </motion.div>
@@ -202,7 +202,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                   initial={{ scale: 0, rotate: 10 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.4 + index * 0.05 }}
-                  className="bg-gray-800 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-gray-600 flex items-center gap-1"
+                  className="bg-secondary text-secondary-foreground text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-border flex items-center gap-1"
                 >
                   <TrendingUp className="w-3 h-3" /> <span>POPULAR</span>
                 </motion.div>
@@ -211,14 +211,14 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             
             {/* Days until show */}
             {daysUntilShow <= 14 && daysUntilShow > 0 && (
-              <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full border border-white/20">
+              <div className="absolute top-4 left-4 bg-background/60 backdrop-blur-sm text-foreground text-xs font-medium px-3 py-1.5 rounded-full border border-border">
                 {daysUntilShow === 1 ? 'Tomorrow' : `${daysUntilShow} days`}
               </div>
             )}
             
             {/* Price badge */}
             {formatPrice(show.min_price, show.max_price) && (
-              <div className="absolute bottom-4 left-4 bg-white text-black text-xs font-bold px-2.5 py-1 rounded-full border border-gray-300 flex items-center gap-1">
+              <div className="absolute bottom-4 left-4 bg-primary text-primary-foreground text-xs font-bold px-2.5 py-1 rounded-full border border-border flex items-center gap-1">
                 <DollarSign className="w-3 h-3" />
                 {formatPrice(show.min_price, show.max_price)}
               </div>
@@ -228,28 +228,28 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
           {/* Enhanced content */}
           <div className="p-6">
             <div className="mb-4">
-              <h3 className="font-bold text-xl text-white mb-2 line-clamp-2 group-hover:text-gray-300 transition-colors">
+              <h3 className="font-bold text-xl text-foreground mb-2 line-clamp-2 group-hover:text-muted-foreground transition-colors">
                 {show.artist.name}
               </h3>
               
-              <div className="space-y-2 text-sm text-gray-400">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-gray-400" />
+                  <MapPin className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium truncate">
                     {show.venue.name}
                   </span>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium">
                     {formatDate(show.date)}
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-2 text-gray-500">
+                <div className="flex items-center gap-2 text-muted-foreground/70">
                   <div className="w-4 h-4 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full" />
                   </div>
                   <span className="truncate">
                     {show.venue.city}, {show.venue.state || show.venue.country}
@@ -260,23 +260,23 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             
             {/* Enhanced engagement stats */}
             {showEngagement && (
-              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+              <div className="mb-4 p-3 bg-muted rounded-lg">
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <div className="text-lg font-bold text-white">
+                    <div className="text-lg font-bold text-foreground">
                       {show.totalVotes || 0}
                     </div>
-                    <div className="text-xs text-gray-400 flex items-center justify-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                       <Vote className="w-3 h-3" />
                       Votes
                     </div>
                   </div>
                   
                   <div>
-                    <div className="text-lg font-bold text-white">
+                    <div className="text-lg font-bold text-foreground">
                       {show.songsVoted || 0}
                     </div>
-                    <div className="text-xs text-gray-400 flex items-center justify-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                       <Music className="w-3 h-3" />
                       Songs
                     </div>
@@ -286,8 +286,8 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
             )}
             
             {/* Enhanced footer */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-              <div className="flex items-center gap-4 text-sm text-gray-400">
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 {show.venue.capacity && (
                   <div className="flex items-center gap-1">
                     <Users className="w-3.5 h-3.5" />
@@ -303,7 +303,7 @@ export function ShowCard({ show, variant = 'grid', showStats = false, showEngage
                 )}
               </div>
               
-              <div className="text-sm font-semibold text-white group-hover:text-gray-300 transition-colors flex items-center gap-1">
+              <div className="text-sm font-semibold text-foreground group-hover:text-muted-foreground transition-colors flex items-center gap-1">
                 Vote Now
                 <motion.div
                   animate={{ x: [0, 4, 0] }}

@@ -11,7 +11,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/sync-setlists',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/sync-setlists',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$
@@ -24,7 +24,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/sync-top-shows',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/sync-top-shows',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$
@@ -37,7 +37,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/sync-spotify',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/sync-spotify',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$
@@ -50,7 +50,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/calculate-trending',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/calculate-trending',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$
@@ -63,7 +63,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/sync-artists',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/sync-artists',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$
@@ -76,7 +76,7 @@ SELECT cron.schedule(
   $$
   SELECT
     net.http_post(
-      url := 'https://your-project-id.supabase.co/functions/v1/cleanup-old-data',
+      url := 'https://ailrmwtahifvstpfhbgn.supabase.co/functions/v1/cleanup-old-data',
       headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.cron_secret') || '"}'::jsonb
     ) as request_id;
   $$

@@ -8,7 +8,8 @@ const supabase = createClient(
 
 interface ImportArtistRequest {
   type: 'artist'
-  spotify_id: string
+  id?: string
+  spotify_id?: string
   name: string
   popularity: number
   followers: number
@@ -19,7 +20,8 @@ interface ImportArtistRequest {
 
 interface ImportShowRequest {
   type: 'show'
-  ticketmaster_id: string
+  id?: string
+  ticketmaster_id?: string
   name: string
   artist_name: string
   artist_image: string | null
@@ -41,11 +43,13 @@ function generateSlug(name: string): string {
 }
 
 async function importArtist(data: ImportArtistRequest) {
+  const spotifyId = data.spotify_id || data.id
+  
   // Check if artist already exists
   const { data: existing } = await supabase
     .from('artists')
     .select('id, slug')
-    .eq('spotify_id', data.spotify_id)
+    .eq('spotify_id', spotifyId)
     .single()
 
   if (existing) {
@@ -57,7 +61,7 @@ async function importArtist(data: ImportArtistRequest) {
   const { data: artist, error } = await supabase
     .from('artists')
     .insert({
-      spotify_id: data.spotify_id,
+      spotify_id: spotifyId,
       name: data.name,
       slug,
       image_url: data.image_url,
@@ -81,6 +85,8 @@ async function importArtist(data: ImportArtistRequest) {
 }
 
 async function importShow(data: ImportShowRequest) {
+  const ticketmasterId = data.ticketmaster_id || data.id
+
   // First, get or create the artist
   let artistId: string
   
@@ -147,7 +153,7 @@ async function importShow(data: ImportShowRequest) {
   const { data: existingShow } = await supabase
     .from('shows')
     .select('id')
-    .eq('ticketmaster_id', data.ticketmaster_id)
+    .eq('ticketmaster_id', ticketmasterId)
     .single()
 
   if (existingShow) {
@@ -158,7 +164,7 @@ async function importShow(data: ImportShowRequest) {
   const { data: show, error: showError } = await supabase
     .from('shows')
     .insert({
-      ticketmaster_id: data.ticketmaster_id,
+      ticketmaster_id: ticketmasterId,
       artist_id: artistId,
       venue_id: venueId,
       name: data.name,

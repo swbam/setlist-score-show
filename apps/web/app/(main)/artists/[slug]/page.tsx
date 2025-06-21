@@ -56,8 +56,8 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
     return (
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
-        <div className="relative bg-black text-white overflow-hidden">
-          <div className="absolute inset-0 bg-black" />
+        <div className="relative bg-background text-foreground overflow-hidden">
+          <div className="absolute inset-0 bg-background" />
           
           <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
             <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
@@ -67,18 +67,18 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
                   <img
                     src={artistData.image_url}
                     alt={artistData.name}
-                    className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full object-cover shadow-2xl border-4 border-white/20"
+                    className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full object-cover shadow-2xl border-4 border-border"
                   />
                 ) : (
-                  <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gray-800 flex items-center justify-center shadow-2xl border-4 border-white/20">
-                    <Music className="w-20 h-20 text-white/60" />
+                  <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-muted flex items-center justify-center shadow-2xl border-4 border-border">
+                    <Music className="w-20 h-20 text-muted-foreground" />
                   </div>
                 )}
               </div>
               
               {/* Artist Info */}
               <div className="flex-1 text-center lg:text-left">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-headline font-bold mb-4 text-white">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-headline font-bold mb-4 gradient-text">
                   {artistData.name}
                 </h1>
                 
@@ -88,7 +88,7 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
                     {artistData.genres.slice(0, 4).map((genre: string) => (
                       <span 
                         key={genre}
-                        className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full text-sm font-medium border border-white/20"
+                        className="px-3 py-1 bg-muted backdrop-blur-sm rounded-full text-sm font-medium border border-border text-foreground"
                       >
                         {genre}
                       </span>
@@ -97,7 +97,7 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
                 )}
                 
                 {/* Stats */}
-                <div className="flex flex-wrap gap-6 justify-center lg:justify-start mb-8 text-white/90">
+                <div className="flex flex-wrap gap-6 justify-center lg:justify-start mb-8 text-muted-foreground">
                   {artistData.followers && (
                     <div className="flex items-center gap-2">
                       <Users className="w-5 h-5" />
@@ -137,7 +137,7 @@ export default async function ArtistPage({ params }: { params: { slug: string } 
                       Listen on Spotify
                     </Link>
                   )}
-                  <button className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white rounded-lg font-semibold transition-colors border border-white/20">
+                  <button className="inline-flex items-center gap-2 px-6 py-3 bg-muted hover:bg-secondary backdrop-blur-sm text-foreground rounded-lg font-semibold transition-colors border border-border">
                     <Heart className="w-5 h-5" />
                     Follow Artist
                   </button>

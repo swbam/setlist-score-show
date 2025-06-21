@@ -19,10 +19,12 @@
     "refresh:trending": "supabase functions invoke refresh_trending_shows",
     "jobs:sync": "pnpm --filter @setlist/api sync:setlists && pnpm --filter @setlist/api calculate:trending",
     "sync": "bash ./scripts/full-sync.sh",
+    "sync:manual": "tsx scripts/manual-sync.ts",
     "updateall": "bash ./scripts/updateall.sh"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },

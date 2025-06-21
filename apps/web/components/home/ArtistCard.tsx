@@ -52,7 +52,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
       className="group"
     >
       <Link href={`/artists/${artist.slug}`} className="block">
-        <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-800 shadow-lg group-hover:shadow-2xl transition-all duration-500 border border-gray-700/50">
+        <div className="relative aspect-square rounded-2xl overflow-hidden bg-muted shadow-lg group-hover:shadow-2xl transition-all duration-500 border border-border">
           {artist.image_url ? (
             <>
               <img
@@ -64,8 +64,8 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
               <div className="absolute inset-0 bg-black/60 group-hover:bg-black/70 transition-colors duration-300" />
             </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-800">
-              <Music className="w-16 h-16 text-gray-500" />
+            <div className="w-full h-full flex items-center justify-center bg-muted">
+              <Music className="w-16 h-16 text-muted-foreground" />
             </div>
           )}
           
@@ -76,7 +76,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.3 + index * 0.05 }}
-                className="bg-gray-700 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-white/20"
+                className="bg-secondary text-secondary-foreground text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-border"
               >
                 🔥 HOT
               </motion.div>
@@ -87,7 +87,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.4 + index * 0.05 }}
-                className="bg-gray-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-white/20"
+                className="bg-muted text-muted-foreground text-xs font-bold px-2.5 py-1 rounded-full shadow-lg backdrop-blur-sm border border-border"
               >
                 📈 TRENDING
               </motion.div>
@@ -97,7 +97,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
           {/* Enhanced content overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-4">
             <div className="space-y-2">
-              <h3 className="font-bold text-white text-lg leading-tight line-clamp-2 drop-shadow-lg group-hover:text-gray-200 transition-colors">
+              <h3 className="font-bold text-foreground text-lg leading-tight line-clamp-2 drop-shadow-lg group-hover:text-muted-foreground transition-colors">
                 {artist.name}
               </h3>
               
@@ -106,14 +106,14 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                   {/* Show count and next show */}
                   {upcomingShows > 0 && (
                     <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-1.5 text-white/90">
+                      <div className="flex items-center gap-1.5 text-foreground/90">
                         <Calendar className="w-3.5 h-3.5" />
                         <span className="font-medium">
                           {upcomingShows} {upcomingShows === 1 ? 'show' : 'shows'}
                         </span>
                       </div>
                       {artist.next_show_date && (
-                        <div className="text-white/80 font-medium">
+                        <div className="text-foreground/80 font-medium">
                           {formatNextShowDate(artist.next_show_date)}
                         </div>
                       )}
@@ -122,7 +122,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                   
                   {/* Followers */}
                   {artist.followers && artist.followers > 1000 && (
-                    <div className="flex items-center gap-1.5 text-white/80 text-sm">
+                    <div className="flex items-center gap-1.5 text-foreground/80 text-sm">
                       <Users className="w-3.5 h-3.5" />
                       <span>
                         {artist.followers > 1000000 
@@ -134,7 +134,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                   
                   {/* Tour cities preview */}
                   {artist.tour_cities && artist.tour_cities.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-white/70 text-xs">
+                    <div className="flex items-center gap-1.5 text-foreground/70 text-xs">
                       <MapPin className="w-3 h-3" />
                       <span className="truncate">
                         {artist.tour_cities.slice(0, 2).join(', ')}
@@ -152,7 +152,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
                     <Badge 
                       key={genre} 
                       variant="secondary" 
-                      className="text-xs bg-white/20 text-white border-white/30 hover:bg-white/30 transition-colors"
+                      className="text-xs bg-muted/20 text-foreground border-border hover:bg-muted/30 transition-colors"
                     >
                       {genre}
                     </Badge>
@@ -163,7 +163,7 @@ export function ArtistCard({ artist, index = 0, showStats = false }: ArtistCardP
           </div>
           
           {/* Hover effect overlay */}
-          <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-foreground/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
         </div>
       </Link>
     </motion.div>

@@ -1,42 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    // Trigger the Supabase Edge Function
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/sync-top-shows-enhanced`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-          'x-cron-secret': process.env.CRON_SECRET || ''
-        }
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error(`Edge function failed: ${response.statusText}`)
+    // Verify request is from authorized source (in production, use proper auth)
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const result = await response.json()
+    // Trigger the enhanced sync function
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const functionUrl = `${supabaseUrl}/functions/v1/sync-top-shows-enhanced`
     
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(`Sync failed: ${result.error || 'Unknown error'}`)
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Top shows sync triggered',
-      result
+      message: 'Sync triggered successfully',
+      data: result
     })
+
   } catch (error) {
-    console.error('Cron job failed:', error)
-    return NextResponse.json(
-      { error: 'Failed to sync top shows', details: error.message },
-      { status: 500 }
-    )
+    console.error('Sync trigger error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
+}
+
+// Also allow GET for easy testing
+export async function GET() {
+  return POST(new NextRequest('http://localhost/api/cron/sync-top-shows', { method: 'POST' }))
 } 

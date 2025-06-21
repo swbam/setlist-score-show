@@ -130,46 +130,54 @@ export function UnifiedSearch() {
           })
           setExternalResults({ artists: [], shows: [] })
         } else {
-          // Search both local database and external APIs in parallel
-          const [localSearch, externalSearch] = await Promise.all([
-            // Local search
-            supabase
+          // Step 1: Search external APIs first (prioritized as per MASTER-FIX-PLUS.md)
+          let externalSearch = null
+          try {
+            const response = await fetch(`/api/search/external?q=${encodeURIComponent(debouncedQuery)}`)
+            if (response.ok) {
+              externalSearch = await response.json()
+            }
+          } catch (error) {
+            console.error('External search failed:', error)
+          }
+
+          const externalArtists = externalSearch?.results?.artists || []
+          const externalShows = externalSearch?.results?.shows || []
+
+          // Step 2: If external results are insufficient (< 5 total), supplement with local
+          let localArtists: any[] = []
+          const totalExternalResults = externalArtists.length + externalShows.length
+          
+          if (totalExternalResults < 5) {
+            const localSearch = await supabase
               .from('artists')
               .select('id, name, slug, image_url, popularity')
               .ilike('name', `%${debouncedQuery}%`)
               .gte('popularity', 20)
               .order('popularity', { ascending: false })
-              .limit(5),
-            
-            // External search
-            fetch(`/api/search/external?q=${encodeURIComponent(debouncedQuery)}`)
-              .then(res => res.ok ? res.json() : null)
-              .catch(() => null)
-          ])
+              .limit(8 - totalExternalResults) // Fill remaining slots
 
-          // Set local results
-          setLocalResults({
-            artists: localSearch.data?.map(artist => ({
+            localArtists = localSearch.data?.map(artist => ({
               id: artist.id,
               name: artist.name,
               slug: artist.slug,
               imageUrl: artist.image_url,
               popularity: artist.popularity,
               source: 'local' as const
-            })) || [],
+            })) || []
+          }
+
+          // Set results with external prioritized
+          setLocalResults({
+            artists: localArtists,
             nearbyShows: [],
             zipInfo: null
           })
 
-          // Set external results
-          if (externalSearch?.results) {
-            setExternalResults({
-              artists: externalSearch.results.artists || [],
-              shows: externalSearch.results.shows || []
-            })
-          } else {
-            setExternalResults({ artists: [], shows: [] })
-          }
+          setExternalResults({
+            artists: externalArtists,
+            shows: externalShows
+          })
         }
       } catch (error) {
         console.error('Search error:', error)
@@ -193,6 +201,13 @@ export function UnifiedSearch() {
     setShowResults(false)
     setLocalResults({ artists: [], nearbyShows: [], zipInfo: null })
     setExternalResults({ artists: [], shows: [] })
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setShowResults(false)
+    }
+    // TODO: Add arrow key navigation for results
   }
 
   const handleImport = async (type: 'artist' | 'show', data: any) => {
@@ -235,6 +250,7 @@ export function UnifiedSearch() {
           placeholder="Search artists or enter zip code..."
           value={query}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={() => setShowResults(true)}
           className="w-full pl-12 pr-4 py-4 text-lg bg-black/40 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/30 transition-all"
         />
@@ -249,49 +265,11 @@ export function UnifiedSearch() {
           {isLoading ? (
             <div className="p-4 text-center text-white/60">
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-              Searching local database and external APIs...
+              Searching Ticketmaster and Spotify...
             </div>
           ) : (
             <div className="p-2">
-              {/* Local Artists */}
-              {localResults.artists.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
-                    <Music className="w-4 h-4" />
-                    Artists in Database
-                  </h3>
-                  {localResults.artists.map((artist) => (
-                    <Link
-                      key={artist.id}
-                      href={`/artists/${artist.slug}`}
-                      onClick={clearSearch}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
-                    >
-                      {artist.imageUrl ? (
-                        <Image
-                          src={artist.imageUrl}
-                          alt={artist.name}
-                          width={40}
-                          height={40}
-                          className="rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
-                          <Music className="w-5 h-5 text-white" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-white truncate">{artist.name}</div>
-                        <div className="text-sm text-white/60">
-                          Popularity: {artist.popularity}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-
-              {/* External Artists from Spotify */}
+              {/* External Artists from Spotify - PRIORITIZED FIRST */}
               {externalResults.artists.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
@@ -335,6 +313,44 @@ export function UnifiedSearch() {
                         Add
                       </button>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Local Artists - SHOWN SECOND */}
+              {localResults.artists.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-white/80 px-3 py-2 flex items-center gap-2">
+                    <Music className="w-4 h-4" />
+                    Artists in Database
+                  </h3>
+                  {localResults.artists.map((artist) => (
+                    <Link
+                      key={artist.id}
+                      href={`/artists/${artist.slug}`}
+                      onClick={clearSearch}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      {artist.imageUrl ? (
+                        <Image
+                          src={artist.imageUrl}
+                          alt={artist.name}
+                          width={40}
+                          height={40}
+                          className="rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+                          <Music className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white truncate">{artist.name}</div>
+                        <div className="text-sm text-white/60">
+                          Popularity: {artist.popularity}
+                        </div>
+                      </div>
+                    </Link>
                   ))}
                 </div>
               )}
