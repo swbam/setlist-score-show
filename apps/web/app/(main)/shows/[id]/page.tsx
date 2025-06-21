@@ -114,8 +114,8 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
     return (
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
-        <div className="relative bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-950 text-white overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+        <div className="relative bg-black text-white overflow-hidden">
+          <div className="absolute inset-0 bg-black" />
           
           <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
             <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
@@ -128,7 +128,7 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
                     className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full object-cover shadow-2xl border-4 border-white/20"
                   />
                 ) : (
-                  <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gradient-to-br from-teal-600 to-emerald-600 flex items-center justify-center shadow-2xl border-4 border-white/20">
+                  <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gray-800 flex items-center justify-center shadow-2xl border-4 border-white/20">
                     <Music className="w-20 h-20 text-white/60" />
                   </div>
                 )}
@@ -136,7 +136,7 @@ export default async function ShowPage({ params }: { params: { id: string } }) {
               
               {/* Show Info */}
               <div className="flex-1 text-center lg:text-left">
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold mb-4 bg-gradient-to-r from-white to-teal-100 bg-clip-text text-transparent">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold mb-4 text-white">
                   {showTitle}
                 </h1>
                 

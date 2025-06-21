@@ -212,20 +212,35 @@ export const artistResolvers: IResolvers = {
       return artists
     },
 
-    searchArtists: async (_parent, { query, limit = 10 }, { prisma }) => {
-      return prisma.artist.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { genres: { hasSome: [query] } },
-          ],
-        },
-        orderBy: [
-          { popularity: 'desc' },
-          { followers: 'desc' },
-        ],
-        take: limit,
-      })
+    searchArtists: async (_parent, { query, limit = 10 }, { ticketmaster }) => {
+      if (!ticketmaster) {
+        throw new GraphQLError('Ticketmaster service unavailable', {
+          extensions: { code: 'SERVICE_UNAVAILABLE' },
+        })
+      }
+
+      try {
+        // Search Ticketmaster API directly
+        const tmResults = await ticketmaster.searchArtists(query, { limit })
+        
+        // Extract unique artist names from TM results
+        const uniqueArtists = [...new Set(tmResults.map(event => event._embedded.attractions[0].name))]
+          .slice(0, limit)
+        
+        // Return simplified artist objects
+        return uniqueArtists.map(name => ({
+          id: `tm-${String(name).toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          name,
+          slug: String(name).toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          imageUrl: null, // Would need to fetch from TM images
+          popularity: 0, // Would need to calculate
+          followers: 0,
+          lastSyncedAt: new Date(),
+        }))
+      } catch (error) {
+        console.error('Ticketmaster search error:', error)
+        return []
+      }
     },
 
     trendingArtists: async (_parent, { limit = 10 }, { prisma }) => {
